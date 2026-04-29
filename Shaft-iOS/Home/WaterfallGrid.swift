@@ -5,6 +5,12 @@ import SwiftUI
 /// height. Suitable for content where the per-item height is known up front
 /// (Pixiv illust width/height). Wraps two `LazyVStack`s in an `HStack` so
 /// scrolling stays lazy.
+///
+/// Distribution is **stable across refreshes**: once an item with a given
+/// `id` lands in column N, it stays in column N as long as it remains in the
+/// `items` array. New items are placed in the shortest column the same way.
+/// This avoids the visual reshuffle when pull-to-refresh returns the same
+/// items in a different order.
 struct WaterfallGrid<Item: Identifiable, Cell: View>: View {
     let items: [Item]
     let columns: Int
@@ -13,6 +19,8 @@ struct WaterfallGrid<Item: Identifiable, Cell: View>: View {
     /// scale doesn't matter — only ratios — but ~`1/aspect + label` is right.
     let estimatedRelativeHeight: (Item) -> Double
     let cell: (Item) -> Cell
+
+    @State private var columnByID: [Item.ID: Int] = [:]
 
     init(
         items: [Item],
@@ -40,21 +48,46 @@ struct WaterfallGrid<Item: Identifiable, Cell: View>: View {
                 .frame(maxWidth: .infinity)
             }
         }
+        .onChange(of: items.map(\.id)) { _, ids in
+            // Drop assignments for items that left the list, so the cache
+            // doesn't grow unbounded across many refreshes.
+            let alive = Set(ids)
+            columnByID = columnByID.filter { alive.contains($0.key) }
+        }
     }
 
     private func distribute() -> [[Item]] {
         var heights = [Double](repeating: 0, count: columns)
         var buckets = [[Item]](repeating: [], count: columns)
+        var newAssignments: [Item.ID: Int] = [:]
+
         for item in items {
             let h = estimatedRelativeHeight(item)
-            // Argmin: pick the shortest column.
-            var bestIdx = 0
-            var bestH = heights[0]
-            for i in 1..<columns where heights[i] < bestH {
-                bestH = heights[i]; bestIdx = i
+            let idx: Int
+            if let cached = columnByID[item.id] {
+                idx = min(max(cached, 0), columns - 1)
+            } else {
+                // Argmin: pick the shortest column.
+                var bestIdx = 0
+                var bestH = heights[0]
+                for i in 1..<columns where heights[i] < bestH {
+                    bestH = heights[i]; bestIdx = i
+                }
+                idx = bestIdx
+                newAssignments[item.id] = idx
             }
-            buckets[bestIdx].append(item)
-            heights[bestIdx] += h
+            buckets[idx].append(item)
+            heights[idx] += h
+        }
+
+        // Persist newly-assigned ids. Done in a Task to avoid mutating
+        // @State during view evaluation.
+        if !newAssignments.isEmpty {
+            Task { @MainActor in
+                for (id, col) in newAssignments where columnByID[id] == nil {
+                    columnByID[id] = col
+                }
+            }
         }
         return buckets
     }

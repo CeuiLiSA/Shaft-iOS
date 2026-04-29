@@ -6,9 +6,11 @@ final class RecommendViewModel {
     var rankingIllusts: [Illust] = []
     var recommendedIllusts: [Illust] = []
     var trendingTags: [TrendingTag] = []
-    var isLoadingRecommend = false
+    var isLoadingRanking = false
+    var isLoadingRecommended = false
     var isLoadingTags = false
-    var recommendError: String?
+    var rankingError: String?
+    var recommendedError: String?
     var tagError: String?
 
     @ObservationIgnored private let api: PixivAPI
@@ -19,26 +21,48 @@ final class RecommendViewModel {
 
     // MARK: Recommend page (ranking + waterfall recommendations)
 
+    /// Either request can succeed or fail independently — each writes its own
+    /// list and its own error so the UI can show a successful section even
+    /// when the other section's request errored.
     func loadRecommendIfNeeded() async {
-        if rankingIllusts.isEmpty && recommendedIllusts.isEmpty && !isLoadingRecommend {
-            await loadRecommend()
+        await withTaskGroup(of: Void.self) { group in
+            if rankingIllusts.isEmpty && !isLoadingRanking {
+                group.addTask { @MainActor [weak self] in await self?.loadRanking() }
+            }
+            if recommendedIllusts.isEmpty && !isLoadingRecommended {
+                group.addTask { @MainActor [weak self] in await self?.loadRecommended() }
+            }
         }
     }
 
     func loadRecommend() async {
-        isLoadingRecommend = true
-        recommendError = nil
-        defer { isLoadingRecommend = false }
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { @MainActor [weak self] in await self?.loadRanking() }
+            group.addTask { @MainActor [weak self] in await self?.loadRecommended() }
+        }
+    }
 
-        async let rank = api.rankingIllusts(mode: "day")
-        async let recd = api.recommendedIllusts()
-
+    func loadRanking() async {
+        isLoadingRanking = true
+        rankingError = nil
+        defer { isLoadingRanking = false }
         do {
-            let (r, c) = try await (rank, recd)
-            rankingIllusts = r.illusts
-            recommendedIllusts = c.illusts
+            let resp = try await api.rankingIllusts(mode: "day")
+            rankingIllusts = resp.illusts
         } catch {
-            recommendError = error.localizedDescription
+            rankingError = error.localizedDescription
+        }
+    }
+
+    func loadRecommended() async {
+        isLoadingRecommended = true
+        recommendedError = nil
+        defer { isLoadingRecommended = false }
+        do {
+            let resp = try await api.recommendedIllusts()
+            recommendedIllusts = resp.illusts
+        } catch {
+            recommendedError = error.localizedDescription
         }
     }
 
@@ -104,16 +128,14 @@ struct RecommendedWorksView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 16, pinnedViews: []) {
-                if let err = vm.recommendError, vm.recommendedIllusts.isEmpty && vm.rankingIllusts.isEmpty {
-                    ErrorBanner(message: err) { Task { await vm.loadRecommend() } }
-                        .padding(.horizontal, 12)
-                }
-
+            LazyVStack(alignment: .leading, spacing: 16) {
                 if !vm.rankingIllusts.isEmpty {
                     SectionHeader(title: l10n.t(.rankingTodayTitle))
                         .padding(.horizontal, 16)
                     RankingStrip(illusts: vm.rankingIllusts)
+                } else if let err = vm.rankingError {
+                    ErrorBanner(message: err) { Task { await vm.loadRanking() } }
+                        .padding(.horizontal, 12)
                 }
 
                 if !vm.recommendedIllusts.isEmpty {
@@ -126,9 +148,12 @@ struct RecommendedWorksView: View {
                         WaterfallIllustCell(illust: illust)
                     }
                     .padding(.horizontal, 8)
+                } else if let err = vm.recommendedError {
+                    ErrorBanner(message: err) { Task { await vm.loadRecommended() } }
+                        .padding(.horizontal, 12)
                 }
 
-                if vm.isLoadingRecommend {
+                if vm.isLoadingRanking || vm.isLoadingRecommended {
                     ProgressView().frame(maxWidth: .infinity).padding(.vertical, 16)
                 }
             }
@@ -194,7 +219,6 @@ private struct WaterfallIllustCell: View {
                 .overlay(alignment: .topTrailing) {
                     if (illust.pageCount ?? 1) > 1 {
                         Label("\(illust.pageCount ?? 1)", systemImage: "square.on.square")
-                            .labelStyle(.titleAndIcon)
                             .font(.caption2.bold())
                             .padding(.horizontal, 5).padding(.vertical, 2)
                             .background(.black.opacity(0.55), in: .capsule)
@@ -233,15 +257,21 @@ private struct WaterfallIllustCell: View {
 private struct RankingStrip: View {
     let illusts: [Illust]
 
+    /// Pixiv `/v1/illust/ranking` first page is already capped at ~30 items;
+    /// this is a defensive cap so the home strip never balloons if the server
+    /// changes the page size.
+    private static let homeStripCap = 30
+
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             LazyHStack(spacing: 10) {
-                ForEach(Array(illusts.prefix(30).enumerated()), id: \.element.id) { idx, illust in
+                ForEach(Array(illusts.prefix(Self.homeStripCap).enumerated()), id: \.element.id) { idx, illust in
                     RankingCard(rank: idx + 1, illust: illust)
                 }
             }
             .padding(.horizontal, 16)
         }
+        .scrollIndicators(.hidden)
     }
 }
 
@@ -255,7 +285,6 @@ private struct RankingCard: View {
         VStack(alignment: .leading, spacing: 6) {
             ZStack(alignment: .topLeading) {
                 PixivAsyncImage(url: imageURL)
-                    .aspectRatio(1, contentMode: .fill)
                     .frame(width: cardWidth, height: cardWidth)
                     .clipShape(.rect(cornerRadius: 8))
                 Text("#\(rank)")
