@@ -4,56 +4,48 @@ struct HomeView: View {
     @Bindable var auth: AuthViewModel
     @Environment(OnboardingStore.self) private var l10n
     @State private var selection: HomeTab = .recommend
-    @State private var showProfile = false
+    @State private var recommendPath = NavigationPath()
+    @State private var discoverPath = NavigationPath()
+    @State private var whatsNewPath = NavigationPath()
 
     var body: some View {
         TabView(selection: $selection) {
-            ForEach(HomeTab.allCases) { tab in
-                NavigationStack {
-                    Group {
-                        switch tab {
-                        case .recommend:
-                            RecommendView()
-                        default:
-                            PlaceholderView(
-                                title: title(for: tab),
-                                systemImage: tab.systemImage,
-                                subtitle: l10n.t(.nothingHere)
-                            )
+            tabStack(.recommend, path: $recommendPath) { RecommendView() }
+            tabStack(.discover, path: $discoverPath) { DiscoverView() }
+            tabStack(.whatsNew, path: $whatsNewPath) { WhatsNewView() }
+        }
+    }
+
+    @ViewBuilder
+    private func tabStack<Content: View>(
+        _ tab: HomeTab,
+        path: Binding<NavigationPath>,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        NavigationStack(path: path) {
+            content()
+                .navigationTitle(navTitle(for: tab))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        NavigationLink(value: AppRoute.search) {
+                            Image(systemName: "magnifyingglass")
                         }
+                        .accessibilityLabel(l10n.t(.searchTitle))
                     }
-                    .navigationTitle(navTitle(for: tab))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                showProfile = true
-                            } label: {
-                                Image(systemName: "person.crop.circle")
-                            }
-                            .accessibilityLabel(l10n.t(.account))
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink(value: AppRoute.more) {
+                            Image(systemName: "person.crop.circle")
                         }
+                        .accessibilityLabel(l10n.t(.moreTitle))
                     }
                 }
-                .tabItem {
-                    Label(title(for: tab), systemImage: tab.systemImage)
-                }
-                .tag(tab)
-            }
+                .registerRoutes(auth: auth)
         }
-        .sheet(isPresented: $showProfile) {
-            NavigationStack {
-                LoggedInView(auth: auth)
-                    .navigationTitle(l10n.t(.account))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button(l10n.t(.actionDone)) { showProfile = false }
-                        }
-                    }
-            }
-            .presentationDetents([.medium, .large])
+        .tabItem {
+            Label(title(for: tab), systemImage: tab.systemImage)
         }
+        .tag(tab)
     }
 
     private func title(for tab: HomeTab) -> String {

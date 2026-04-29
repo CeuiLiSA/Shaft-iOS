@@ -2,34 +2,48 @@ import Foundation
 
 enum LocalizedKey: String, CaseIterable, Sendable {
     // Login
-    case loginTitle
-    case loginSubtitle
-    case loginAction
-    case loginProvisional
+    case loginTitle, loginSubtitle, loginAction, loginProvisional
 
     // Bottom tabs
-    case tabRecommend
-    case tabDiscover
-    case tabWhatsNew
+    case tabRecommend, tabDiscover, tabWhatsNew
 
     // Recommend tab
-    case homeNavTitle      // string_207 — toolbar title for the Recommend tab
-    case subRecommendedWorks
-    case subPopularTags
-    case rankingTodayTitle
+    case homeNavTitle, subRecommendedWorks, subPopularTags, rankingTodayTitle
 
     // Account / actions
-    case account
-    case actionDone
-    case actionLogOut
-    case actionRefresh
-    case actionRetry
+    case account, actionDone, actionLogOut, actionRefresh, actionRetry
 
     // Token sheet
-    case tokenTitle
-    case tokenAccess
-    case tokenExpiresFormat   // "%@" → expiry time
+    case tokenTitle, tokenAccess, tokenExpiresFormat
 
     // Common
     case nothingHere
+
+    // Detail / sections
+    case detailRelated, commentsTitle, viewAllComments, commentsEmpty
+    case novelRead
+
+    // Profile sections
+    case profileIllusts, profileManga, profileNovels, profileBookmarks
+    case profileFollow, profileFollowing
+
+    // Search
+    case searchTitle, searchPlaceholder
+    case searchTabIllust, searchTabNovel, searchTabUser
+
+    // Ranking modes
+    case rankingTitle
+    case rankModeDay, rankModeWeek, rankModeMonth
+    case rankModeDayMale, rankModeDayFemale
+    case rankModeWeekRookie, rankModeWeekOriginal, rankModeDayManga
+
+    // Discover
+    case discoverSpotlight
+
+    // More / settings / about
+    case moreTitle
+    case historyTitle, downloadsTitle, mutedTitle
+    case settingsTitle, aboutTitle
+    case settingsLanguage, settingsContent, settingsHideR18, settingsColumns
+    case settingsNetwork, settingsDirectConnect
 }

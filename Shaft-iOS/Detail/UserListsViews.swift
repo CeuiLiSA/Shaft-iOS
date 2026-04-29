@@ -1,0 +1,336 @@
+import SwiftUI
+
+// MARK: - User illusts / manga / bookmarks / novels (full-screen lists)
+
+@MainActor
+@Observable
+private final class UserIllustsVM {
+    let userId: Int64
+    let type: String
+    var illusts: [Illust] = []
+    var isLoading = false
+    var errorMessage: String?
+
+    @ObservationIgnored private let api: PixivAPI
+
+    init(userId: Int64, type: String) {
+        self.userId = userId; self.type = type
+        self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
+    }
+
+    func loadIfNeeded() async { if illusts.isEmpty { await load() } }
+    func load() async {
+        isLoading = true; errorMessage = nil
+        defer { isLoading = false }
+        do { illusts = try await api.userIllusts(userId, type: type).illusts }
+        catch { errorMessage = error.localizedDescription }
+    }
+}
+
+struct UserIllustsView: View {
+    let userId: Int64
+    let type: String
+    @State private var vm: UserIllustsVM
+
+    init(userId: Int64, type: String) {
+        self.userId = userId; self.type = type
+        _vm = State(wrappedValue: UserIllustsVM(userId: userId, type: type))
+    }
+
+    var body: some View {
+        IllustWaterfallList(
+            illusts: vm.illusts, isLoading: vm.isLoading,
+            errorMessage: vm.errorMessage,
+            onRefresh: { await vm.load() },
+            onTap: { _ in }
+        )
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await vm.loadIfNeeded() }
+    }
+}
+
+@MainActor
+@Observable
+private final class UserBookmarksVM {
+    let userId: Int64
+    var illusts: [Illust] = []
+    var isLoading = false; var errorMessage: String?
+
+    @ObservationIgnored private let api: PixivAPI
+
+    init(userId: Int64) {
+        self.userId = userId
+        self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
+    }
+
+    func loadIfNeeded() async { if illusts.isEmpty { await load() } }
+    func load() async {
+        isLoading = true; errorMessage = nil
+        defer { isLoading = false }
+        do { illusts = try await api.userBookmarkedIllusts(userId).illusts }
+        catch { errorMessage = error.localizedDescription }
+    }
+}
+
+struct UserBookmarksView: View {
+    let userId: Int64
+    @State private var vm: UserBookmarksVM
+
+    init(userId: Int64) {
+        self.userId = userId
+        _vm = State(wrappedValue: UserBookmarksVM(userId: userId))
+    }
+
+    var body: some View {
+        IllustWaterfallList(
+            illusts: vm.illusts, isLoading: vm.isLoading,
+            errorMessage: vm.errorMessage,
+            onRefresh: { await vm.load() },
+            onTap: { _ in }
+        )
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await vm.loadIfNeeded() }
+    }
+}
+
+@MainActor
+@Observable
+private final class UserNovelsVM {
+    let userId: Int64
+    var novels: [Novel] = []
+    var isLoading = false; var errorMessage: String?
+
+    @ObservationIgnored private let api: PixivAPI
+
+    init(userId: Int64) {
+        self.userId = userId
+        self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
+    }
+
+    func loadIfNeeded() async { if novels.isEmpty { await load() } }
+    func load() async {
+        isLoading = true; errorMessage = nil
+        defer { isLoading = false }
+        do { novels = try await api.userNovels(userId).novels }
+        catch { errorMessage = error.localizedDescription }
+    }
+}
+
+struct UserNovelsView: View {
+    let userId: Int64
+    @State private var vm: UserNovelsVM
+
+    init(userId: Int64) {
+        self.userId = userId
+        _vm = State(wrappedValue: UserNovelsVM(userId: userId))
+    }
+
+    var body: some View {
+        NovelList(novels: vm.novels)
+            .navigationBarTitleDisplayMode(.inline)
+            .task { await vm.loadIfNeeded() }
+            .refreshable { await vm.load() }
+            .overlay {
+                if vm.isLoading && vm.novels.isEmpty {
+                    ProgressView()
+                } else if vm.novels.isEmpty, let err = vm.errorMessage {
+                    InlineError(message: err) { Task { await vm.load() } }.padding()
+                }
+            }
+    }
+}
+
+// MARK: - Following / Followers
+
+@MainActor
+@Observable
+private final class UserPreviewListVM {
+    enum Source { case following(Int64), follower(Int64) }
+    let source: Source
+    var items: [UserPreview] = []
+    var isLoading = false; var errorMessage: String?
+
+    @ObservationIgnored private let api: PixivAPI
+
+    init(source: Source) {
+        self.source = source
+        self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
+    }
+
+    func loadIfNeeded() async { if items.isEmpty { await load() } }
+    func load() async {
+        isLoading = true; errorMessage = nil
+        defer { isLoading = false }
+        do {
+            switch source {
+            case .following(let id):
+                items = try await api.userFollowing(id).userPreviews
+            case .follower(let id):
+                items = try await api.userFollower(id).userPreviews
+            }
+        } catch { errorMessage = error.localizedDescription }
+    }
+}
+
+struct UserFollowingView: View {
+    let userId: Int64
+    @State private var vm: UserPreviewListVM
+    init(userId: Int64) {
+        self.userId = userId
+        _vm = State(wrappedValue: UserPreviewListVM(source: .following(userId)))
+    }
+    var body: some View {
+        UserPreviewList(items: vm.items)
+            .task { await vm.loadIfNeeded() }
+            .refreshable { await vm.load() }
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct UserFollowerView: View {
+    let userId: Int64
+    @State private var vm: UserPreviewListVM
+    init(userId: Int64) {
+        self.userId = userId
+        _vm = State(wrappedValue: UserPreviewListVM(source: .follower(userId)))
+    }
+    var body: some View {
+        UserPreviewList(items: vm.items)
+            .task { await vm.loadIfNeeded() }
+            .refreshable { await vm.load() }
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Related illusts
+
+@MainActor
+@Observable
+private final class RelatedIllustsVM {
+    let illustId: Int64
+    var illusts: [Illust] = []
+    var isLoading = false; var errorMessage: String?
+
+    @ObservationIgnored private let api: PixivAPI
+
+    init(illustId: Int64) {
+        self.illustId = illustId
+        self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
+    }
+
+    func loadIfNeeded() async { if illusts.isEmpty { await load() } }
+    func load() async {
+        isLoading = true; errorMessage = nil
+        defer { isLoading = false }
+        do { illusts = try await api.relatedIllusts(illustId).illusts }
+        catch { errorMessage = error.localizedDescription }
+    }
+}
+
+struct RelatedIllustsView: View {
+    let illustId: Int64
+    @State private var vm: RelatedIllustsVM
+    init(illustId: Int64) {
+        self.illustId = illustId
+        _vm = State(wrappedValue: RelatedIllustsVM(illustId: illustId))
+    }
+    var body: some View {
+        IllustWaterfallList(
+            illusts: vm.illusts, isLoading: vm.isLoading,
+            errorMessage: vm.errorMessage,
+            onRefresh: { await vm.load() },
+            onTap: { _ in }
+        )
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await vm.loadIfNeeded() }
+    }
+}
+
+// MARK: - Spotlight / Walkthrough
+
+@MainActor
+@Observable
+private final class SpotlightVM {
+    var articles: [Article] = []
+    var isLoading = false; var errorMessage: String?
+
+    @ObservationIgnored private let api: PixivAPI
+
+    init() { self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared) }
+
+    func loadIfNeeded() async { if articles.isEmpty { await load() } }
+    func load() async {
+        isLoading = true; errorMessage = nil
+        defer { isLoading = false }
+        do { articles = try await api.spotlightArticles().spotlightArticles }
+        catch { errorMessage = error.localizedDescription }
+    }
+}
+
+struct SpotlightView: View {
+    @State private var vm = SpotlightVM()
+    @Environment(OnboardingStore.self) private var l10n
+
+    var body: some View {
+        List(vm.articles) { article in
+            VStack(alignment: .leading, spacing: 6) {
+                if let url = article.thumbnail.flatMap(URL.init(string:)) {
+                    PixivAsyncImage(url: url)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 160)
+                        .clipShape(.rect(cornerRadius: 8))
+                }
+                Text(article.title ?? article.pureTitle ?? "")
+                    .font(.headline)
+                if let date = article.publishDate {
+                    Text(date).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+            .onTapGesture {
+                if let s = article.articleUrl, let url = URL(string: s) {
+                    UIApplication.shared.open(url)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .navigationTitle(l10n.t(.discoverSpotlight))
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await vm.loadIfNeeded() }
+        .refreshable { await vm.load() }
+    }
+}
+
+@MainActor
+@Observable
+private final class WalkthroughVM {
+    var illusts: [Illust] = []
+    var isLoading = false; var errorMessage: String?
+
+    @ObservationIgnored private let api: PixivAPI
+
+    init() { self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared) }
+
+    func loadIfNeeded() async { if illusts.isEmpty { await load() } }
+    func load() async {
+        isLoading = true; errorMessage = nil
+        defer { isLoading = false }
+        do { illusts = try await api.walkthroughIllusts().illusts }
+        catch { errorMessage = error.localizedDescription }
+    }
+}
+
+struct WalkthroughView: View {
+    @State private var vm = WalkthroughVM()
+
+    var body: some View {
+        IllustWaterfallList(
+            illusts: vm.illusts, isLoading: vm.isLoading,
+            errorMessage: vm.errorMessage,
+            onRefresh: { await vm.load() },
+            onTap: { _ in }
+        )
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await vm.loadIfNeeded() }
+    }
+}

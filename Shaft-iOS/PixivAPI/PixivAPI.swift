@@ -84,6 +84,181 @@ actor PixivAPI {
         ])
     }
 
+    func walkthroughIllusts() async throws -> IllustResponse {
+        try await get(path: "/v1/walkthrough/illusts")
+    }
+
+    func newIllustsFromFollowing(restrict: String = "public") async throws -> IllustResponse {
+        try await get(path: "/v2/illust/follow", query: [
+            "restrict": restrict,
+            "filter": "for_ios",
+        ])
+    }
+
+    func newNovelsFromFollowing(restrict: String = "public") async throws -> NovelResponse {
+        try await get(path: "/v1/novel/follow", query: ["restrict": restrict])
+    }
+
+    func spotlightArticles(category: String = "all") async throws -> ArticlesResponse {
+        try await get(path: "/v1/spotlight/articles", query: ["category": category])
+    }
+
+    // MARK: Detail
+
+    func illustDetail(_ illustId: Int64) async throws -> IllustDetailResponse {
+        try await get(path: "/v1/illust/detail", query: ["illust_id": "\(illustId)"])
+    }
+
+    func relatedIllusts(_ illustId: Int64) async throws -> IllustResponse {
+        try await get(path: "/v2/illust/related", query: ["illust_id": "\(illustId)"])
+    }
+
+    func illustComments(_ illustId: Int64) async throws -> CommentsResponse {
+        try await get(path: "/v3/illust/comments", query: ["illust_id": "\(illustId)"])
+    }
+
+    func novelDetail(_ novelId: Int64) async throws -> NovelDetailResponse {
+        try await get(path: "/v2/novel/detail", query: ["novel_id": "\(novelId)"])
+    }
+
+    func novelComments(_ novelId: Int64) async throws -> CommentsResponse {
+        try await get(path: "/v3/novel/comments", query: ["novel_id": "\(novelId)"])
+    }
+
+    func recommendedNovels() async throws -> NovelResponse {
+        try await get(path: "/v1/novel/recommended", query: [
+            "include_ranking_illusts": "false",
+        ])
+    }
+
+    // MARK: User
+
+    func userDetail(_ userId: Int64) async throws -> UserDetailResponse {
+        try await get(path: "/v1/user/detail", query: [
+            "user_id": "\(userId)",
+            "filter": "for_ios",
+        ])
+    }
+
+    func userIllusts(_ userId: Int64, type: String = "illust") async throws -> IllustResponse {
+        try await get(path: "/v1/user/illusts", query: [
+            "user_id": "\(userId)",
+            "type": type,
+            "filter": "for_ios",
+        ])
+    }
+
+    func userBookmarkedIllusts(_ userId: Int64, restrict: String = "public") async throws -> IllustResponse {
+        try await get(path: "/v1/user/bookmarks/illust", query: [
+            "user_id": "\(userId)",
+            "restrict": restrict,
+            "filter": "for_ios",
+        ])
+    }
+
+    func userBookmarkedNovels(_ userId: Int64, restrict: String = "public") async throws -> NovelResponse {
+        try await get(path: "/v1/user/bookmarks/novel", query: [
+            "user_id": "\(userId)",
+            "restrict": restrict,
+        ])
+    }
+
+    func userNovels(_ userId: Int64) async throws -> NovelResponse {
+        try await get(path: "/v1/user/novels", query: ["user_id": "\(userId)"])
+    }
+
+    func userFollowing(_ userId: Int64, restrict: String = "public") async throws -> UserPreviewResponse {
+        try await get(path: "/v1/user/following", query: [
+            "user_id": "\(userId)",
+            "restrict": restrict,
+        ])
+    }
+
+    func userFollower(_ userId: Int64) async throws -> UserPreviewResponse {
+        try await get(path: "/v1/user/follower", query: [
+            "user_id": "\(userId)",
+            "filter": "for_ios",
+        ])
+    }
+
+    func selfProfile() async throws -> SelfProfileResponse {
+        try await get(path: "/v1/user/me/state")
+    }
+
+    // MARK: Search
+
+    func searchIllust(word: String, sort: String = "date_desc") async throws -> IllustResponse {
+        try await get(path: "/v1/search/illust", query: [
+            "word": word,
+            "sort": sort,
+            "search_target": "partial_match_for_tags",
+            "filter": "for_ios",
+        ])
+    }
+
+    func searchNovel(word: String, sort: String = "date_desc") async throws -> NovelResponse {
+        try await get(path: "/v1/search/novel", query: [
+            "word": word,
+            "sort": sort,
+            "search_target": "partial_match_for_tags",
+        ])
+    }
+
+    func searchUser(word: String) async throws -> UserPreviewResponse {
+        try await get(path: "/v1/search/user", query: [
+            "word": word,
+            "filter": "for_ios",
+        ])
+    }
+
+    func autocompleteTags(prefix: String) async throws -> AutoCompleteResponse {
+        try await get(path: "/v2/search/autocomplete", query: [
+            "word": prefix,
+            "merge_plain_keyword_results": "true",
+        ])
+    }
+
+    // MARK: Mutations
+
+    @discardableResult
+    func bookmarkIllust(_ illustId: Int64, restrict: String = "public") async throws -> EmptyResponse {
+        try await post(path: "/v2/illust/bookmark/add", form: [
+            "illust_id": "\(illustId)",
+            "restrict": restrict,
+        ])
+    }
+
+    @discardableResult
+    func unbookmarkIllust(_ illustId: Int64) async throws -> EmptyResponse {
+        try await post(path: "/v1/illust/bookmark/delete", form: ["illust_id": "\(illustId)"])
+    }
+
+    @discardableResult
+    func bookmarkNovel(_ novelId: Int64, restrict: String = "public") async throws -> EmptyResponse {
+        try await post(path: "/v2/novel/bookmark/add", form: [
+            "novel_id": "\(novelId)",
+            "restrict": restrict,
+        ])
+    }
+
+    @discardableResult
+    func unbookmarkNovel(_ novelId: Int64) async throws -> EmptyResponse {
+        try await post(path: "/v1/novel/bookmark/delete", form: ["novel_id": "\(novelId)"])
+    }
+
+    @discardableResult
+    func followUser(_ userId: Int64, restrict: String = "public") async throws -> EmptyResponse {
+        try await post(path: "/v1/user/follow/add", form: [
+            "user_id": "\(userId)",
+            "restrict": restrict,
+        ])
+    }
+
+    @discardableResult
+    func unfollowUser(_ userId: Int64) async throws -> EmptyResponse {
+        try await post(path: "/v1/user/follow/delete", form: ["user_id": "\(userId)"])
+    }
+
     // MARK: Internals
 
     private func get<T: Decodable>(path: String, query: [String: String] = [:]) async throws -> T {
@@ -92,6 +267,25 @@ actor PixivAPI {
             comps.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
         }
         return try await perform(request: URLRequest(url: comps.url!))
+    }
+
+    private func post<T: Decodable>(path: String, form: [String: String]) async throws -> T {
+        let url = Self.baseURL.appendingPathComponent(path)
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        req.httpBody = formEncode(form).data(using: .utf8)
+        return try await perform(request: req)
+    }
+
+    private func formEncode(_ fields: [String: String]) -> String {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&=+")
+        return fields.map { k, v in
+            let key = k.addingPercentEncoding(withAllowedCharacters: allowed) ?? k
+            let val = v.addingPercentEncoding(withAllowedCharacters: allowed) ?? v
+            return "\(key)=\(val)"
+        }.joined(separator: "&")
     }
 
     private func perform<T: Decodable>(request original: URLRequest) async throws -> T {
@@ -115,6 +309,9 @@ actor PixivAPI {
             throw APIError.http(code: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
 
+        if data.isEmpty, let empty = EmptyResponse() as? T {
+            return empty
+        }
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {

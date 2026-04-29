@@ -145,7 +145,10 @@ struct RecommendedWorksView: View {
                         spacing: 8,
                         estimatedRelativeHeight: relativeHeight(for:)
                     ) { illust in
-                        WaterfallIllustCell(illust: illust)
+                        NavigationLink(value: AppRoute.illustDetail(illust.id)) {
+                            IllustWaterfallCell(illust: illust)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .padding(.horizontal, 8)
                 } else if let err = vm.recommendedError {
@@ -208,52 +211,6 @@ struct PopularTagsView: View {
 
 // MARK: - Cells
 
-private struct WaterfallIllustCell: View {
-    let illust: Illust
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            PixivAsyncImage(url: imageURL)
-                .aspectRatio(displayAspect, contentMode: .fit)
-                .clipShape(.rect(cornerRadius: 6))
-                .overlay(alignment: .topTrailing) {
-                    if (illust.pageCount ?? 1) > 1 {
-                        Label("\(illust.pageCount ?? 1)", systemImage: "square.on.square")
-                            .font(.caption2.bold())
-                            .padding(.horizontal, 5).padding(.vertical, 2)
-                            .background(.black.opacity(0.55), in: .capsule)
-                            .foregroundStyle(.white)
-                            .padding(6)
-                    }
-                }
-
-            Text(illust.title ?? "")
-                .font(.caption)
-                .lineLimit(1)
-            if let user = illust.user {
-                Text(user.name ?? "")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-        }
-    }
-
-    private var displayAspect: CGFloat {
-        let w = max(CGFloat(illust.width ?? 1), 1)
-        let h = max(CGFloat(illust.height ?? 1), 1)
-        let r = w / h
-        return min(max(r, 0.5), 2.0)
-    }
-
-    private var imageURL: URL? {
-        let s = illust.imageUrls?.medium
-            ?? illust.imageUrls?.large
-            ?? illust.imageUrls?.squareMedium
-        return s.flatMap(URL.init(string:))
-    }
-}
-
 private struct RankingStrip: View {
     let illusts: [Illust]
 
@@ -266,7 +223,10 @@ private struct RankingStrip: View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: 10) {
                 ForEach(Array(illusts.prefix(Self.homeStripCap).enumerated()), id: \.element.id) { idx, illust in
-                    RankingCard(rank: idx + 1, illust: illust)
+                    NavigationLink(value: AppRoute.illustDetail(illust.id)) {
+                        RankingCard(rank: idx + 1, illust: illust)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 16)
