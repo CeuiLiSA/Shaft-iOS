@@ -11,6 +11,13 @@
 		A1000000000000000000B002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F002 /* ContentView.swift */; };
 		A1000000000000000000B003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F003 /* Assets.xcassets */; };
 		A1000000000000000000B004 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F004 /* Preview Assets.xcassets */; };
+		A1000000000000000000B005 /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F005 /* KeychainTokenStore.swift */; };
+		A1000000000000000000B006 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F006 /* LoginView.swift */; };
+		A1000000000000000000B007 /* PixivOAuthConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F007 /* PixivOAuthConfig.swift */; };
+		A1000000000000000000B008 /* PkceUtil.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F008 /* PkceUtil.swift */; };
+		A1000000000000000000B009 /* PixivOAuthResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F009 /* PixivOAuthResponse.swift */; };
+		A1000000000000000000B010 /* PixivOAuthClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F010 /* PixivOAuthClient.swift */; };
+		A1000000000000000000B011 /* PixivLoginSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F011 /* PixivLoginSession.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -19,6 +26,13 @@
 		A1000000000000000000F002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1000000000000000000F004 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		A1000000000000000000F005 /* KeychainTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainTokenStore.swift; sourceTree = "<group>"; };
+		A1000000000000000000F006 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F007 /* PixivOAuthConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixivOAuthConfig.swift; sourceTree = "<group>"; };
+		A1000000000000000000F008 /* PkceUtil.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PkceUtil.swift; sourceTree = "<group>"; };
+		A1000000000000000000F009 /* PixivOAuthResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixivOAuthResponse.swift; sourceTree = "<group>"; };
+		A1000000000000000000F010 /* PixivOAuthClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixivOAuthClient.swift; sourceTree = "<group>"; };
+		A1000000000000000000F011 /* PixivLoginSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixivLoginSession.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -45,10 +59,25 @@
 			children = (
 				A1000000000000000000F001 /* Shaft_iOSApp.swift */,
 				A1000000000000000000F002 /* ContentView.swift */,
+				A1000000000000000000F006 /* LoginView.swift */,
+				A1000000000000000000F005 /* KeychainTokenStore.swift */,
+				A1000000000000000000G005 /* PixivOAuth */,
 				A1000000000000000000F003 /* Assets.xcassets */,
 				A1000000000000000000G004 /* Preview Content */,
 			);
 			path = "Shaft-iOS";
+			sourceTree = "<group>";
+		};
+		A1000000000000000000G005 /* PixivOAuth */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000F007 /* PixivOAuthConfig.swift */,
+				A1000000000000000000F008 /* PkceUtil.swift */,
+				A1000000000000000000F009 /* PixivOAuthResponse.swift */,
+				A1000000000000000000F010 /* PixivOAuthClient.swift */,
+				A1000000000000000000F011 /* PixivLoginSession.swift */,
+			);
+			path = PixivOAuth;
 			sourceTree = "<group>";
 		};
 		A1000000000000000000G003 /* Products */ = {
@@ -139,6 +168,13 @@
 			files = (
 				A1000000000000000000B002 /* ContentView.swift in Sources */,
 				A1000000000000000000B001 /* Shaft_iOSApp.swift in Sources */,
+				A1000000000000000000B005 /* KeychainTokenStore.swift in Sources */,
+				A1000000000000000000B006 /* LoginView.swift in Sources */,
+				A1000000000000000000B007 /* PixivOAuthConfig.swift in Sources */,
+				A1000000000000000000B008 /* PkceUtil.swift in Sources */,
+				A1000000000000000000B009 /* PixivOAuthResponse.swift in Sources */,
+				A1000000000000000000B010 /* PixivOAuthClient.swift in Sources */,
+				A1000000000000000000B011 /* PixivLoginSession.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

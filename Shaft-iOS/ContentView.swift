@@ -1,18 +1,16 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State private var auth = AuthViewModel()
+
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "photo.artframe")
-                .imageScale(.large)
-                .font(.system(size: 56))
-                .foregroundStyle(.tint)
-            Text("Shaft-iOS")
-                .font(.largeTitle.bold())
-            Text("Hello, SwiftUI!")
-                .foregroundStyle(.secondary)
+        Group {
+            if auth.token != nil {
+                LoggedInView(auth: auth)
+            } else {
+                LoginView(auth: auth)
+            }
         }
-        .padding()
     }
 }
 
