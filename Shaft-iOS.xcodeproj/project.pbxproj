@@ -22,6 +22,7 @@
 		A1000000000000000000B013 /* OnboardingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F013 /* OnboardingStore.swift */; };
 		A1000000000000000000B014 /* TunnelBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F014 /* TunnelBackgroundView.swift */; };
 		A1000000000000000000B015 /* LanguageOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F015 /* LanguageOnboardingView.swift */; };
+		A1000000000000000000B016 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F016 /* HomeView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +42,7 @@
 		A1000000000000000000F013 /* OnboardingStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingStore.swift; sourceTree = "<group>"; };
 		A1000000000000000000F014 /* TunnelBackgroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelBackgroundView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F015 /* LanguageOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageOnboardingView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F016 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,10 +73,19 @@
 				A1000000000000000000F005 /* KeychainTokenStore.swift */,
 				A1000000000000000000G005 /* PixivOAuth */,
 				A1000000000000000000G006 /* Onboarding */,
+				A1000000000000000000G007 /* Home */,
 				A1000000000000000000F003 /* Assets.xcassets */,
 				A1000000000000000000G004 /* Preview Content */,
 			);
 			path = "Shaft-iOS";
+			sourceTree = "<group>";
+		};
+		A1000000000000000000G007 /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000F016 /* HomeView.swift */,
+			);
+			path = Home;
 			sourceTree = "<group>";
 		};
 		A1000000000000000000G005 /* PixivOAuth */ = {
@@ -199,6 +210,7 @@
 				A1000000000000000000B013 /* OnboardingStore.swift in Sources */,
 				A1000000000000000000B014 /* TunnelBackgroundView.swift in Sources */,
 				A1000000000000000000B015 /* LanguageOnboardingView.swift in Sources */,
+				A1000000000000000000B016 /* HomeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

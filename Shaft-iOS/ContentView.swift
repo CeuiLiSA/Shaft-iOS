@@ -15,7 +15,7 @@ struct ContentView: View {
                 LoginView(auth: auth)
                     .transition(.opacity)
             } else {
-                LoggedInView(auth: auth)
+                HomeView(auth: auth)
                     .transition(.opacity)
             }
         }
