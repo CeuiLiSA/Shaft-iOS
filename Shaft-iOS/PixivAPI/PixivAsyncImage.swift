@@ -11,10 +11,11 @@ final class PixivImageCache {
 
     init() {
         cache.countLimit = 200
+        cache.totalCostLimit = 64 * 1024 * 1024  // ~64 MB of decoded images
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 15
-        cfg.urlCache = URLCache(memoryCapacity: 32 * 1024 * 1024,
-                                diskCapacity: 200 * 1024 * 1024)
+        cfg.urlCache = nil  // dedup via NSCache; URLCache would double-cache encoded bytes
+        cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
         self.session = URLSession(configuration: cfg)
     }
 
@@ -32,7 +33,8 @@ final class PixivImageCache {
         do {
             let (data, _) = try await session.data(for: req)
             guard let img = UIImage(data: data) else { return nil }
-            cache.setObject(img, forKey: url.absoluteString as NSString)
+            let cost = (img.cgImage?.bytesPerRow ?? data.count) * (img.cgImage?.height ?? 1)
+            cache.setObject(img, forKey: url.absoluteString as NSString, cost: cost)
             return img
         } catch {
             return nil

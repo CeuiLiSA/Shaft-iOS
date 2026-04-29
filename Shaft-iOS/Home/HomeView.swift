@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @Bindable var auth: AuthViewModel
+    @Environment(OnboardingStore.self) private var l10n
     @State private var selection: HomeTab = .recommend
     @State private var showProfile = false
 
@@ -11,11 +12,17 @@ struct HomeView: View {
                 NavigationStack {
                     Group {
                         switch tab {
-                        case .recommend: RecommendView()
-                        default:         EmptyTabView(tab: tab)
+                        case .recommend:
+                            RecommendView()
+                        default:
+                            PlaceholderView(
+                                title: title(for: tab),
+                                systemImage: tab.systemImage,
+                                subtitle: l10n.t(.nothingHere)
+                            )
                         }
                     }
-                    .navigationTitle(tab == .recommend ? "Home" : tab.title)
+                    .navigationTitle(navTitle(for: tab))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
@@ -24,12 +31,12 @@ struct HomeView: View {
                             } label: {
                                 Image(systemName: "person.crop.circle")
                             }
-                            .accessibilityLabel("Account")
+                            .accessibilityLabel(l10n.t(.account))
                         }
                     }
                 }
                 .tabItem {
-                    Label(tab.title, systemImage: tab.systemImage)
+                    Label(title(for: tab), systemImage: tab.systemImage)
                 }
                 .tag(tab)
             }
@@ -37,16 +44,30 @@ struct HomeView: View {
         .sheet(isPresented: $showProfile) {
             NavigationStack {
                 LoggedInView(auth: auth)
-                    .navigationTitle("Account")
+                    .navigationTitle(l10n.t(.account))
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button("Done") { showProfile = false }
+                            Button(l10n.t(.actionDone)) { showProfile = false }
                         }
                     }
             }
             .presentationDetents([.medium, .large])
         }
+    }
+
+    private func title(for tab: HomeTab) -> String {
+        switch tab {
+        case .recommend: return l10n.t(.tabRecommend)
+        case .discover:  return l10n.t(.tabDiscover)
+        case .whatsNew:  return l10n.t(.tabWhatsNew)
+        }
+    }
+
+    private func navTitle(for tab: HomeTab) -> String {
+        // Recommend tab toolbar shows "Home" (Shaft string_207); other tabs
+        // reuse their bottom-bar label.
+        tab == .recommend ? l10n.t(.homeNavTitle) : title(for: tab)
     }
 }
 
@@ -55,38 +76,11 @@ enum HomeTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    var title: String {
-        switch self {
-        case .recommend: return "Recommend"
-        case .discover:  return "Discover"
-        case .whatsNew:  return "What's New"
-        }
-    }
-
     var systemImage: String {
         switch self {
         case .recommend: return "sparkles"
         case .discover:  return "safari"
         case .whatsNew:  return "bell"
         }
-    }
-}
-
-struct EmptyTabView: View {
-    let tab: HomeTab
-
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: tab.systemImage)
-                .font(.system(size: 48, weight: .light))
-                .foregroundStyle(.secondary)
-            Text(tab.title)
-                .font(.title3.weight(.semibold))
-            Text("Nothing here yet")
-                .font(.footnote)
-                .foregroundStyle(.tertiary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemBackground))
     }
 }

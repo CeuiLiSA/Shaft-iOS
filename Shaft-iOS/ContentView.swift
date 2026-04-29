@@ -19,6 +19,8 @@ struct ContentView: View {
                     .transition(.opacity)
             }
         }
+        .environment(onboarding)
+        .environment(\.locale, onboarding.currentLocale)
         .animation(.easeInOut(duration: 0.35), value: onboarding.hasUserConfigured)
         .animation(.easeInOut(duration: 0.35), value: auth.token != nil)
     }

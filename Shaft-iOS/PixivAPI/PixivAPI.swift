@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import UIKit
 
 protocol PixivTokenProvider: Sendable {
     func currentAccessToken() async -> String?
@@ -13,9 +14,18 @@ actor PixivAPI {
 
     private let session: URLSession
     private let tokenProvider: any PixivTokenProvider
+    private let osVersion: String
+    private let deviceModel: String
 
-    init(tokenProvider: any PixivTokenProvider, session: URLSession? = nil) {
+    init(
+        tokenProvider: any PixivTokenProvider,
+        osVersion: String,
+        deviceModel: String,
+        session: URLSession? = nil
+    ) {
         self.tokenProvider = tokenProvider
+        self.osVersion = osVersion
+        self.deviceModel = deviceModel
         if let session {
             self.session = session
         } else {
@@ -24,6 +34,15 @@ actor PixivAPI {
             cfg.timeoutIntervalForResource = 30
             self.session = URLSession(configuration: cfg)
         }
+    }
+
+    @MainActor
+    static func make(tokenProvider: any PixivTokenProvider) -> PixivAPI {
+        PixivAPI(
+            tokenProvider: tokenProvider,
+            osVersion: UIDevice.current.systemVersion,
+            deviceModel: UIDevice.current.model
+        )
     }
 
     enum APIError: Error, LocalizedError {
@@ -54,11 +73,6 @@ actor PixivAPI {
 
     func trendingTags(type: String = "illust") async throws -> TrendingTagsResponse {
         try await get(path: "/v1/trending-tags/\(type)", query: ["filter": "for_ios"])
-    }
-
-    func nextPage<T: Decodable>(_ url: String) async throws -> T {
-        guard let u = URL(string: url) else { throw APIError.http(code: 0, body: "bad next_url") }
-        return try await perform(request: URLRequest(url: u))
     }
 
     // MARK: Internals
@@ -109,11 +123,12 @@ actor PixivAPI {
 
         req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "authorization")
         req.setValue("ios", forHTTPHeaderField: "app-os")
-        req.setValue("17.0", forHTTPHeaderField: "app-os-version")
+        req.setValue(osVersion, forHTTPHeaderField: "app-os-version")
         req.setValue(Self.appVersion, forHTTPHeaderField: "app-version")
         req.setValue(clientTime, forHTTPHeaderField: "x-client-time")
         req.setValue(hash, forHTTPHeaderField: "x-client-hash")
-        req.setValue("PixivIOSApp/\(Self.appVersion) (iOS 17.0; iPhone)", forHTTPHeaderField: "user-agent")
+        req.setValue("PixivIOSApp/\(Self.appVersion) (iOS \(osVersion); \(deviceModel))",
+                     forHTTPHeaderField: "user-agent")
         req.setValue(Self.acceptLanguage(), forHTTPHeaderField: "accept-language")
     }
 

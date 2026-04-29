@@ -11,7 +11,11 @@ final class RecommendViewModel {
     var illustError: String?
     var tagError: String?
 
-    @ObservationIgnored private let api = PixivAPI(tokenProvider: AuthTokenProvider.shared)
+    @ObservationIgnored private let api: PixivAPI
+
+    init() {
+        self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
+    }
 
     func loadIllustsIfNeeded() async {
         guard illusts.isEmpty, !isLoadingIllusts else { return }
@@ -52,22 +56,23 @@ final class RecommendViewModel {
 struct RecommendView: View {
     @State private var subTab: SubTab = .recommended
     @State private var vm = RecommendViewModel()
+    @Environment(OnboardingStore.self) private var l10n
 
     enum SubTab: Hashable, CaseIterable {
         case recommended, hotTag
+    }
 
-        var title: String {
-            switch self {
-            case .recommended: return "Recommended works"
-            case .hotTag:      return "Popular Tags"
-            }
+    private func title(_ tab: SubTab) -> String {
+        switch tab {
+        case .recommended: return l10n.t(.subRecommendedWorks)
+        case .hotTag:      return l10n.t(.subPopularTags)
         }
     }
 
     var body: some View {
         VStack(spacing: 0) {
             PagerTabBar(
-                titles: SubTab.allCases.map { ($0, $0.title) },
+                titles: SubTab.allCases.map { ($0, title($0)) },
                 selection: $subTab
             )
             TabView(selection: $subTab) {
@@ -83,7 +88,7 @@ struct RecommendView: View {
 }
 
 struct RecommendedWorksView: View {
-    @Bindable var vm: RecommendViewModel
+    let vm: RecommendViewModel
 
     private let columns = [
         GridItem(.flexible(), spacing: 8),
@@ -112,7 +117,7 @@ struct RecommendedWorksView: View {
 }
 
 struct PopularTagsView: View {
-    @Bindable var vm: RecommendViewModel
+    let vm: RecommendViewModel
 
     private let columns = [
         GridItem(.flexible(), spacing: 8),
@@ -206,6 +211,7 @@ private struct TagGridCell: View {
 private struct ErrorBanner: View {
     let message: String
     let retry: () -> Void
+    @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
         HStack {
@@ -215,7 +221,7 @@ private struct ErrorBanner: View {
                 .font(.footnote)
                 .lineLimit(3)
             Spacer()
-            Button("Retry", action: retry)
+            Button(l10n.t(.actionRetry), action: retry)
                 .buttonStyle(.bordered)
                 .controlSize(.small)
         }

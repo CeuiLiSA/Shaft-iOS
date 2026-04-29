@@ -24,7 +24,6 @@ struct TunnelBackgroundView: View {
 
         // Receding concentric rectangles, parallax rotation
         let rot = sin(t * 0.18) * 0.12
-        let cosR = cos(rot), sinR = sin(rot)
 
         let baseColors: [(r: Double, g: Double, b: Double)] = [
             (0.04, 0.02, 0.10),
@@ -43,7 +42,6 @@ struct TunnelBackgroundView: View {
             var transform = CGAffineTransform(translationX: cx, y: cy)
             transform = transform.rotated(by: rot)
             transform = transform.translatedBy(x: -rectW / 2, y: -rectH / 2)
-            _ = (cosR, sinR)
 
             let path = Path(roundedRect: CGRect(x: 0, y: 0, width: rectW, height: rectH),
                             cornerRadius: rectW * 0.04)

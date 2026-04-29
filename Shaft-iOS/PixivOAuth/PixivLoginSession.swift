@@ -37,8 +37,18 @@ final class PixivLoginSession: NSObject, ASWebAuthenticationPresentationContextP
                     cont.resume(throwing: ASWebAuthenticationSessionError(.canceledLogin))
                 }
             }
-        } catch let e as ASWebAuthenticationSessionError where e.code == .canceledLogin {
-            return .failure(.userCancelled)
+        } catch let e as ASWebAuthenticationSessionError {
+            switch e.code {
+            case .canceledLogin:
+                return .failure(.userCancelled)
+            case .presentationContextNotProvided, .presentationContextInvalid:
+                return .failure(.networkError(
+                    message: "Cannot present sign-in: \(e.localizedDescription)",
+                    underlying: e
+                ))
+            @unknown default:
+                return .failure(.networkError(message: e.localizedDescription, underlying: e))
+            }
         } catch {
             return .failure(.networkError(message: error.localizedDescription, underlying: error))
         }

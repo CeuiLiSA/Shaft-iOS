@@ -12,6 +12,11 @@ actor AuthTokenProvider: PixivTokenProvider {
         store.load()?.accessToken
     }
 
+    /// Concurrent callers are coalesced into a single refresh: the first arrival
+    /// publishes its `Task` to `inflightRefresh`, later arrivals await the same
+    /// value. Actor isolation guarantees the check-then-set sequence runs without
+    /// interleaving — `Task { ... }` does not suspend, so other actor-isolated
+    /// methods cannot run between line "check" and line "publish".
     func refreshAccessToken() async -> String? {
         if let inflight = inflightRefresh {
             return await inflight.value

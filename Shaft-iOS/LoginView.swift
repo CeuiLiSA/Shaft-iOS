@@ -61,6 +61,7 @@ final class AuthViewModel {
 
 struct LoginView: View {
     @Bindable var auth: AuthViewModel
+    @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
         ZStack {
@@ -77,11 +78,11 @@ struct LoginView: View {
                         .font(.system(size: 56))
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.6), radius: 6, y: 2)
-                    Text("Sign in to Pixiv")
+                    Text(l10n.t(.loginTitle))
                         .font(.system(size: 28, weight: .bold))
                         .foregroundStyle(.white)
                         .shadow(color: .black.opacity(0.6), radius: 6, y: 2)
-                    Text("OAuth 2.0 with PKCE")
+                    Text(l10n.t(.loginSubtitle))
                         .font(.footnote)
                         .foregroundStyle(.white.opacity(0.7))
                         .shadow(color: .black.opacity(0.6), radius: 4, y: 1)
@@ -93,7 +94,7 @@ struct LoginView: View {
                     Button {
                         Task { await auth.login(provisional: false) }
                     } label: {
-                        Text("Log in")
+                        Text(l10n.t(.loginAction))
                             .font(.system(size: 17, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
@@ -105,7 +106,7 @@ struct LoginView: View {
                     Button {
                         Task { await auth.login(provisional: true) }
                     } label: {
-                        Text("Try without account")
+                        Text(l10n.t(.loginProvisional))
                             .font(.system(size: 17, weight: .medium))
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
@@ -139,6 +140,7 @@ struct LoginView: View {
 
 struct LoggedInView: View {
     @Bindable var auth: AuthViewModel
+    @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
         VStack(spacing: 16) {
@@ -153,11 +155,12 @@ struct LoggedInView: View {
             }
 
             if let token = auth.token {
-                GroupBox("Token") {
+                GroupBox(l10n.t(.tokenTitle)) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Access").font(.caption.bold())
+                        Text(l10n.t(.tokenAccess)).font(.caption.bold())
                         Text(token.accessToken).font(.caption.monospaced()).lineLimit(2).truncationMode(.middle)
-                        Text("Expires \(token.expiresAt.formatted(date: .omitted, time: .shortened))")
+                        let formatted = token.expiresAt.formatted(date: .omitted, time: .shortened)
+                        Text(l10n.t(.tokenExpiresFormat, formatted))
                             .font(.caption2).foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -166,9 +169,9 @@ struct LoggedInView: View {
             }
 
             HStack {
-                Button("Refresh") { Task { await auth.refresh() } }
+                Button(l10n.t(.actionRefresh)) { Task { await auth.refresh() } }
                     .buttonStyle(.bordered)
-                Button("Log out", role: .destructive) { auth.logout() }
+                Button(l10n.t(.actionLogOut), role: .destructive) { auth.logout() }
                     .buttonStyle(.bordered)
             }
             .disabled(auth.isLoading)

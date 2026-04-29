@@ -29,6 +29,9 @@
 		A1000000000000000000B020 /* PixivAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F020 /* PixivAPI.swift */; };
 		A1000000000000000000B021 /* AuthTokenProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F021 /* AuthTokenProvider.swift */; };
 		A1000000000000000000B022 /* PixivAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F022 /* PixivAsyncImage.swift */; };
+		A1000000000000000000B023 /* PlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F023 /* PlaceholderView.swift */; };
+		A1000000000000000000B024 /* LocalizedKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F024 /* LocalizedKey.swift */; };
+		A1000000000000000000B025 /* LocalizedStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F025 /* LocalizedStrings.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -55,6 +58,9 @@
 		A1000000000000000000F020 /* PixivAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixivAPI.swift; sourceTree = "<group>"; };
 		A1000000000000000000F021 /* AuthTokenProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthTokenProvider.swift; sourceTree = "<group>"; };
 		A1000000000000000000F022 /* PixivAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixivAsyncImage.swift; sourceTree = "<group>"; };
+		A1000000000000000000F023 /* PlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F024 /* LocalizedKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedKey.swift; sourceTree = "<group>"; };
+		A1000000000000000000F025 /* LocalizedStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedStrings.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -85,6 +91,7 @@
 				A1000000000000000000F005 /* KeychainTokenStore.swift */,
 				A1000000000000000000G005 /* PixivOAuth */,
 				A1000000000000000000G008 /* PixivAPI */,
+				A1000000000000000000G009 /* Localization */,
 				A1000000000000000000G006 /* Onboarding */,
 				A1000000000000000000G007 /* Home */,
 				A1000000000000000000F003 /* Assets.xcassets */,
@@ -110,8 +117,18 @@
 				A1000000000000000000F016 /* HomeView.swift */,
 				A1000000000000000000F017 /* PagerTabBar.swift */,
 				A1000000000000000000F018 /* RecommendView.swift */,
+				A1000000000000000000F023 /* PlaceholderView.swift */,
 			);
 			path = Home;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000G009 /* Localization */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000F024 /* LocalizedKey.swift */,
+				A1000000000000000000F025 /* LocalizedStrings.swift */,
+			);
+			path = Localization;
 			sourceTree = "<group>";
 		};
 		A1000000000000000000G005 /* PixivOAuth */ = {
@@ -243,6 +260,9 @@
 				A1000000000000000000B020 /* PixivAPI.swift in Sources */,
 				A1000000000000000000B021 /* AuthTokenProvider.swift in Sources */,
 				A1000000000000000000B022 /* PixivAsyncImage.swift in Sources */,
+				A1000000000000000000B023 /* PlaceholderView.swift in Sources */,
+				A1000000000000000000B024 /* LocalizedKey.swift in Sources */,
+				A1000000000000000000B025 /* LocalizedStrings.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
