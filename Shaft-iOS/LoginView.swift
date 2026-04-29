@@ -63,51 +63,77 @@ struct LoginView: View {
     @Bindable var auth: AuthViewModel
 
     var body: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "person.crop.circle.badge.checkmark")
-                .font(.system(size: 64))
-                .foregroundStyle(.tint)
+        ZStack {
+            TunnelBackgroundView()
+                .ignoresSafeArea()
+            LoginScrimGradient()
+                .ignoresSafeArea()
 
-            Text("Sign in to Pixiv")
-                .font(.title2.bold())
+            VStack(spacing: 24) {
+                Spacer()
 
-            Text("OAuth 2.0 with PKCE")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-            VStack(spacing: 12) {
-                Button {
-                    Task { await auth.login(provisional: false) }
-                } label: {
-                    Text("Log in").frame(maxWidth: .infinity)
+                VStack(spacing: 10) {
+                    Image(systemName: "person.crop.circle.badge.checkmark")
+                        .font(.system(size: 56))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.6), radius: 6, y: 2)
+                    Text("Sign in to Pixiv")
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.6), radius: 6, y: 2)
+                    Text("OAuth 2.0 with PKCE")
+                        .font(.footnote)
+                        .foregroundStyle(.white.opacity(0.7))
+                        .shadow(color: .black.opacity(0.6), radius: 4, y: 1)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .disabled(auth.isLoading)
 
-                Button {
-                    Task { await auth.login(provisional: true) }
-                } label: {
-                    Text("Try without account").frame(maxWidth: .infinity)
+                Spacer()
+
+                VStack(spacing: 12) {
+                    Button {
+                        Task { await auth.login(provisional: false) }
+                    } label: {
+                        Text("Log in")
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .foregroundStyle(.black)
+                            .background(.white, in: .rect(cornerRadius: 14))
+                    }
+                    .disabled(auth.isLoading)
+
+                    Button {
+                        Task { await auth.login(provisional: true) }
+                    } label: {
+                        Text("Try without account")
+                            .font(.system(size: 17, weight: .medium))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .foregroundStyle(.white)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .stroke(.white.opacity(0.45), lineWidth: 1)
+                            )
+                    }
+                    .disabled(auth.isLoading)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .disabled(auth.isLoading)
-            }
-            .padding(.horizontal, 32)
+                .padding(.horizontal, 30)
 
-            if auth.isLoading {
-                ProgressView()
-            }
-            if let msg = auth.errorMessage {
-                Text(msg)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
+                if auth.isLoading {
+                    ProgressView().tint(.white)
+                }
+                if let msg = auth.errorMessage {
+                    Text(msg)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                }
+
+                Spacer().frame(height: 24)
             }
         }
-        .padding()
+        .preferredColorScheme(.dark)
     }
 }
 
