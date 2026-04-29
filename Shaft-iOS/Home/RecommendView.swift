@@ -3,12 +3,12 @@ import SwiftUI
 @MainActor
 @Observable
 final class RecommendViewModel {
-    var illusts: [Illust] = []
     var rankingIllusts: [Illust] = []
+    var recommendedIllusts: [Illust] = []
     var trendingTags: [TrendingTag] = []
-    var isLoadingIllusts = false
+    var isLoadingRecommend = false
     var isLoadingTags = false
-    var illustError: String?
+    var recommendError: String?
     var tagError: String?
 
     @ObservationIgnored private let api: PixivAPI
@@ -17,23 +17,32 @@ final class RecommendViewModel {
         self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
     }
 
-    func loadIllustsIfNeeded() async {
-        guard illusts.isEmpty, !isLoadingIllusts else { return }
-        await loadIllusts()
-    }
+    // MARK: Recommend page (ranking + waterfall recommendations)
 
-    func loadIllusts() async {
-        isLoadingIllusts = true
-        illustError = nil
-        defer { isLoadingIllusts = false }
-        do {
-            let resp = try await api.recommendedIllusts()
-            illusts = resp.illusts
-            rankingIllusts = resp.rankingIllusts ?? []
-        } catch {
-            illustError = error.localizedDescription
+    func loadRecommendIfNeeded() async {
+        if rankingIllusts.isEmpty && recommendedIllusts.isEmpty && !isLoadingRecommend {
+            await loadRecommend()
         }
     }
+
+    func loadRecommend() async {
+        isLoadingRecommend = true
+        recommendError = nil
+        defer { isLoadingRecommend = false }
+
+        async let rank = api.rankingIllusts(mode: "day")
+        async let recd = api.recommendedIllusts()
+
+        do {
+            let (r, c) = try await (rank, recd)
+            rankingIllusts = r.illusts
+            recommendedIllusts = c.illusts
+        } catch {
+            recommendError = error.localizedDescription
+        }
+    }
+
+    // MARK: Hot tags page
 
     func loadTagsIfNeeded() async {
         guard trendingTags.isEmpty, !isLoadingTags else { return }
@@ -87,34 +96,60 @@ struct RecommendView: View {
     }
 }
 
+// MARK: - Recommended works (horizontal ranking + vertical waterfall)
+
 struct RecommendedWorksView: View {
     let vm: RecommendViewModel
-
-    private let columns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8),
-    ]
+    @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
         ScrollView {
-            if let err = vm.illustError {
-                ErrorBanner(message: err) { Task { await vm.loadIllusts() } }
-                    .padding()
-            }
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(vm.illusts) { illust in
-                    IllustGridCell(illust: illust)
+            LazyVStack(alignment: .leading, spacing: 16, pinnedViews: []) {
+                if let err = vm.recommendError, vm.recommendedIllusts.isEmpty && vm.rankingIllusts.isEmpty {
+                    ErrorBanner(message: err) { Task { await vm.loadRecommend() } }
+                        .padding(.horizontal, 12)
+                }
+
+                if !vm.rankingIllusts.isEmpty {
+                    SectionHeader(title: l10n.t(.rankingTodayTitle))
+                        .padding(.horizontal, 16)
+                    RankingStrip(illusts: vm.rankingIllusts)
+                }
+
+                if !vm.recommendedIllusts.isEmpty {
+                    WaterfallGrid(
+                        items: vm.recommendedIllusts,
+                        columns: 2,
+                        spacing: 8,
+                        estimatedRelativeHeight: relativeHeight(for:)
+                    ) { illust in
+                        WaterfallIllustCell(illust: illust)
+                    }
+                    .padding(.horizontal, 8)
+                }
+
+                if vm.isLoadingRecommend {
+                    ProgressView().frame(maxWidth: .infinity).padding(.vertical, 16)
                 }
             }
-            .padding(8)
-            if vm.isLoadingIllusts {
-                ProgressView().padding()
-            }
+            .padding(.vertical, 12)
         }
-        .refreshable { await vm.loadIllusts() }
-        .task { await vm.loadIllustsIfNeeded() }
+        .refreshable { await vm.loadRecommend() }
+        .task { await vm.loadRecommendIfNeeded() }
+    }
+
+    private func relativeHeight(for illust: Illust) -> Double {
+        // Cell layout: image (full width @ aspect = w/h) + ~0.18 column-widths
+        // for the title/author label area below. Clamp the image aspect so a
+        // single tall illust can't dominate the column.
+        let w = max(Double(illust.width ?? 1), 1)
+        let h = max(Double(illust.height ?? 1), 1)
+        let aspect = max(0.5, min(w / h, 2.0))
+        return 1.0 / aspect + 0.18
     }
 }
+
+// MARK: - Popular tags
 
 struct PopularTagsView: View {
     let vm: RecommendViewModel
@@ -146,14 +181,28 @@ struct PopularTagsView: View {
     }
 }
 
-private struct IllustGridCell: View {
+// MARK: - Cells
+
+private struct WaterfallIllustCell: View {
     let illust: Illust
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             PixivAsyncImage(url: imageURL)
-                .aspectRatio(1, contentMode: .fit)
+                .aspectRatio(displayAspect, contentMode: .fit)
                 .clipShape(.rect(cornerRadius: 6))
+                .overlay(alignment: .topTrailing) {
+                    if (illust.pageCount ?? 1) > 1 {
+                        Label("\(illust.pageCount ?? 1)", systemImage: "square.on.square")
+                            .labelStyle(.titleAndIcon)
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(.black.opacity(0.55), in: .capsule)
+                            .foregroundStyle(.white)
+                            .padding(6)
+                    }
+                }
+
             Text(illust.title ?? "")
                 .font(.caption)
                 .lineLimit(1)
@@ -166,10 +215,83 @@ private struct IllustGridCell: View {
         }
     }
 
+    private var displayAspect: CGFloat {
+        let w = max(CGFloat(illust.width ?? 1), 1)
+        let h = max(CGFloat(illust.height ?? 1), 1)
+        let r = w / h
+        return min(max(r, 0.5), 2.0)
+    }
+
+    private var imageURL: URL? {
+        let s = illust.imageUrls?.medium
+            ?? illust.imageUrls?.large
+            ?? illust.imageUrls?.squareMedium
+        return s.flatMap(URL.init(string:))
+    }
+}
+
+private struct RankingStrip: View {
+    let illusts: [Illust]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 10) {
+                ForEach(Array(illusts.prefix(30).enumerated()), id: \.element.id) { idx, illust in
+                    RankingCard(rank: idx + 1, illust: illust)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+}
+
+private struct RankingCard: View {
+    let rank: Int
+    let illust: Illust
+
+    private let cardWidth: CGFloat = 130
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ZStack(alignment: .topLeading) {
+                PixivAsyncImage(url: imageURL)
+                    .aspectRatio(1, contentMode: .fill)
+                    .frame(width: cardWidth, height: cardWidth)
+                    .clipShape(.rect(cornerRadius: 8))
+                Text("#\(rank)")
+                    .font(.caption.bold())
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(rankBadgeColor, in: .capsule)
+                    .foregroundStyle(.white)
+                    .padding(6)
+            }
+
+            Text(illust.title ?? "")
+                .font(.caption)
+                .lineLimit(1)
+                .frame(width: cardWidth, alignment: .leading)
+            if let user = illust.user {
+                Text(user.name ?? "")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .frame(width: cardWidth, alignment: .leading)
+            }
+        }
+    }
+
+    private var rankBadgeColor: Color {
+        switch rank {
+        case 1: return Color(red: 0.85, green: 0.65, blue: 0.13)   // gold
+        case 2: return Color(red: 0.66, green: 0.66, blue: 0.66)   // silver
+        case 3: return Color(red: 0.78, green: 0.49, blue: 0.20)   // bronze
+        default: return .black.opacity(0.6)
+        }
+    }
+
     private var imageURL: URL? {
         let s = illust.imageUrls?.squareMedium
             ?? illust.imageUrls?.medium
-            ?? illust.imageUrls?.large
         return s.flatMap(URL.init(string:))
     }
 }
@@ -205,6 +327,20 @@ private struct TagGridCell: View {
         let s = tag.illust?.imageUrls?.squareMedium
             ?? tag.illust?.imageUrls?.medium
         return s.flatMap(URL.init(string:))
+    }
+}
+
+// MARK: - Reusable bits
+
+private struct SectionHeader: View {
+    let title: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.title3.bold())
+            Spacer()
+        }
     }
 }
 

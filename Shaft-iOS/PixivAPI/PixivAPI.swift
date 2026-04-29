@@ -75,6 +75,15 @@ actor PixivAPI {
         try await get(path: "/v1/trending-tags/\(type)", query: ["filter": "for_ios"])
     }
 
+    /// `mode` accepts `day`, `week`, `month`, `day_male`, `day_female`,
+    /// `day_manga`, etc. — see Shaft `RankingIllustsFragment`.
+    func rankingIllusts(mode: String = "day") async throws -> IllustResponse {
+        try await get(path: "/v1/illust/ranking", query: [
+            "mode": mode,
+            "filter": "for_ios",
+        ])
+    }
+
     // MARK: Internals
 
     private func get<T: Decodable>(path: String, query: [String: String] = [:]) async throws -> T {

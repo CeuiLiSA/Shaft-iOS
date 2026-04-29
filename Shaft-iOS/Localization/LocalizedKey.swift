@@ -16,6 +16,7 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case homeNavTitle      // string_207 — toolbar title for the Recommend tab
     case subRecommendedWorks
     case subPopularTags
+    case rankingTodayTitle
 
     // Account / actions
     case account
