@@ -9,19 +9,24 @@ struct HomeView: View {
         TabView(selection: $selection) {
             ForEach(HomeTab.allCases) { tab in
                 NavigationStack {
-                    EmptyTabView(tab: tab)
-                        .navigationTitle(tab.title)
-                        .navigationBarTitleDisplayMode(.inline)
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button {
-                                    showProfile = true
-                                } label: {
-                                    Image(systemName: "person.crop.circle")
-                                }
-                                .accessibilityLabel("Account")
-                            }
+                    Group {
+                        switch tab {
+                        case .recommend: RecommendView()
+                        default:         EmptyTabView(tab: tab)
                         }
+                    }
+                    .navigationTitle(tab == .recommend ? "Home" : tab.title)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                showProfile = true
+                            } label: {
+                                Image(systemName: "person.crop.circle")
+                            }
+                            .accessibilityLabel("Account")
+                        }
+                    }
                 }
                 .tabItem {
                     Label(tab.title, systemImage: tab.systemImage)

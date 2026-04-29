@@ -23,6 +23,8 @@
 		A1000000000000000000B014 /* TunnelBackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F014 /* TunnelBackgroundView.swift */; };
 		A1000000000000000000B015 /* LanguageOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F015 /* LanguageOnboardingView.swift */; };
 		A1000000000000000000B016 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F016 /* HomeView.swift */; };
+		A1000000000000000000B017 /* PagerTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F017 /* PagerTabBar.swift */; };
+		A1000000000000000000B018 /* RecommendView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F018 /* RecommendView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +45,8 @@
 		A1000000000000000000F014 /* TunnelBackgroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelBackgroundView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F015 /* LanguageOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageOnboardingView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F016 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F017 /* PagerTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PagerTabBar.swift; sourceTree = "<group>"; };
+		A1000000000000000000F018 /* RecommendView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -84,6 +88,8 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000F016 /* HomeView.swift */,
+				A1000000000000000000F017 /* PagerTabBar.swift */,
+				A1000000000000000000F018 /* RecommendView.swift */,
 			);
 			path = Home;
 			sourceTree = "<group>";
@@ -211,6 +217,8 @@
 				A1000000000000000000B014 /* TunnelBackgroundView.swift in Sources */,
 				A1000000000000000000B015 /* LanguageOnboardingView.swift in Sources */,
 				A1000000000000000000B016 /* HomeView.swift in Sources */,
+				A1000000000000000000B017 /* PagerTabBar.swift in Sources */,
+				A1000000000000000000B018 /* RecommendView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
