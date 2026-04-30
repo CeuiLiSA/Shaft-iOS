@@ -185,6 +185,65 @@ actor PixivAPI {
         try await get(path: "/v1/user/me/state")
     }
 
+    func recommendedUsers() async throws -> UserPreviewResponse {
+        try await get(path: "/v1/user/recommended", query: ["filter": "for_ios"])
+    }
+
+    func latestIllusts(type: String = "illust") async throws -> IllustResponse {
+        try await get(path: "/v1/illust/new", query: [
+            "content_type": type,
+            "filter": "for_ios",
+        ])
+    }
+
+    func latestNovels() async throws -> NovelResponse {
+        try await get(path: "/v1/novel/new")
+    }
+
+    func novelText(_ novelId: Int64) async throws -> Data {
+        let url = Self.baseURL.appendingPathComponent("/webview/v2/novel")
+        var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        comps.queryItems = [URLQueryItem(name: "id", value: "\(novelId)")]
+        var req = URLRequest(url: comps.url!)
+        guard let token = await tokenProvider.currentAccessToken() else { throw APIError.noToken }
+        applyHeaders(&req, accessToken: token)
+        let (data, resp) = try await session.data(for: req)
+        guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.http(code: (resp as? HTTPURLResponse)?.statusCode ?? 0,
+                                body: String(data: data, encoding: .utf8) ?? "")
+        }
+        return data
+    }
+
+    @discardableResult
+    func postIllustComment(_ illustId: Int64, comment: String, parentId: Int64? = nil) async throws -> EmptyResponse {
+        var form: [String: String] = [
+            "illust_id": "\(illustId)",
+            "comment": comment,
+        ]
+        if let parentId { form["parent_comment_id"] = "\(parentId)" }
+        return try await post(path: "/v1/illust/comment/add", form: form)
+    }
+
+    @discardableResult
+    func postNovelComment(_ novelId: Int64, comment: String, parentId: Int64? = nil) async throws -> EmptyResponse {
+        var form: [String: String] = [
+            "novel_id": "\(novelId)",
+            "comment": comment,
+        ]
+        if let parentId { form["parent_comment_id"] = "\(parentId)" }
+        return try await post(path: "/v1/novel/comment/add", form: form)
+    }
+
+    /// Generic GET against an absolute pixiv next_url (already includes base
+    /// + query params). Used by paginating list view models.
+    func nextPage<T: Decodable>(_ next: String) async throws -> T {
+        guard let url = URL(string: next) else {
+            throw APIError.http(code: 0, body: "invalid next_url")
+        }
+        return try await perform(request: URLRequest(url: url))
+    }
+
     // MARK: Search
 
     func searchIllust(word: String, sort: String = "date_desc") async throws -> IllustResponse {

@@ -83,6 +83,7 @@ final class NovelDetailViewModel {
 struct NovelDetailView: View {
     let novelId: Int64
     @State private var vm: NovelDetailViewModel
+    @State private var showReader = false
     @Environment(OnboardingStore.self) private var l10n
 
     init(novelId: Int64) {
@@ -188,7 +189,7 @@ struct NovelDetailView: View {
                 .disabled(vm.isBookmarking || vm.novel == nil)
 
                 Button {
-                    // TODO: open NovelReaderView with /webview/v2/novel content.
+                    showReader = true
                 } label: {
                     Text(l10n.t(.novelRead))
                         .font(.subheadline.bold())
@@ -203,7 +204,13 @@ struct NovelDetailView: View {
             .background(.thinMaterial)
         }
         .navigationBarTitleDisplayMode(.inline)
-        .task { await vm.loadIfNeeded() }
+        .task {
+            await vm.loadIfNeeded()
+            if let n = vm.novel { HistoryStore.shared.record(novel: n) }
+        }
+        .fullScreenCover(isPresented: $showReader) {
+            NovelReaderView(novelId: novelId)
+        }
     }
 
     private func avatar(for user: PixivUser) -> URL? {

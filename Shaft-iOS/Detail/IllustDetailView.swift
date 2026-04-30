@@ -91,6 +91,8 @@ final class IllustDetailViewModel {
 struct IllustDetailView: View {
     let illustId: Int64
     @State private var vm: IllustDetailViewModel
+    @State private var showViewer = false
+    @State private var viewerIndex = 0
     @Environment(OnboardingStore.self) private var l10n
 
     init(illustId: Int64) {
@@ -103,7 +105,7 @@ struct IllustDetailView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     if let illust = vm.illust {
-                        IllustPagesHero(illust: illust)
+                        IllustPagesHero(illust: illust, onTap: { showViewer = true })
                         IllustMetaSection(illust: illust)
                             .padding(.horizontal, 16)
                         IllustAuthorSection(illust: illust)
@@ -157,21 +159,31 @@ struct IllustDetailView: View {
             BottomActionBar(vm: vm)
         }
         .navigationBarTitleDisplayMode(.inline)
-        .task { await vm.loadIfNeeded() }
+        .task {
+            await vm.loadIfNeeded()
+            if let i = vm.illust { HistoryStore.shared.record(illust: i) }
+        }
+        .fullScreenCover(isPresented: $showViewer) {
+            if let urls = vm.illust.map(IllustPagesHero.urls(for:)), !urls.isEmpty {
+                ImageViewerView(urls: urls, index: $viewerIndex)
+            }
+        }
     }
 }
 
-private struct IllustPagesHero: View {
+struct IllustPagesHero: View {
     let illust: Illust
+    var onTap: () -> Void = {}
     @State private var index = 0
 
     var body: some View {
-        let urls = pageURLs()
+        let urls = Self.urls(for: illust)
         TabView(selection: $index) {
             ForEach(Array(urls.enumerated()), id: \.offset) { i, url in
                 PixivAsyncImage(url: url, contentMode: .fit)
                     .frame(maxWidth: .infinity)
                     .frame(maxHeight: 480)
+                    .onTapGesture { onTap() }
                     .tag(i)
             }
         }
@@ -180,21 +192,23 @@ private struct IllustPagesHero: View {
         .background(Color(.secondarySystemBackground))
     }
 
+    static func urls(for illust: Illust) -> [URL] {
+        if let pages = illust.metaPages, !pages.isEmpty {
+            return pages.compactMap { $0.imageUrls?.large.flatMap(URL.init(string:)) }
+        }
+        if let s = illust.metaSinglePage?.originalImageUrl
+            ?? illust.imageUrls?.large
+            ?? illust.imageUrls?.medium {
+            return [URL(string: s)].compactMap { $0 }
+        }
+        return []
+    }
+
     private var heroHeight: CGFloat {
         let w = max(CGFloat(illust.width ?? 1), 1)
         let h = max(CGFloat(illust.height ?? 1), 1)
         let aspect = max(0.5, min(w / h, 2.0))
         return min(540, UIScreen.main.bounds.width / aspect + 24)
-    }
-
-    private func pageURLs() -> [URL] {
-        if let pages = illust.metaPages, !pages.isEmpty {
-            return pages.compactMap { $0.imageUrls?.large.flatMap(URL.init(string:)) }
-        }
-        if let s = illust.imageUrls?.large ?? illust.imageUrls?.medium {
-            return [URL(string: s)].compactMap { $0 }
-        }
-        return []
     }
 }
 

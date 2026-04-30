@@ -127,7 +127,10 @@ struct UserProfileView: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
         }
         .navigationBarTitleDisplayMode(.inline)
-        .task { await vm.loadIfNeeded() }
+        .task {
+            await vm.loadIfNeeded()
+            if let u = vm.user { HistoryStore.shared.record(user: u) }
+        }
     }
 
     private func label(for s: ProfileSection) -> String {

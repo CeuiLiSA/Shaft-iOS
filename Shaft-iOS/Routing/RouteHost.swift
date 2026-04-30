@@ -41,6 +41,10 @@ struct RouteHost: ViewModifier {
                 SpotlightView()
             case .walkthrough:
                 WalkthroughView()
+            case .recommendUsers:
+                RecommendUsersView()
+            case .latestWorks:
+                LatestWorksView()
             case .more:
                 MoreView(auth: auth)
             case .history:

@@ -48,6 +48,15 @@
 		A1000000000000000000B039 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F039 /* MoreView.swift */; };
 		A1000000000000000000B040 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F040 /* SettingsView.swift */; };
 		A1000000000000000000B041 /* AboutAndPlaceholders.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F041 /* AboutAndPlaceholders.swift */; };
+		A1000000000000000000B042 /* ImageViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F042 /* ImageViewerView.swift */; };
+		A1000000000000000000B043 /* NovelReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F043 /* NovelReaderView.swift */; };
+		A1000000000000000000B044 /* HistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F044 /* HistoryStore.swift */; };
+		A1000000000000000000B045 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F045 /* HistoryView.swift */; };
+		A1000000000000000000B046 /* RecommendUsersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F046 /* RecommendUsersView.swift */; };
+		A1000000000000000000B047 /* LatestWorksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F047 /* LatestWorksView.swift */; };
+		A1000000000000000000B048 /* WebArticleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F048 /* WebArticleView.swift */; };
+		A1000000000000000000B049 /* MuteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F049 /* MuteStore.swift */; };
+		A1000000000000000000B050 /* MutedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F050 /* MutedView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -93,6 +102,15 @@
 		A1000000000000000000F039 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F040 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F041 /* AboutAndPlaceholders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutAndPlaceholders.swift; sourceTree = "<group>"; };
+		A1000000000000000000F042 /* ImageViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViewerView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F043 /* NovelReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelReaderView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F044 /* HistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryStore.swift; sourceTree = "<group>"; };
+		A1000000000000000000F045 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F046 /* RecommendUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendUsersView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F047 /* LatestWorksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LatestWorksView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F048 /* WebArticleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebArticleView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F049 /* MuteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuteStore.swift; sourceTree = "<group>"; };
+		A1000000000000000000F050 /* MutedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutedView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -134,6 +152,8 @@
 				A1000000000000000000G015 /* Discover */,
 				A1000000000000000000G016 /* WhatsNew */,
 				A1000000000000000000G017 /* More */,
+				A1000000000000000000G018 /* History */,
+				A1000000000000000000G019 /* Mute */,
 				A1000000000000000000F003 /* Assets.xcassets */,
 				A1000000000000000000G004 /* Preview Content */,
 			);
@@ -176,6 +196,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000F027 /* IllustWaterfallList.swift */,
+				A1000000000000000000F048 /* WebArticleView.swift */,
 			);
 			path = Common;
 			sourceTree = "<group>";
@@ -197,6 +218,9 @@
 				A1000000000000000000F032 /* UserProfileView.swift */,
 				A1000000000000000000F033 /* CommentsView.swift */,
 				A1000000000000000000F034 /* UserListsViews.swift */,
+				A1000000000000000000F042 /* ImageViewerView.swift */,
+				A1000000000000000000F043 /* NovelReaderView.swift */,
+				A1000000000000000000F046 /* RecommendUsersView.swift */,
 			);
 			path = Detail;
 			sourceTree = "<group>";
@@ -221,8 +245,27 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000F037 /* DiscoverView.swift */,
+				A1000000000000000000F047 /* LatestWorksView.swift */,
 			);
 			path = Discover;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000G018 /* History */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000F044 /* HistoryStore.swift */,
+				A1000000000000000000F045 /* HistoryView.swift */,
+			);
+			path = History;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000G019 /* Mute */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000F049 /* MuteStore.swift */,
+				A1000000000000000000F050 /* MutedView.swift */,
+			);
+			path = Mute;
 			sourceTree = "<group>";
 		};
 		A1000000000000000000G016 /* WhatsNew */ = {
@@ -391,6 +434,15 @@
 				A1000000000000000000B039 /* MoreView.swift in Sources */,
 				A1000000000000000000B040 /* SettingsView.swift in Sources */,
 				A1000000000000000000B041 /* AboutAndPlaceholders.swift in Sources */,
+				A1000000000000000000B042 /* ImageViewerView.swift in Sources */,
+				A1000000000000000000B043 /* NovelReaderView.swift in Sources */,
+				A1000000000000000000B044 /* HistoryStore.swift in Sources */,
+				A1000000000000000000B045 /* HistoryView.swift in Sources */,
+				A1000000000000000000B046 /* RecommendUsersView.swift in Sources */,
+				A1000000000000000000B047 /* LatestWorksView.swift in Sources */,
+				A1000000000000000000B048 /* WebArticleView.swift in Sources */,
+				A1000000000000000000B049 /* MuteStore.swift in Sources */,
+				A1000000000000000000B050 /* MutedView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

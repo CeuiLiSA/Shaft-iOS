@@ -32,17 +32,6 @@ struct AboutView: View {
     }
 }
 
-struct HistoryView: View {
-    @Environment(OnboardingStore.self) private var l10n
-    var body: some View {
-        PlaceholderView(title: l10n.t(.historyTitle),
-                        systemImage: "clock.arrow.circlepath",
-                        subtitle: l10n.t(.nothingHere))
-            .navigationTitle(l10n.t(.historyTitle))
-            .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
 struct DownloadsView: View {
     @Environment(OnboardingStore.self) private var l10n
     var body: some View {
@@ -54,13 +43,3 @@ struct DownloadsView: View {
     }
 }
 
-struct MutedView: View {
-    @Environment(OnboardingStore.self) private var l10n
-    var body: some View {
-        PlaceholderView(title: l10n.t(.mutedTitle),
-                        systemImage: "speaker.slash",
-                        subtitle: l10n.t(.nothingHere))
-            .navigationTitle(l10n.t(.mutedTitle))
-            .navigationBarTitleDisplayMode(.inline)
-    }
-}

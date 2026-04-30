@@ -19,6 +19,8 @@ enum AppRoute: Hashable, Codable, Sendable {
     case comments(target: CommentTarget)
     case spotlight
     case walkthrough
+    case recommendUsers
+    case latestWorks
     case more
     case history
     case downloads

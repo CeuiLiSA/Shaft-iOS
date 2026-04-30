@@ -269,35 +269,46 @@ private final class SpotlightVM {
 
 struct SpotlightView: View {
     @State private var vm = SpotlightVM()
+    @State private var openURL: URL?
     @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
         List(vm.articles) { article in
-            VStack(alignment: .leading, spacing: 6) {
-                if let url = article.thumbnail.flatMap(URL.init(string:)) {
-                    PixivAsyncImage(url: url)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 160)
-                        .clipShape(.rect(cornerRadius: 8))
-                }
-                Text(article.title ?? article.pureTitle ?? "")
-                    .font(.headline)
-                if let date = article.publishDate {
-                    Text(date).font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            .padding(.vertical, 4)
-            .onTapGesture {
+            Button {
                 if let s = article.articleUrl, let url = URL(string: s) {
-                    UIApplication.shared.open(url)
+                    openURL = url
                 }
+            } label: {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let url = article.thumbnail.flatMap(URL.init(string:)) {
+                        PixivAsyncImage(url: url)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 160)
+                            .clipShape(.rect(cornerRadius: 8))
+                    }
+                    Text(article.title ?? article.pureTitle ?? "")
+                        .font(.headline)
+                    if let date = article.publishDate {
+                        Text(date).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
             }
+            .buttonStyle(.plain)
         }
         .listStyle(.plain)
         .navigationTitle(l10n.t(.discoverSpotlight))
         .navigationBarTitleDisplayMode(.inline)
         .task { await vm.loadIfNeeded() }
         .refreshable { await vm.load() }
+        .navigationDestination(isPresented: Binding(
+            get: { openURL != nil },
+            set: { if !$0 { openURL = nil } }
+        )) {
+            if let url = openURL {
+                WebArticleView(url: url)
+            }
+        }
     }
 }
 

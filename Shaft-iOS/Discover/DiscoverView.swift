@@ -38,23 +38,16 @@ struct DiscoverView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                NavigationLink(value: AppRoute.spotlight) {
-                    Label(l10n.t(.discoverSpotlight), systemImage: "doc.richtext")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(Color(.secondarySystemBackground), in: .capsule)
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    chip(.spotlight, label: l10n.t(.discoverSpotlight), icon: "doc.richtext")
+                    chip(.ranking(initialMode: "day"), label: l10n.t(.rankingTitle), icon: "trophy")
+                    chip(.latestWorks, label: l10n.t(.latestWorksTitle), icon: "clock.badge")
+                    chip(.recommendUsers, label: l10n.t(.recommendUsersTitle), icon: "person.2.crop.square.stack")
                 }
-                Spacer()
-                NavigationLink(value: AppRoute.ranking(initialMode: "day")) {
-                    Label(l10n.t(.rankingTitle), systemImage: "trophy")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 12).padding(.vertical, 8)
-                        .background(Color(.secondarySystemBackground), in: .capsule)
-                }
+                .padding(.horizontal, 12).padding(.vertical, 8)
             }
-            .padding(.horizontal, 12).padding(.top, 8)
-            .buttonStyle(.plain)
+            .scrollIndicators(.hidden)
 
             IllustWaterfallList(
                 illusts: vm.illusts,
@@ -65,5 +58,17 @@ struct DiscoverView: View {
             )
         }
         .task { await vm.loadIfNeeded() }
+    }
+
+    @ViewBuilder
+    private func chip(_ route: AppRoute, label: String, icon: String) -> some View {
+        NavigationLink(value: route) {
+            Label(label, systemImage: icon)
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(Color(.secondarySystemBackground), in: .capsule)
+                .foregroundStyle(.primary)
+        }
+        .buttonStyle(.plain)
     }
 }

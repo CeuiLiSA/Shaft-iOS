@@ -40,6 +40,15 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     // Discover
     case discoverSpotlight
 
+    // Comments
+    case commentCompose
+
+    // Newly added discover/recommend
+    case latestWorksTitle, recommendUsersTitle
+
+    // Mute
+    case muteUsers, muteTags, muteAddTag
+
     // More / settings / about
     case moreTitle
     case historyTitle, downloadsTitle, mutedTitle
