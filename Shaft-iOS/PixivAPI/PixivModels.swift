@@ -83,6 +83,7 @@ struct Illust: Codable, Hashable, Sendable, Identifiable {
     let createDate: String?
     let metaSinglePage: MetaSinglePage?
     let metaPages: [MetaPage]?
+    let series: IllustSeriesRef?
 
     enum CodingKeys: String, CodingKey {
         case id, title, caption, type
@@ -96,7 +97,13 @@ struct Illust: Codable, Hashable, Sendable, Identifiable {
         case createDate = "create_date"
         case metaSinglePage = "meta_single_page"
         case metaPages = "meta_pages"
+        case series
     }
+}
+
+struct IllustSeriesRef: Codable, Hashable, Sendable {
+    let id: Int64?
+    let title: String?
 }
 
 struct IllustResponse: Codable, Sendable {
@@ -279,6 +286,62 @@ struct NovelSeries: Codable, Hashable, Sendable {
     let title: String?
 }
 
+// MARK: - Series detail responses
+
+struct IllustSeriesDetail: Codable, Hashable, Sendable {
+    let id: Int64?
+    let title: String?
+    let caption: String?
+    let workCount: Int?
+    let user: PixivUser?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, caption, user
+        case workCount = "work_count"
+    }
+}
+
+struct IllustSeriesResponse: Codable, Sendable {
+    let illustSeriesDetail: IllustSeriesDetail?
+    let illustSeriesFirstIllust: Illust?
+    let illusts: [Illust]
+    let nextUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case illustSeriesDetail = "illust_series_detail"
+        case illustSeriesFirstIllust = "illust_series_first_illust"
+        case illusts
+        case nextUrl = "next_url"
+    }
+}
+
+struct NovelSeriesDetail: Codable, Hashable, Sendable {
+    let id: Int64?
+    let title: String?
+    let caption: String?
+    let contentCount: Int?
+    let user: PixivUser?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, caption, user
+        case contentCount = "content_count"
+    }
+}
+
+struct NovelSeriesDetailResponse: Codable, Sendable {
+    let novelSeriesDetail: NovelSeriesDetail?
+    let novelSeriesFirstNovel: Novel?
+    let novels: [Novel]
+    let nextUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case novelSeriesDetail = "novel_series_detail"
+        case novelSeriesFirstNovel = "novel_series_first_novel"
+        case novels
+        case nextUrl = "next_url"
+    }
+}
+
 struct NovelResponse: Codable, Sendable {
     let novels: [Novel]
     let nextUrl: String?
@@ -318,6 +381,23 @@ struct ArticlesResponse: Codable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case spotlightArticles = "spotlight_articles"
+        case nextUrl = "next_url"
+    }
+}
+
+struct BookmarkTag: Codable, Hashable, Sendable, Identifiable {
+    let name: String?
+    let count: Int?
+
+    var id: String { name ?? "" }
+}
+
+struct BookmarkTagsResponse: Codable, Sendable {
+    let bookmarkTags: [BookmarkTag]
+    let nextUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case bookmarkTags = "bookmark_tags"
         case nextUrl = "next_url"
     }
 }

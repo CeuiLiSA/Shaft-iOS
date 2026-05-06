@@ -31,6 +31,10 @@ struct RouteHost: ViewModifier {
                 UserBookmarksView(userId: userId)
             case .userNovels(let userId):
                 UserNovelsView(userId: userId)
+            case .illustSeries(let seriesId):
+                IllustSeriesView(seriesId: seriesId)
+            case .novelSeries(let seriesId):
+                NovelSeriesView(seriesId: seriesId)
             case .userFollowing(let userId):
                 UserFollowingView(userId: userId)
             case .userFollower(let userId):
@@ -45,6 +49,10 @@ struct RouteHost: ViewModifier {
                 RecommendUsersView()
             case .latestWorks:
                 LatestWorksView()
+            case .mangaRecommend:
+                MangaRecommendView()
+            case .novelRecommend:
+                NovelRecommendView()
             case .more:
                 MoreView(auth: auth)
             case .history:

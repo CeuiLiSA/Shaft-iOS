@@ -1,34 +1,38 @@
 import SwiftUI
 
-/// Local view-history list. Replaces the placeholder.
+/// Local view-history list with All/Illusts/Novels/Users tabs, mirroring
+/// FragmentHistoryV3 from Pixiv-Shaft.
 struct HistoryView: View {
     @State private var store = HistoryStore.shared
+    @State private var section: Section = .all
     @Environment(OnboardingStore.self) private var l10n
 
-    var body: some View {
-        List {
-            if store.entries.isEmpty {
-                ContentUnavailableView(l10n.t(.nothingHere),
-                                       systemImage: "clock.arrow.circlepath")
-            }
-            ForEach(store.entries) { entry in
-                NavigationLink(value: route(for: entry)) {
-                    HistoryRow(entry: entry)
-                }
-            }
-            .onDelete { offsets in
-                var copy = store.entries
-                copy.remove(atOffsets: offsets)
-                store.entries = copy
-                // Persist via re-record: simplest, replay order; use load/save
-                // dance via clear + bulk re-add. Here we just write directly.
-                let key = "view_history_v1"
-                if let data = try? JSONEncoder().encode(copy) {
-                    UserDefaults.standard.set(data, forKey: key)
-                }
+    enum Section: Hashable, CaseIterable {
+        case all, illust, novel, user
+
+        var kind: HistoryStore.Kind? {
+            switch self {
+            case .all:    return nil
+            case .illust: return .illust
+            case .novel:  return .novel
+            case .user:   return .user
             }
         }
-        .listStyle(.plain)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            PagerTabBar(
+                titles: Section.allCases.map { ($0, label(for: $0)) },
+                selection: $section
+            )
+            TabView(selection: $section) {
+                ForEach(Section.allCases, id: \.self) { sec in
+                    list(for: sec).tag(sec)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+        }
         .navigationTitle(l10n.t(.historyTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -39,6 +43,42 @@ struct HistoryView: View {
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func list(for section: Section) -> some View {
+        let entries = filtered(for: section)
+        List {
+            if entries.isEmpty {
+                ContentUnavailableView(l10n.t(.nothingHere),
+                                       systemImage: "clock.arrow.circlepath")
+            }
+            ForEach(entries) { entry in
+                NavigationLink(value: route(for: entry)) {
+                    HistoryRow(entry: entry)
+                }
+            }
+            .onDelete { offsets in
+                let toDelete = offsets.map { entries[$0].compositeID }
+                store.entries.removeAll { toDelete.contains($0.compositeID) }
+                store.persist()
+            }
+        }
+        .listStyle(.plain)
+    }
+
+    private func filtered(for section: Section) -> [HistoryStore.Entry] {
+        guard let kind = section.kind else { return store.entries }
+        return store.entries.filter { $0.kind == kind }
+    }
+
+    private func label(for s: Section) -> String {
+        switch s {
+        case .all:    return l10n.t(.historyAll)
+        case .illust: return l10n.t(.searchTabIllust)
+        case .novel:  return l10n.t(.searchTabNovel)
+        case .user:   return l10n.t(.searchTabUser)
         }
     }
 

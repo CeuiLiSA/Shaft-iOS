@@ -12,6 +12,8 @@ enum LocalizedKey: String, CaseIterable, Sendable {
 
     // Account / actions
     case account, actionDone, actionLogOut, actionRefresh, actionRetry
+    case actionShare, actionCopyLink, actionOpenInBrowser, actionMuteArtist
+    case actionMuteUser, actionUnmuteUser
 
     // Token sheet
     case tokenTitle, tokenAccess, tokenExpiresFormat
@@ -30,6 +32,18 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     // Search
     case searchTitle, searchPlaceholder
     case searchTabIllust, searchTabNovel, searchTabUser
+    case searchSortDateDesc, searchSortDateAsc, searchSortPopular, searchSortLabel
+    case searchTargetPartial, searchTargetExact, searchTargetTitleCaption
+    case searchOpenLink, searchRecent, actionClear
+
+    // Following restrict
+    case followingPublic, followingPrivate, followingMyPixiv
+
+    // Series / bookmark restrict
+    case seriesTitle, bookmarkPublic, bookmarkPrivate, bookmarkAction, bookmarkRestrictTitle
+    case bookmarkTagsTitle, bookmarkTagsPlaceholder, bookmarkTagsSuggested, bookmarkWithTags
+    case bookmarkTagAll
+    case actionCancel
 
     // Ranking modes
     case rankingTitle
@@ -41,7 +55,7 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case discoverSpotlight
 
     // Comments
-    case commentCompose
+    case commentCompose, commentReply, commentShowReplies, commentHideReplies
 
     // Newly added discover/recommend
     case latestWorksTitle, recommendUsersTitle
@@ -52,6 +66,7 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     // More / settings / about
     case moreTitle
     case historyTitle, downloadsTitle, mutedTitle
+    case historyAll
     case settingsTitle, aboutTitle
     case settingsLanguage, settingsContent, settingsHideR18, settingsColumns
     case settingsNetwork, settingsDirectConnect

@@ -5,9 +5,11 @@ import SwiftUI
 final class RecommendViewModel {
     var rankingIllusts: [Illust] = []
     var recommendedIllusts: [Illust] = []
+    var recommendedNext: String?
     var trendingTags: [TrendingTag] = []
     var isLoadingRanking = false
     var isLoadingRecommended = false
+    var isLoadingMoreRecommended = false
     var isLoadingTags = false
     var rankingError: String?
     var recommendedError: String?
@@ -61,8 +63,19 @@ final class RecommendViewModel {
         do {
             let resp = try await api.recommendedIllusts()
             recommendedIllusts = resp.illusts
+            recommendedNext = resp.nextUrl
         } catch {
             recommendedError = error.localizedDescription
+        }
+    }
+
+    func loadMoreRecommended() async {
+        guard let url = recommendedNext, !isLoadingMoreRecommended else { return }
+        isLoadingMoreRecommended = true
+        defer { isLoadingMoreRecommended = false }
+        if let r: HomeIllustResponse = try? await api.nextPage(url) {
+            recommendedIllusts.append(contentsOf: r.illusts)
+            recommendedNext = r.nextUrl
         }
     }
 
@@ -125,6 +138,7 @@ struct RecommendView: View {
 struct RecommendedWorksView: View {
     let vm: RecommendViewModel
     @Environment(OnboardingStore.self) private var l10n
+    @State private var mute = MuteStore.shared
 
     var body: some View {
         ScrollView {
@@ -138,10 +152,11 @@ struct RecommendedWorksView: View {
                         .padding(.horizontal, 12)
                 }
 
-                if !vm.recommendedIllusts.isEmpty {
+                let visible = mute.filter(vm.recommendedIllusts)
+                if !visible.isEmpty {
                     WaterfallGrid(
-                        items: vm.recommendedIllusts,
-                        columns: 2,
+                        items: visible,
+                        columns: mute.waterfallColumns,
                         spacing: 8,
                         estimatedRelativeHeight: relativeHeight(for:)
                     ) { illust in
@@ -158,6 +173,10 @@ struct RecommendedWorksView: View {
 
                 if vm.isLoadingRanking || vm.isLoadingRecommended {
                     ProgressView().frame(maxWidth: .infinity).padding(.vertical, 16)
+                } else if vm.recommendedNext != nil, !vm.recommendedIllusts.isEmpty {
+                    Color.clear
+                        .frame(height: 40)
+                        .onAppear { Task { await vm.loadMoreRecommended() } }
                 }
             }
             .padding(.vertical, 12)
@@ -196,7 +215,10 @@ struct PopularTagsView: View {
             }
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(vm.trendingTags) { tag in
-                    TagGridCell(tag: tag)
+                    NavigationLink(value: AppRoute.tagResults(tag: tag.tag ?? "")) {
+                        TagGridCell(tag: tag)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(8)

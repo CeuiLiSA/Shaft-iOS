@@ -73,6 +73,10 @@ final class HistoryStore {
         save()
     }
 
+    /// Persist the current entries array. Useful after callers mutate
+    /// `entries` directly (e.g. row deletion in HistoryView).
+    func persist() { save() }
+
     private func prepend(_ e: Entry) {
         // Dedupe by compositeID.
         entries.removeAll { $0.compositeID == e.compositeID }

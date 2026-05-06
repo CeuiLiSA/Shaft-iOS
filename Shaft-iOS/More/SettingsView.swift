@@ -2,9 +2,8 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(OnboardingStore.self) private var store
+    @State private var mute = MuteStore.shared
     @State private var directConnect = false
-    @State private var hideR18 = true
-    @State private var lineCount: Double = 2
 
     var body: some View {
         Form {
@@ -21,9 +20,15 @@ struct SettingsView: View {
             }
 
             Section(store.t(.settingsContent)) {
-                Toggle(store.t(.settingsHideR18), isOn: $hideR18)
-                Stepper(value: $lineCount, in: 1...4, step: 1) {
-                    Text("\(store.t(.settingsColumns)): \(Int(lineCount))")
+                Toggle(store.t(.settingsHideR18), isOn: Binding(
+                    get: { mute.hideR18 },
+                    set: { mute.setHideR18($0) }
+                ))
+                Stepper(value: Binding(
+                    get: { mute.waterfallColumns },
+                    set: { mute.setWaterfallColumns($0) }
+                ), in: 1...4, step: 1) {
+                    Text("\(store.t(.settingsColumns)): \(mute.waterfallColumns)")
                 }
             }
 

@@ -1,40 +1,66 @@
 import SwiftUI
 
 /// Reusable two-column waterfall illust list with built-in loading / error /
-/// pull-to-refresh wiring. Tapping a cell pushes `illustDetail(id)` onto the
-/// nearest navigation stack via the `path` binding.
+/// pull-to-refresh / load-more wiring. Each cell pushes `illustDetail(id)`
+/// onto the nearest navigation stack and exposes a context menu with share,
+/// copy link, open in browser, and mute artist.
 struct IllustWaterfallList: View {
     let illusts: [Illust]
     let isLoading: Bool
     let errorMessage: String?
     let onRefresh: () async -> Void
-    let onTap: (Illust) -> Void
+    let onLoadMore: (() async -> Void)?
+    let hasMore: Bool
 
-    @Environment(OnboardingStore.self) private var l10n
+    @State private var mute = MuteStore.shared
+
+    init(
+        illusts: [Illust],
+        isLoading: Bool,
+        errorMessage: String?,
+        onRefresh: @escaping () async -> Void,
+        onLoadMore: (() async -> Void)? = nil,
+        hasMore: Bool = false
+    ) {
+        self.illusts = illusts
+        self.isLoading = isLoading
+        self.errorMessage = errorMessage
+        self.onRefresh = onRefresh
+        self.onLoadMore = onLoadMore
+        self.hasMore = hasMore
+    }
 
     var body: some View {
+        let visible = mute.filter(illusts)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 if illusts.isEmpty, let err = errorMessage {
                     InlineError(message: err) { Task { await onRefresh() } }
                         .padding(.horizontal, 12)
                 }
-                if !illusts.isEmpty {
+                if !visible.isEmpty {
                     WaterfallGrid(
-                        items: illusts,
-                        columns: 2,
+                        items: visible,
+                        columns: mute.waterfallColumns,
                         spacing: 8,
                         estimatedRelativeHeight: relativeHeight(for:)
                     ) { illust in
-                        Button { onTap(illust) } label: {
+                        NavigationLink(value: AppRoute.illustDetail(illust.id)) {
                             IllustWaterfallCell(illust: illust)
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            IllustCellContextMenuItems(illust: illust)
+                        }
                     }
                     .padding(.horizontal, 8)
                 }
                 if isLoading {
                     ProgressView().frame(maxWidth: .infinity).padding()
+                } else if hasMore, !illusts.isEmpty {
+                    Color.clear
+                        .frame(height: 40)
+                        .onAppear { Task { await onLoadMore?() } }
                 }
             }
             .padding(.vertical, 8)
@@ -93,6 +119,42 @@ struct IllustWaterfallCell: View {
             ?? illust.imageUrls?.large
             ?? illust.imageUrls?.squareMedium
         return s.flatMap(URL.init(string:))
+    }
+}
+
+/// Context-menu items used on illust cells across the app — share, copy URL,
+/// open in browser, and mute artist (writes to the local MuteStore).
+struct IllustCellContextMenuItems: View {
+    let illust: Illust
+    @Environment(OnboardingStore.self) private var l10n
+    @Environment(\.openURL) private var openURL
+
+    private var pixivURL: URL {
+        URL(string: "https://www.pixiv.net/artworks/\(illust.id)")!
+    }
+
+    var body: some View {
+        ShareLink(item: pixivURL) {
+            Label(l10n.t(.actionShare), systemImage: "square.and.arrow.up")
+        }
+        Button {
+            UIPasteboard.general.string = pixivURL.absoluteString
+        } label: {
+            Label(l10n.t(.actionCopyLink), systemImage: "doc.on.doc")
+        }
+        Button {
+            openURL(pixivURL)
+        } label: {
+            Label(l10n.t(.actionOpenInBrowser), systemImage: "safari")
+        }
+        if let user = illust.user {
+            Divider()
+            Button(role: .destructive) {
+                MuteStore.shared.toggleUser(user.id)
+            } label: {
+                Label(l10n.t(.actionMuteArtist), systemImage: "speaker.slash")
+            }
+        }
     }
 }
 

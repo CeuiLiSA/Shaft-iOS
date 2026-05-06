@@ -10,6 +10,13 @@ final class UserProfileViewModel {
     var manga: [Illust] = []
     var novels: [Novel] = []
     var bookmarks: [Illust] = []
+    var illustNext: String?
+    var mangaNext: String?
+    var novelNext: String?
+    var bookmarkNext: String?
+    var bookmarkRestrict: String = "public"
+    var bookmarkTags: [BookmarkTag] = []
+    var bookmarkTagFilter: String? = nil
     var isLoading = false
     var errorMessage: String?
     var isFollowing = false
@@ -48,17 +55,80 @@ final class UserProfileViewModel {
             errorMessage = error.localizedDescription
         }
     }
-    private func loadIllusts() async {
-        illusts = (try? await api.userIllusts(userId, type: "illust"))?.illusts ?? []
+    func loadIllusts() async {
+        let r = try? await api.userIllusts(userId, type: "illust")
+        illusts = r?.illusts ?? []
+        illustNext = r?.nextUrl
     }
-    private func loadManga() async {
-        manga = (try? await api.userIllusts(userId, type: "manga"))?.illusts ?? []
+    func loadManga() async {
+        let r = try? await api.userIllusts(userId, type: "manga")
+        manga = r?.illusts ?? []
+        mangaNext = r?.nextUrl
     }
-    private func loadNovels() async {
-        novels = (try? await api.userNovels(userId))?.novels ?? []
+    func loadNovels() async {
+        let r = try? await api.userNovels(userId)
+        novels = r?.novels ?? []
+        novelNext = r?.nextUrl
     }
-    private func loadBookmarks() async {
-        bookmarks = (try? await api.userBookmarkedIllusts(userId))?.illusts ?? []
+    func loadBookmarks() async {
+        let r = try? await api.userBookmarkedIllusts(
+            userId, restrict: bookmarkRestrict, tag: bookmarkTagFilter
+        )
+        bookmarks = r?.illusts ?? []
+        bookmarkNext = r?.nextUrl
+    }
+
+    func loadBookmarkTags() async {
+        let r = try? await api.userBookmarkTags(userId, restrict: bookmarkRestrict)
+        bookmarkTags = r?.bookmarkTags ?? []
+    }
+
+    func setBookmarkRestrict(_ r: String) async {
+        guard r != bookmarkRestrict else { return }
+        bookmarkRestrict = r
+        bookmarks = []
+        bookmarkNext = nil
+        bookmarkTagFilter = nil
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { @MainActor [weak self] in await self?.loadBookmarks() }
+            group.addTask { @MainActor [weak self] in await self?.loadBookmarkTags() }
+        }
+    }
+
+    func setBookmarkTagFilter(_ tag: String?) async {
+        bookmarkTagFilter = tag
+        bookmarks = []
+        bookmarkNext = nil
+        await loadBookmarks()
+    }
+
+    func loadMoreIllusts() async {
+        guard let url = illustNext else { return }
+        if let r: IllustResponse = try? await api.nextPage(url) {
+            illusts.append(contentsOf: r.illusts)
+            illustNext = r.nextUrl
+        }
+    }
+    func loadMoreManga() async {
+        guard let url = mangaNext else { return }
+        if let r: IllustResponse = try? await api.nextPage(url) {
+            manga.append(contentsOf: r.illusts)
+            mangaNext = r.nextUrl
+        }
+    }
+    func loadMoreNovels() async {
+        guard let url = novelNext else { return }
+        if let r: NovelResponse = try? await api.nextPage(url) {
+            novels.append(contentsOf: r.novels)
+            novelNext = r.nextUrl
+        }
+    }
+    func loadMoreBookmarks() async {
+        guard let url = bookmarkNext else { return }
+        if let r: IllustResponse = try? await api.nextPage(url) {
+            bookmarks.append(contentsOf: r.illusts)
+            bookmarkNext = r.nextUrl
+        }
     }
 
     func toggleFollow() async {
@@ -86,8 +156,17 @@ struct UserProfileView: View {
     @State private var vm: UserProfileViewModel
     @State private var section: ProfileSection = .illusts
     @Environment(OnboardingStore.self) private var l10n
+    @Environment(\.openURL) private var openURL
 
     enum ProfileSection: Hashable, CaseIterable { case illusts, manga, novels, bookmarks }
+
+    private var pixivURL: URL {
+        URL(string: "https://www.pixiv.net/users/\(userId)")!
+    }
+
+    private var isOwnProfile: Bool {
+        KeychainTokenStore.shared.load()?.user?.id == userId
+    }
 
     init(userId: Int64) {
         self.userId = userId
@@ -111,26 +190,134 @@ struct UserProfileView: View {
             TabView(selection: $section) {
                 IllustWaterfallList(
                     illusts: vm.illusts, isLoading: false, errorMessage: nil,
-                    onRefresh: {}, onTap: { _ in }
+                    onRefresh: { await vm.loadIllusts() },
+                    onLoadMore: { await vm.loadMoreIllusts() },
+                    hasMore: vm.illustNext != nil
                 ).tag(ProfileSection.illusts)
                 IllustWaterfallList(
                     illusts: vm.manga, isLoading: false, errorMessage: nil,
-                    onRefresh: {}, onTap: { _ in }
+                    onRefresh: { await vm.loadManga() },
+                    onLoadMore: { await vm.loadMoreManga() },
+                    hasMore: vm.mangaNext != nil
                 ).tag(ProfileSection.manga)
-                NovelList(novels: vm.novels)
-                    .tag(ProfileSection.novels)
-                IllustWaterfallList(
-                    illusts: vm.bookmarks, isLoading: false, errorMessage: nil,
-                    onRefresh: {}, onTap: { _ in }
-                ).tag(ProfileSection.bookmarks)
+                NovelList(
+                    novels: vm.novels,
+                    onLoadMore: { await vm.loadMoreNovels() },
+                    hasMore: vm.novelNext != nil
+                )
+                .tag(ProfileSection.novels)
+                bookmarksTab.tag(ProfileSection.bookmarks)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    ShareLink(item: pixivURL) {
+                        Label(l10n.t(.actionShare), systemImage: "square.and.arrow.up")
+                    }
+                    Button {
+                        UIPasteboard.general.string = pixivURL.absoluteString
+                    } label: {
+                        Label(l10n.t(.actionCopyLink), systemImage: "doc.on.doc")
+                    }
+                    Button {
+                        openURL(pixivURL)
+                    } label: {
+                        Label(l10n.t(.actionOpenInBrowser), systemImage: "safari")
+                    }
+                    Divider()
+                    Button(role: .destructive) {
+                        MuteStore.shared.toggleUser(userId)
+                    } label: {
+                        let muted = MuteStore.shared.isUserMuted(userId)
+                        Label(muted ? l10n.t(.actionUnmuteUser) : l10n.t(.actionMuteUser),
+                              systemImage: "speaker.slash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
         .task {
             await vm.loadIfNeeded()
             if let u = vm.user { HistoryStore.shared.record(user: u) }
         }
+    }
+
+    @ViewBuilder
+    private var bookmarksTab: some View {
+        VStack(spacing: 0) {
+            if isOwnProfile {
+                HStack(spacing: 8) {
+                    restrictChip("public", label: l10n.t(.followingPublic))
+                    restrictChip("private", label: l10n.t(.followingPrivate))
+                    Spacer()
+                }
+                .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
+
+                if !vm.bookmarkTags.isEmpty {
+                    bookmarkTagStrip
+                }
+            }
+            IllustWaterfallList(
+                illusts: vm.bookmarks, isLoading: false, errorMessage: nil,
+                onRefresh: { await vm.loadBookmarks() },
+                onLoadMore: { await vm.loadMoreBookmarks() },
+                hasMore: vm.bookmarkNext != nil
+            )
+        }
+        .task(id: isOwnProfile) {
+            if isOwnProfile, vm.bookmarkTags.isEmpty {
+                await vm.loadBookmarkTags()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var bookmarkTagStrip: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                bookmarkTagChip(name: nil, label: l10n.t(.bookmarkTagAll))
+                ForEach(vm.bookmarkTags) { tag in
+                    bookmarkTagChip(name: tag.name, label: tag.name ?? "")
+                }
+            }
+            .padding(.horizontal, 12).padding(.bottom, 6)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    @ViewBuilder
+    private func bookmarkTagChip(name: String?, label: String) -> some View {
+        let active = vm.bookmarkTagFilter == name
+        Button {
+            Task { await vm.setBookmarkTagFilter(name) }
+        } label: {
+            Text(label)
+                .font(.caption.weight(active ? .bold : .regular))
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(active ? Color.accentColor : Color(.secondarySystemBackground),
+                            in: .capsule)
+                .foregroundStyle(active ? Color.white : .primary)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func restrictChip(_ r: String, label: String) -> some View {
+        Button {
+            Task { await vm.setBookmarkRestrict(r) }
+        } label: {
+            Text(label)
+                .font(.caption.weight(vm.bookmarkRestrict == r ? .bold : .regular))
+                .padding(.horizontal, 10).padding(.vertical, 5)
+                .background(vm.bookmarkRestrict == r ? Color.accentColor : Color(.secondarySystemBackground),
+                            in: .capsule)
+                .foregroundStyle(vm.bookmarkRestrict == r ? Color.white : .primary)
+        }
+        .buttonStyle(.plain)
     }
 
     private func label(for s: ProfileSection) -> String {
@@ -177,6 +364,18 @@ struct UserProfileView: View {
 
 struct NovelList: View {
     let novels: [Novel]
+    let onLoadMore: (() async -> Void)?
+    let hasMore: Bool
+
+    init(
+        novels: [Novel],
+        onLoadMore: (() async -> Void)? = nil,
+        hasMore: Bool = false
+    ) {
+        self.novels = novels
+        self.onLoadMore = onLoadMore
+        self.hasMore = hasMore
+    }
 
     var body: some View {
         ScrollView {
@@ -187,6 +386,11 @@ struct NovelList: View {
                     }
                     .buttonStyle(.plain)
                     Divider()
+                }
+                if hasMore, !novels.isEmpty {
+                    Color.clear
+                        .frame(height: 40)
+                        .onAppear { Task { await onLoadMore?() } }
                 }
             }
             .padding(.horizontal, 12)

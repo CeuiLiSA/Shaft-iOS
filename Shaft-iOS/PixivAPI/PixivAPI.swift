@@ -71,6 +71,14 @@ actor PixivAPI {
         ])
     }
 
+    func recommendedManga() async throws -> HomeIllustResponse {
+        try await get(path: "/v1/manga/recommended", query: [
+            "include_ranking_illusts": "false",
+            "include_privacy_policy": "true",
+            "filter": "for_ios",
+        ])
+    }
+
     func trendingTags(type: String = "illust") async throws -> TrendingTagsResponse {
         try await get(path: "/v1/trending-tags/\(type)", query: ["filter": "for_ios"])
     }
@@ -125,6 +133,18 @@ actor PixivAPI {
         try await get(path: "/v3/novel/comments", query: ["novel_id": "\(novelId)"])
     }
 
+    func illustCommentReplies(_ commentId: Int64) async throws -> CommentsResponse {
+        try await get(path: "/v1/illust/comment/replies", query: [
+            "comment_id": "\(commentId)",
+        ])
+    }
+
+    func novelCommentReplies(_ commentId: Int64) async throws -> CommentsResponse {
+        try await get(path: "/v1/novel/comment/replies", query: [
+            "comment_id": "\(commentId)",
+        ])
+    }
+
     func recommendedNovels() async throws -> NovelResponse {
         try await get(path: "/v1/novel/recommended", query: [
             "include_ranking_illusts": "false",
@@ -148,11 +168,24 @@ actor PixivAPI {
         ])
     }
 
-    func userBookmarkedIllusts(_ userId: Int64, restrict: String = "public") async throws -> IllustResponse {
-        try await get(path: "/v1/user/bookmarks/illust", query: [
+    func userBookmarkedIllusts(
+        _ userId: Int64,
+        restrict: String = "public",
+        tag: String? = nil
+    ) async throws -> IllustResponse {
+        var q: [String: String] = [
             "user_id": "\(userId)",
             "restrict": restrict,
             "filter": "for_ios",
+        ]
+        if let tag, !tag.isEmpty { q["tag"] = tag }
+        return try await get(path: "/v1/user/bookmarks/illust", query: q)
+    }
+
+    func userBookmarkTags(_ userId: Int64, restrict: String = "public") async throws -> BookmarkTagsResponse {
+        try await get(path: "/v1/user/bookmark-tags/illust", query: [
+            "user_id": "\(userId)",
+            "restrict": restrict,
         ])
     }
 
@@ -198,6 +231,21 @@ actor PixivAPI {
 
     func latestNovels() async throws -> NovelResponse {
         try await get(path: "/v1/novel/new")
+    }
+
+    // MARK: Series
+
+    func illustSeries(_ seriesId: Int64) async throws -> IllustSeriesResponse {
+        try await get(path: "/v1/illust/series", query: [
+            "illust_series_id": "\(seriesId)",
+            "filter": "for_ios",
+        ])
+    }
+
+    func novelSeries(_ seriesId: Int64) async throws -> NovelSeriesDetailResponse {
+        try await get(path: "/v2/novel/series", query: [
+            "series_id": "\(seriesId)",
+        ])
     }
 
     func novelText(_ novelId: Int64) async throws -> Data {
@@ -246,20 +294,28 @@ actor PixivAPI {
 
     // MARK: Search
 
-    func searchIllust(word: String, sort: String = "date_desc") async throws -> IllustResponse {
+    func searchIllust(
+        word: String,
+        sort: String = "date_desc",
+        searchTarget: String = "partial_match_for_tags"
+    ) async throws -> IllustResponse {
         try await get(path: "/v1/search/illust", query: [
             "word": word,
             "sort": sort,
-            "search_target": "partial_match_for_tags",
+            "search_target": searchTarget,
             "filter": "for_ios",
         ])
     }
 
-    func searchNovel(word: String, sort: String = "date_desc") async throws -> NovelResponse {
+    func searchNovel(
+        word: String,
+        sort: String = "date_desc",
+        searchTarget: String = "partial_match_for_tags"
+    ) async throws -> NovelResponse {
         try await get(path: "/v1/search/novel", query: [
             "word": word,
             "sort": sort,
-            "search_target": "partial_match_for_tags",
+            "search_target": searchTarget,
         ])
     }
 
@@ -280,11 +336,13 @@ actor PixivAPI {
     // MARK: Mutations
 
     @discardableResult
-    func bookmarkIllust(_ illustId: Int64, restrict: String = "public") async throws -> EmptyResponse {
-        try await post(path: "/v2/illust/bookmark/add", form: [
-            "illust_id": "\(illustId)",
-            "restrict": restrict,
-        ])
+    func bookmarkIllust(_ illustId: Int64, restrict: String = "public", tags: [String] = []) async throws -> EmptyResponse {
+        var pairs: [(String, String)] = [
+            ("illust_id", "\(illustId)"),
+            ("restrict", restrict),
+        ]
+        for t in tags { pairs.append(("tags[]", t)) }
+        return try await postPairs(path: "/v2/illust/bookmark/add", pairs: pairs)
     }
 
     @discardableResult
@@ -293,11 +351,13 @@ actor PixivAPI {
     }
 
     @discardableResult
-    func bookmarkNovel(_ novelId: Int64, restrict: String = "public") async throws -> EmptyResponse {
-        try await post(path: "/v2/novel/bookmark/add", form: [
-            "novel_id": "\(novelId)",
-            "restrict": restrict,
-        ])
+    func bookmarkNovel(_ novelId: Int64, restrict: String = "public", tags: [String] = []) async throws -> EmptyResponse {
+        var pairs: [(String, String)] = [
+            ("novel_id", "\(novelId)"),
+            ("restrict", restrict),
+        ]
+        for t in tags { pairs.append(("tags[]", t)) }
+        return try await postPairs(path: "/v2/novel/bookmark/add", pairs: pairs)
     }
 
     @discardableResult
@@ -329,18 +389,22 @@ actor PixivAPI {
     }
 
     private func post<T: Decodable>(path: String, form: [String: String]) async throws -> T {
+        try await postPairs(path: path, pairs: form.map { ($0.key, $0.value) })
+    }
+
+    private func postPairs<T: Decodable>(path: String, pairs: [(String, String)]) async throws -> T {
         let url = Self.baseURL.appendingPathComponent(path)
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        req.httpBody = formEncode(form).data(using: .utf8)
+        req.httpBody = formEncode(pairs).data(using: .utf8)
         return try await perform(request: req)
     }
 
-    private func formEncode(_ fields: [String: String]) -> String {
+    private func formEncode(_ pairs: [(String, String)]) -> String {
         var allowed = CharacterSet.urlQueryAllowed
         allowed.remove(charactersIn: "&=+")
-        return fields.map { k, v in
+        return pairs.map { k, v in
             let key = k.addingPercentEncoding(withAllowedCharacters: allowed) ?? k
             let val = v.addingPercentEncoding(withAllowedCharacters: allowed) ?? v
             return "\(key)=\(val)"

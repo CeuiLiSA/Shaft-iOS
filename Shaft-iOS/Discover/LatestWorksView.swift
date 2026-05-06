@@ -5,7 +5,11 @@ import SwiftUI
 private final class LatestWorksVM {
     var illusts: [Illust] = []
     var novels: [Novel] = []
+    var illustNext: String?
+    var novelNext: String?
     var isLoading = false
+    var isLoadingMoreIllusts = false
+    var isLoadingMoreNovels = false
     var errorMessage: String?
 
     @ObservationIgnored private let api: PixivAPI
@@ -22,12 +26,36 @@ private final class LatestWorksVM {
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor [weak self] in
                 guard let self else { return }
-                self.illusts = (try? await self.api.latestIllusts())?.illusts ?? []
+                let r = try? await self.api.latestIllusts()
+                self.illusts = r?.illusts ?? []
+                self.illustNext = r?.nextUrl
             }
             group.addTask { @MainActor [weak self] in
                 guard let self else { return }
-                self.novels = (try? await self.api.latestNovels())?.novels ?? []
+                let r = try? await self.api.latestNovels()
+                self.novels = r?.novels ?? []
+                self.novelNext = r?.nextUrl
             }
+        }
+    }
+
+    func loadMoreIllusts() async {
+        guard let url = illustNext, !isLoadingMoreIllusts else { return }
+        isLoadingMoreIllusts = true
+        defer { isLoadingMoreIllusts = false }
+        if let r: IllustResponse = try? await api.nextPage(url) {
+            illusts.append(contentsOf: r.illusts)
+            illustNext = r.nextUrl
+        }
+    }
+
+    func loadMoreNovels() async {
+        guard let url = novelNext, !isLoadingMoreNovels else { return }
+        isLoadingMoreNovels = true
+        defer { isLoadingMoreNovels = false }
+        if let r: NovelResponse = try? await api.nextPage(url) {
+            novels.append(contentsOf: r.novels)
+            novelNext = r.nextUrl
         }
     }
 }
@@ -51,9 +79,14 @@ struct LatestWorksView: View {
                     illusts: vm.illusts, isLoading: vm.isLoading,
                     errorMessage: vm.errorMessage,
                     onRefresh: { await vm.load() },
-                    onTap: { _ in }
+                    onLoadMore: { await vm.loadMoreIllusts() },
+                    hasMore: vm.illustNext != nil
                 ).tag(Section.illust)
-                NovelList(novels: vm.novels).tag(Section.novel)
+                NovelList(
+                    novels: vm.novels,
+                    onLoadMore: { await vm.loadMoreNovels() },
+                    hasMore: vm.novelNext != nil
+                ).tag(Section.novel)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
         }

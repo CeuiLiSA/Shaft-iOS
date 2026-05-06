@@ -4,7 +4,9 @@ import SwiftUI
 @Observable
 private final class RecommendUsersVM {
     var items: [UserPreview] = []
+    var nextUrl: String?
     var isLoading = false
+    var isLoadingMore = false
     var errorMessage: String?
 
     @ObservationIgnored private let api: PixivAPI
@@ -15,8 +17,20 @@ private final class RecommendUsersVM {
     func load() async {
         isLoading = true; errorMessage = nil
         defer { isLoading = false }
-        do { items = try await api.recommendedUsers().userPreviews }
-        catch { errorMessage = error.localizedDescription }
+        do {
+            let r = try await api.recommendedUsers()
+            items = r.userPreviews
+            nextUrl = r.nextUrl
+        } catch { errorMessage = error.localizedDescription }
+    }
+    func loadMore() async {
+        guard let url = nextUrl, !isLoadingMore else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        if let r: UserPreviewResponse = try? await api.nextPage(url) {
+            items.append(contentsOf: r.userPreviews)
+            nextUrl = r.nextUrl
+        }
     }
 }
 
@@ -25,16 +39,20 @@ struct RecommendUsersView: View {
     @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
-        UserPreviewList(items: vm.items)
-            .overlay {
-                if vm.items.isEmpty && vm.isLoading { ProgressView() }
-                else if vm.items.isEmpty, let err = vm.errorMessage {
-                    InlineError(message: err) { Task { await vm.load() } }.padding()
-                }
+        UserPreviewList(
+            items: vm.items,
+            onLoadMore: { await vm.loadMore() },
+            hasMore: vm.nextUrl != nil
+        )
+        .overlay {
+            if vm.items.isEmpty && vm.isLoading { ProgressView() }
+            else if vm.items.isEmpty, let err = vm.errorMessage {
+                InlineError(message: err) { Task { await vm.load() } }.padding()
             }
-            .navigationTitle(l10n.t(.recommendUsersTitle))
-            .navigationBarTitleDisplayMode(.inline)
-            .task { await vm.loadIfNeeded() }
-            .refreshable { await vm.load() }
+        }
+        .navigationTitle(l10n.t(.recommendUsersTitle))
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await vm.loadIfNeeded() }
+        .refreshable { await vm.load() }
     }
 }

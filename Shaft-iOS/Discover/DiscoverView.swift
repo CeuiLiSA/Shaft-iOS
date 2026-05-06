@@ -4,7 +4,9 @@ import SwiftUI
 @Observable
 final class DiscoverViewModel {
     var illusts: [Illust] = []
+    var nextUrl: String?
     var isLoading = false
+    var isLoadingMore = false
     var errorMessage: String?
 
     @ObservationIgnored private let api: PixivAPI
@@ -22,9 +24,21 @@ final class DiscoverViewModel {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            illusts = try await api.walkthroughIllusts().illusts
+            let r = try await api.walkthroughIllusts()
+            illusts = r.illusts
+            nextUrl = r.nextUrl
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadMore() async {
+        guard let url = nextUrl, !isLoadingMore else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        if let r: IllustResponse = try? await api.nextPage(url) {
+            illusts.append(contentsOf: r.illusts)
+            nextUrl = r.nextUrl
         }
     }
 }
@@ -43,6 +57,8 @@ struct DiscoverView: View {
                     chip(.spotlight, label: l10n.t(.discoverSpotlight), icon: "doc.richtext")
                     chip(.ranking(initialMode: "day"), label: l10n.t(.rankingTitle), icon: "trophy")
                     chip(.latestWorks, label: l10n.t(.latestWorksTitle), icon: "clock.badge")
+                    chip(.mangaRecommend, label: l10n.t(.profileManga), icon: "book")
+                    chip(.novelRecommend, label: l10n.t(.profileNovels), icon: "text.book.closed")
                     chip(.recommendUsers, label: l10n.t(.recommendUsersTitle), icon: "person.2.crop.square.stack")
                 }
                 .padding(.horizontal, 12).padding(.vertical, 8)
@@ -54,7 +70,8 @@ struct DiscoverView: View {
                 isLoading: vm.isLoading,
                 errorMessage: vm.errorMessage,
                 onRefresh: { await vm.load() },
-                onTap: { _ in }
+                onLoadMore: { await vm.loadMore() },
+                hasMore: vm.nextUrl != nil
             )
         }
         .task { await vm.loadIfNeeded() }

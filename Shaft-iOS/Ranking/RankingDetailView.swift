@@ -5,7 +5,9 @@ import SwiftUI
 final class RankingDetailViewModel {
     var mode: String
     var illusts: [Illust] = []
+    var nextUrl: String?
     var isLoading = false
+    var isLoadingMore = false
     var errorMessage: String?
 
     @ObservationIgnored private let api: PixivAPI
@@ -18,6 +20,7 @@ final class RankingDetailViewModel {
     func setMode(_ m: String) async {
         mode = m
         illusts = []
+        nextUrl = nil
         await load()
     }
 
@@ -30,9 +33,21 @@ final class RankingDetailViewModel {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            illusts = try await api.rankingIllusts(mode: mode).illusts
+            let r = try await api.rankingIllusts(mode: mode)
+            illusts = r.illusts
+            nextUrl = r.nextUrl
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadMore() async {
+        guard let url = nextUrl, !isLoadingMore else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        if let r: IllustResponse = try? await api.nextPage(url) {
+            illusts.append(contentsOf: r.illusts)
+            nextUrl = r.nextUrl
         }
     }
 }
@@ -79,7 +94,8 @@ struct RankingDetailView: View {
                 isLoading: vm.isLoading,
                 errorMessage: vm.errorMessage,
                 onRefresh: { await vm.load() },
-                onTap: { _ in }
+                onLoadMore: { await vm.loadMore() },
+                hasMore: vm.nextUrl != nil
             )
         }
         .navigationTitle(l10n.t(.rankingTitle))

@@ -1,8 +1,10 @@
 import SwiftUI
 import Photos
 
-/// Full-screen pannable + pinch-zoomable image viewer with multi-page swipe
-/// and Save / Share. Mirrors Shaft `FragmentImageDetail`.
+/// Full-screen pannable + pinch-zoomable image viewer with multi-page swipe.
+/// Save button writes the current page to Photos; for multi-page works a
+/// "save all" affordance writes every page in sequence with a count badge.
+/// Mirrors Shaft `FragmentImageDetail`.
 struct ImageViewerView: View {
     let urls: [URL]
     @Binding var index: Int
@@ -10,7 +12,20 @@ struct ImageViewerView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var saveStatus: SaveStatus = .idle
 
-    enum SaveStatus { case idle, saving, saved, failed(String) }
+    enum SaveStatus: Equatable {
+        case idle
+        case saving
+        case savingAll(current: Int, total: Int)
+        case saved
+        case failed(String)
+
+        var isInFlight: Bool {
+            switch self {
+            case .saving, .savingAll: return true
+            default: return false
+            }
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -33,6 +48,20 @@ struct ImageViewerView: View {
                         .foregroundStyle(.white)
                 }
                 Spacer()
+
+                if urls.count > 1 {
+                    Button {
+                        Task { await saveAll() }
+                    } label: {
+                        Image(systemName: saveAllButtonIcon)
+                            .font(.title3)
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                            .background(.black.opacity(0.5), in: .circle)
+                    }
+                    .disabled(saveStatus.isInFlight)
+                }
+
                 Button {
                     Task { await save() }
                 } label: {
@@ -42,7 +71,8 @@ struct ImageViewerView: View {
                         .frame(width: 36, height: 36)
                         .background(.black.opacity(0.5), in: .circle)
                 }
-                .disabled({ if case .saving = saveStatus { true } else { false } }())
+                .disabled(saveStatus.isInFlight)
+
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
                         .font(.title3.bold())
@@ -54,7 +84,15 @@ struct ImageViewerView: View {
             .padding(.horizontal, 16)
             .padding(.top, 8)
 
-            if case .failed(let msg) = saveStatus {
+            if case .savingAll(let cur, let total) = saveStatus {
+                Text("\(cur) / \(total)")
+                    .font(.caption.bold())
+                    .foregroundStyle(.white)
+                    .padding(8)
+                    .background(.black.opacity(0.7), in: .capsule)
+                    .padding(.top, 60)
+                    .padding(.horizontal, 16)
+            } else if case .failed(let msg) = saveStatus {
                 Text(msg)
                     .font(.caption)
                     .foregroundStyle(.white)
@@ -70,27 +108,52 @@ struct ImageViewerView: View {
 
     private var saveButtonIcon: String {
         switch saveStatus {
-        case .idle, .failed: return "square.and.arrow.down"
-        case .saving:        return "ellipsis"
-        case .saved:         return "checkmark"
+        case .idle, .failed:               return "square.and.arrow.down"
+        case .saving:                      return "ellipsis"
+        case .savingAll:                   return "square.and.arrow.down"
+        case .saved:                       return "checkmark"
+        }
+    }
+
+    private var saveAllButtonIcon: String {
+        switch saveStatus {
+        case .savingAll: return "ellipsis"
+        default:         return "square.and.arrow.down.on.square"
         }
     }
 
     private func save() async {
         guard let url = urls[safe: index] else { return }
         saveStatus = .saving
+        if await saveOne(url) {
+            saveStatus = .saved
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if case .saved = saveStatus { saveStatus = .idle }
+        }
+    }
 
+    private func saveAll() async {
+        let total = urls.count
+        guard total > 0 else { return }
+        guard await ensurePhotosAuthorization() else { return }
+        for (i, u) in urls.enumerated() {
+            saveStatus = .savingAll(current: i + 1, total: total)
+            if !(await saveOne(u, alreadyAuthorized: true)) { return }
+        }
+        saveStatus = .saved
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        if case .saved = saveStatus { saveStatus = .idle }
+    }
+
+    /// Returns true on success, sets `saveStatus = .failed(...)` on error.
+    private func saveOne(_ url: URL, alreadyAuthorized: Bool = false) async -> Bool {
         guard let image = await PixivImageCache.shared.load(url) else {
             saveStatus = .failed("Couldn't load image")
-            return
+            return false
         }
-
-        let auth = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        guard auth == .authorized || auth == .limited else {
-            saveStatus = .failed("Photos access denied")
-            return
+        if !alreadyAuthorized {
+            guard await ensurePhotosAuthorization() else { return false }
         }
-
         do {
             try await PHPhotoLibrary.shared().performChanges {
                 let req = PHAssetCreationRequest.forAsset()
@@ -98,12 +161,18 @@ struct ImageViewerView: View {
                     req.addResource(with: .photo, data: data, options: nil)
                 }
             }
-            saveStatus = .saved
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            if case .saved = saveStatus { saveStatus = .idle }
+            return true
         } catch {
             saveStatus = .failed(error.localizedDescription)
+            return false
         }
+    }
+
+    private func ensurePhotosAuthorization() async -> Bool {
+        let auth = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        if auth == .authorized || auth == .limited { return true }
+        saveStatus = .failed("Photos access denied")
+        return false
     }
 }
 

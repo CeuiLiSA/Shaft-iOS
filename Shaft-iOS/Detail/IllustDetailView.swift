@@ -54,7 +54,7 @@ final class IllustDetailViewModel {
         totalComments = resp?.totalComments
     }
 
-    func toggleBookmark() async {
+    func toggleBookmark(restrict: String = "public") async {
         guard let cur = illust else { return }
         isBookmarking = true
         defer { isBookmarking = false }
@@ -63,9 +63,22 @@ final class IllustDetailViewModel {
                 _ = try await api.unbookmarkIllust(illustId)
                 update(isBookmarked: false)
             } else {
-                _ = try await api.bookmarkIllust(illustId)
+                _ = try await api.bookmarkIllust(illustId, restrict: restrict)
                 update(isBookmarked: true)
             }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Bookmark with explicit restrict + tags. Re-applies if already bookmarked
+    /// (Pixiv replaces the bookmark with the new tag/restrict set).
+    func bookmark(restrict: String, tags: [String]) async {
+        isBookmarking = true
+        defer { isBookmarking = false }
+        do {
+            _ = try await api.bookmarkIllust(illustId, restrict: restrict, tags: tags)
+            update(isBookmarked: true)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -79,7 +92,8 @@ final class IllustDetailViewModel {
             pageCount: i.pageCount, width: i.width, height: i.height,
             totalBookmarks: i.totalBookmarks, totalView: i.totalView,
             isBookmarked: isBookmarked, createDate: i.createDate,
-            metaSinglePage: i.metaSinglePage, metaPages: i.metaPages
+            metaSinglePage: i.metaSinglePage, metaPages: i.metaPages,
+            series: i.series
         )
         illust = i
     }
@@ -93,11 +107,17 @@ struct IllustDetailView: View {
     @State private var vm: IllustDetailViewModel
     @State private var showViewer = false
     @State private var viewerIndex = 0
+    @State private var showBookmarkSheet = false
     @Environment(OnboardingStore.self) private var l10n
+    @Environment(\.openURL) private var openURL
 
     init(illustId: Int64) {
         self.illustId = illustId
         _vm = State(wrappedValue: IllustDetailViewModel(illustId: illustId))
+    }
+
+    private var pixivURL: URL {
+        URL(string: "https://www.pixiv.net/artworks/\(illustId)")!
     }
 
     var body: some View {
@@ -156,9 +176,40 @@ struct IllustDetailView: View {
                 }
                 .padding(.vertical, 8)
             }
-            BottomActionBar(vm: vm)
+            BottomActionBar(vm: vm, onShowBookmarkSheet: { showBookmarkSheet = true })
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    ShareLink(item: pixivURL) {
+                        Label(l10n.t(.actionShare), systemImage: "square.and.arrow.up")
+                    }
+                    Button {
+                        UIPasteboard.general.string = pixivURL.absoluteString
+                    } label: {
+                        Label(l10n.t(.actionCopyLink), systemImage: "doc.on.doc")
+                    }
+                    Button {
+                        openURL(pixivURL)
+                    } label: {
+                        Label(l10n.t(.actionOpenInBrowser), systemImage: "safari")
+                    }
+                    if let user = vm.illust?.user {
+                        Divider()
+                        Button(role: .destructive) {
+                            MuteStore.shared.toggleUser(user.id)
+                        } label: {
+                            let muted = MuteStore.shared.isUserMuted(user.id)
+                            Label(muted ? l10n.t(.actionUnmuteUser) : l10n.t(.actionMuteArtist),
+                                  systemImage: "speaker.slash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
         .task {
             await vm.loadIfNeeded()
             if let i = vm.illust { HistoryStore.shared.record(illust: i) }
@@ -166,6 +217,13 @@ struct IllustDetailView: View {
         .fullScreenCover(isPresented: $showViewer) {
             if let urls = vm.illust.map(IllustPagesHero.urls(for:)), !urls.isEmpty {
                 ImageViewerView(urls: urls, index: $viewerIndex)
+            }
+        }
+        .sheet(isPresented: $showBookmarkSheet) {
+            BookmarkTagsSheet(
+                existingTags: (vm.illust?.tags ?? []).compactMap { $0.name }
+            ) { restrict, tags in
+                await vm.bookmark(restrict: restrict, tags: tags)
             }
         }
     }
@@ -219,6 +277,18 @@ private struct IllustMetaSection: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(illust.title ?? "")
                 .font(.title3.bold())
+            if let series = illust.series,
+               let title = series.title, !title.isEmpty,
+               let sid = series.id {
+                NavigationLink(value: AppRoute.illustSeries(seriesId: sid)) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "rectangle.stack")
+                        Text(title)
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(.tint)
+                }
+            }
             HStack(spacing: 14) {
                 if let v = illust.totalView {
                     Label("\(v)", systemImage: "eye")
@@ -303,6 +373,7 @@ private struct IllustTagsSection: View {
 
 private struct BottomActionBar: View {
     let vm: IllustDetailViewModel
+    let onShowBookmarkSheet: () -> Void
     @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
@@ -317,6 +388,25 @@ private struct BottomActionBar: View {
                     .frame(width: 44, height: 44)
             }
             .disabled(vm.isBookmarking || vm.illust == nil)
+            .contextMenu {
+                if vm.illust?.isBookmarked != true {
+                    Button {
+                        Task { await vm.toggleBookmark(restrict: "public") }
+                    } label: {
+                        Label(l10n.t(.bookmarkPublic), systemImage: "heart")
+                    }
+                    Button {
+                        Task { await vm.toggleBookmark(restrict: "private") }
+                    } label: {
+                        Label(l10n.t(.bookmarkPrivate), systemImage: "lock")
+                    }
+                }
+                Button {
+                    onShowBookmarkSheet()
+                } label: {
+                    Label(l10n.t(.bookmarkWithTags), systemImage: "tag")
+                }
+            }
 
             ShareLink(item: shareURL) {
                 Image(systemName: "square.and.arrow.up")

@@ -47,7 +47,7 @@ final class NovelDetailViewModel {
         totalComments = resp?.totalComments
     }
 
-    func toggleBookmark() async {
+    func toggleBookmark(restrict: String = "public") async {
         guard let cur = novel else { return }
         isBookmarking = true
         defer { isBookmarking = false }
@@ -56,9 +56,20 @@ final class NovelDetailViewModel {
                 _ = try await api.unbookmarkNovel(novelId)
                 update(isBookmarked: false)
             } else {
-                _ = try await api.bookmarkNovel(novelId)
+                _ = try await api.bookmarkNovel(novelId, restrict: restrict)
                 update(isBookmarked: true)
             }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func bookmark(restrict: String, tags: [String]) async {
+        isBookmarking = true
+        defer { isBookmarking = false }
+        do {
+            _ = try await api.bookmarkNovel(novelId, restrict: restrict, tags: tags)
+            update(isBookmarked: true)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -84,11 +95,17 @@ struct NovelDetailView: View {
     let novelId: Int64
     @State private var vm: NovelDetailViewModel
     @State private var showReader = false
+    @State private var showBookmarkSheet = false
     @Environment(OnboardingStore.self) private var l10n
+    @Environment(\.openURL) private var openURL
 
     init(novelId: Int64) {
         self.novelId = novelId
         _vm = State(wrappedValue: NovelDetailViewModel(novelId: novelId))
+    }
+
+    private var pixivURL: URL {
+        URL(string: "https://www.pixiv.net/novel/show.php?id=\(novelId)")!
     }
 
     var body: some View {
@@ -100,7 +117,19 @@ struct NovelDetailView: View {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(novel.title ?? "")
                                 .font(.title3.bold())
-                            if let series = novel.series, let title = series.title, !title.isEmpty {
+                            if let series = novel.series,
+                               let title = series.title, !title.isEmpty,
+                               let sid = series.id {
+                                NavigationLink(value: AppRoute.novelSeries(seriesId: sid)) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "books.vertical")
+                                        Text(title)
+                                    }
+                                    .font(.footnote)
+                                    .foregroundStyle(.tint)
+                                }
+                            } else if let series = novel.series,
+                                      let title = series.title, !title.isEmpty {
                                 Text(title)
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
@@ -187,6 +216,25 @@ struct NovelDetailView: View {
                         .frame(width: 44, height: 44)
                 }
                 .disabled(vm.isBookmarking || vm.novel == nil)
+                .contextMenu {
+                    if vm.novel?.isBookmarked != true {
+                        Button {
+                            Task { await vm.toggleBookmark(restrict: "public") }
+                        } label: {
+                            Label(l10n.t(.bookmarkPublic), systemImage: "heart")
+                        }
+                        Button {
+                            Task { await vm.toggleBookmark(restrict: "private") }
+                        } label: {
+                            Label(l10n.t(.bookmarkPrivate), systemImage: "lock")
+                        }
+                    }
+                    Button {
+                        showBookmarkSheet = true
+                    } label: {
+                        Label(l10n.t(.bookmarkWithTags), systemImage: "tag")
+                    }
+                }
 
                 Button {
                     showReader = true
@@ -204,12 +252,50 @@ struct NovelDetailView: View {
             .background(.thinMaterial)
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    ShareLink(item: pixivURL) {
+                        Label(l10n.t(.actionShare), systemImage: "square.and.arrow.up")
+                    }
+                    Button {
+                        UIPasteboard.general.string = pixivURL.absoluteString
+                    } label: {
+                        Label(l10n.t(.actionCopyLink), systemImage: "doc.on.doc")
+                    }
+                    Button {
+                        openURL(pixivURL)
+                    } label: {
+                        Label(l10n.t(.actionOpenInBrowser), systemImage: "safari")
+                    }
+                    if let user = vm.novel?.user {
+                        Divider()
+                        Button(role: .destructive) {
+                            MuteStore.shared.toggleUser(user.id)
+                        } label: {
+                            let muted = MuteStore.shared.isUserMuted(user.id)
+                            Label(muted ? l10n.t(.actionUnmuteUser) : l10n.t(.actionMuteArtist),
+                                  systemImage: "speaker.slash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
         .task {
             await vm.loadIfNeeded()
             if let n = vm.novel { HistoryStore.shared.record(novel: n) }
         }
         .fullScreenCover(isPresented: $showReader) {
             NovelReaderView(novelId: novelId)
+        }
+        .sheet(isPresented: $showBookmarkSheet) {
+            BookmarkTagsSheet(
+                existingTags: (vm.novel?.tags ?? []).compactMap { $0.name }
+            ) { restrict, tags in
+                await vm.bookmark(restrict: restrict, tags: tags)
+            }
         }
     }
 

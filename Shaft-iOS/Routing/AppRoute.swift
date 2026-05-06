@@ -14,6 +14,8 @@ enum AppRoute: Hashable, Codable, Sendable {
     case userIllusts(userId: Int64, type: String)
     case userBookmarks(userId: Int64)
     case userNovels(userId: Int64)
+    case illustSeries(seriesId: Int64)
+    case novelSeries(seriesId: Int64)
     case userFollowing(userId: Int64)
     case userFollower(userId: Int64)
     case comments(target: CommentTarget)
@@ -21,6 +23,8 @@ enum AppRoute: Hashable, Codable, Sendable {
     case walkthrough
     case recommendUsers
     case latestWorks
+    case mangaRecommend
+    case novelRecommend
     case more
     case history
     case downloads
