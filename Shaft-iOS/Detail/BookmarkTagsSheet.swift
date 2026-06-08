@@ -10,11 +10,26 @@ struct BookmarkTagsSheet: View {
     @Environment(OnboardingStore.self) private var l10n
 
     let existingTags: [String]
+    /// Optional async pre-fill: when the work is already bookmarked, load its
+    /// registered tags + visibility so editing the bookmark starts from the
+    /// current state instead of an empty form.
+    let loadInitial: (() async -> (restrict: String, tags: [String])?)?
     let onSave: (_ restrict: String, _ tags: [String]) async -> Void
 
     @State private var draftTags: String = ""
     @State private var restrict: String = "public"
     @State private var isSaving = false
+    @State private var didLoadInitial = false
+
+    init(
+        existingTags: [String],
+        loadInitial: (() async -> (restrict: String, tags: [String])?)? = nil,
+        onSave: @escaping (_ restrict: String, _ tags: [String]) async -> Void
+    ) {
+        self.existingTags = existingTags
+        self.loadInitial = loadInitial
+        self.onSave = onSave
+    }
 
     var body: some View {
         NavigationStack {
@@ -53,6 +68,15 @@ struct BookmarkTagsSheet: View {
             }
             .navigationTitle(l10n.t(.bookmarkAction))
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                guard !didLoadInitial else { return }
+                didLoadInitial = true
+                guard let loadInitial, let initial = await loadInitial() else { return }
+                restrict = initial.restrict
+                if !initial.tags.isEmpty {
+                    draftTags = initial.tags.joined(separator: ", ")
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(l10n.t(.actionCancel)) { dismiss() }

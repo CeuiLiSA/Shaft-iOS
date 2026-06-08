@@ -193,7 +193,7 @@ struct UserNovelsView: View {
 @MainActor
 @Observable
 private final class UserPreviewListVM {
-    enum Source { case following(Int64), follower(Int64), recommended }
+    enum Source { case following(Int64), follower(Int64), recommended, mypixiv(Int64), related(Int64) }
     let source: Source
     var items: [UserPreview] = []
     var nextUrl: String?
@@ -217,6 +217,8 @@ private final class UserPreviewListVM {
             case .following(let id):  r = try await api.userFollowing(id)
             case .follower(let id):   r = try await api.userFollower(id)
             case .recommended:        r = try await api.recommendedUsers()
+            case .mypixiv(let id):    r = try await api.userMyPixiv(id)
+            case .related(let id):    r = try await api.userRelated(id)
             }
             items = r.userPreviews
             nextUrl = r.nextUrl
@@ -258,6 +260,44 @@ struct UserFollowerView: View {
     init(userId: Int64) {
         self.userId = userId
         _vm = State(wrappedValue: UserPreviewListVM(source: .follower(userId)))
+    }
+    var body: some View {
+        UserPreviewList(
+            items: vm.items,
+            onLoadMore: { await vm.loadMore() },
+            hasMore: vm.nextUrl != nil
+        )
+        .task { await vm.loadIfNeeded() }
+        .refreshable { await vm.load() }
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct UserMyPixivView: View {
+    let userId: Int64
+    @State private var vm: UserPreviewListVM
+    init(userId: Int64) {
+        self.userId = userId
+        _vm = State(wrappedValue: UserPreviewListVM(source: .mypixiv(userId)))
+    }
+    var body: some View {
+        UserPreviewList(
+            items: vm.items,
+            onLoadMore: { await vm.loadMore() },
+            hasMore: vm.nextUrl != nil
+        )
+        .task { await vm.loadIfNeeded() }
+        .refreshable { await vm.load() }
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct UserRelatedView: View {
+    let userId: Int64
+    @State private var vm: UserPreviewListVM
+    init(userId: Int64) {
+        self.userId = userId
+        _vm = State(wrappedValue: UserPreviewListVM(source: .related(userId)))
     }
     var body: some View {
         UserPreviewList(

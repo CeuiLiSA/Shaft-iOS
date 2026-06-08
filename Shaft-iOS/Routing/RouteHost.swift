@@ -39,6 +39,14 @@ struct RouteHost: ViewModifier {
                 UserFollowingView(userId: userId)
             case .userFollower(let userId):
                 UserFollowerView(userId: userId)
+            case .userMyPixiv(let userId):
+                UserMyPixivView(userId: userId)
+            case .userRelated(let userId):
+                UserRelatedView(userId: userId)
+            case .userIllustSeriesList(let userId):
+                UserIllustSeriesListView(userId: userId)
+            case .userNovelSeriesList(let userId):
+                UserNovelSeriesListView(userId: userId)
             case .comments(let target):
                 CommentsView(target: target)
             case .spotlight:

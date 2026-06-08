@@ -177,6 +177,7 @@ struct UserProfileView: View {
         VStack(spacing: 0) {
             if let user = vm.user {
                 header(user: user)
+                entriesRow
             } else if vm.isLoading {
                 ProgressView().padding(.vertical, 40)
             } else if let err = vm.errorMessage {
@@ -244,6 +245,42 @@ struct UserProfileView: View {
             await vm.loadIfNeeded()
             if let u = vm.user { HistoryStore.shared.record(user: u) }
         }
+    }
+
+    /// Secondary destinations Shaft surfaces on a profile: the user's own
+    /// series, mutual friends (MyPixiv), and related artists.
+    @ViewBuilder
+    private var entriesRow: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                if (vm.profile?.totalIllustSeries ?? 1) > 0 {
+                    entryChip(.userIllustSeriesList(userId: userId),
+                              label: l10n.t(.userIllustSeriesTitle), systemImage: "rectangle.stack")
+                }
+                if (vm.profile?.totalNovelSeries ?? 1) > 0 {
+                    entryChip(.userNovelSeriesList(userId: userId),
+                              label: l10n.t(.userNovelSeriesTitle), systemImage: "books.vertical")
+                }
+                entryChip(.userMyPixiv(userId: userId),
+                          label: l10n.t(.followingMyPixiv), systemImage: "person.2")
+                entryChip(.userRelated(userId: userId),
+                          label: l10n.t(.userRelatedTitle), systemImage: "person.3")
+            }
+            .padding(.horizontal, 12).padding(.bottom, 8)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    @ViewBuilder
+    private func entryChip(_ route: AppRoute, label: String, systemImage: String) -> some View {
+        NavigationLink(value: route) {
+            Label(label, systemImage: systemImage)
+                .font(.caption.weight(.medium))
+                .padding(.horizontal, 12).padding(.vertical, 7)
+                .background(Color(.secondarySystemBackground), in: .capsule)
+                .foregroundStyle(.primary)
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder

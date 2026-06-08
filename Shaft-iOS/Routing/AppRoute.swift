@@ -18,6 +18,10 @@ enum AppRoute: Hashable, Codable, Sendable {
     case novelSeries(seriesId: Int64)
     case userFollowing(userId: Int64)
     case userFollower(userId: Int64)
+    case userMyPixiv(userId: Int64)
+    case userRelated(userId: Int64)
+    case userIllustSeriesList(userId: Int64)
+    case userNovelSeriesList(userId: Int64)
     case comments(target: CommentTarget)
     case spotlight
     case walkthrough

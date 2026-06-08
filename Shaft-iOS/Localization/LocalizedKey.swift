@@ -60,6 +60,12 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     // Newly added discover/recommend
     case latestWorksTitle, recommendUsersTitle
 
+    // User profile extras
+    case userRelatedTitle, userIllustSeriesTitle, userNovelSeriesTitle
+
+    // Search duration filter
+    case searchDurationAll, searchDurationDay, searchDurationWeek, searchDurationMonth
+
     // Mute
     case muteUsers, muteTags, muteAddTag
 

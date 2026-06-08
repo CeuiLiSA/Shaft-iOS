@@ -64,6 +64,12 @@ final class NovelDetailViewModel {
         }
     }
 
+    func bookmarkDetail() async -> (restrict: String, tags: [String])? {
+        guard novel?.isBookmarked == true else { return nil }
+        guard let d = try? await api.novelBookmarkDetail(novelId).bookmarkDetail else { return nil }
+        return (d.restrict ?? "public", d.registeredTags)
+    }
+
     func bookmark(restrict: String, tags: [String]) async {
         isBookmarking = true
         defer { isBookmarking = false }
@@ -292,7 +298,8 @@ struct NovelDetailView: View {
         }
         .sheet(isPresented: $showBookmarkSheet) {
             BookmarkTagsSheet(
-                existingTags: (vm.novel?.tags ?? []).compactMap { $0.name }
+                existingTags: (vm.novel?.tags ?? []).compactMap { $0.name },
+                loadInitial: { await vm.bookmarkDetail() }
             ) { restrict, tags in
                 await vm.bookmark(restrict: restrict, tags: tags)
             }

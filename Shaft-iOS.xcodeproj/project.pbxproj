@@ -60,6 +60,8 @@
 		A1000000000000000000B051 /* SeriesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F051 /* SeriesViews.swift */; };
 		A1000000000000000000B052 /* BookmarkTagsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F052 /* BookmarkTagsSheet.swift */; };
 		A1000000000000000000B053 /* SearchHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F053 /* SearchHistoryStore.swift */; };
+		A1000000000000000000B054 /* UgoiraPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F054 /* UgoiraPlayer.swift */; };
+		A1000000000000000000B055 /* UserSeriesListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F055 /* UserSeriesListView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -117,6 +119,8 @@
 		A1000000000000000000F051 /* SeriesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesViews.swift; sourceTree = "<group>"; };
 		A1000000000000000000F052 /* BookmarkTagsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkTagsSheet.swift; sourceTree = "<group>"; };
 		A1000000000000000000F053 /* SearchHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchHistoryStore.swift; sourceTree = "<group>"; };
+		A1000000000000000000F054 /* UgoiraPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UgoiraPlayer.swift; sourceTree = "<group>"; };
+		A1000000000000000000F055 /* UserSeriesListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserSeriesListView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -173,6 +177,7 @@
 				A1000000000000000000F020 /* PixivAPI.swift */,
 				A1000000000000000000F021 /* AuthTokenProvider.swift */,
 				A1000000000000000000F022 /* PixivAsyncImage.swift */,
+				A1000000000000000000F054 /* UgoiraPlayer.swift */,
 			);
 			path = PixivAPI;
 			sourceTree = "<group>";
@@ -229,6 +234,7 @@
 				A1000000000000000000F046 /* RecommendUsersView.swift */,
 				A1000000000000000000F051 /* SeriesViews.swift */,
 				A1000000000000000000F052 /* BookmarkTagsSheet.swift */,
+				A1000000000000000000F055 /* UserSeriesListView.swift */,
 			);
 			path = Detail;
 			sourceTree = "<group>";
@@ -455,6 +461,8 @@
 				A1000000000000000000B051 /* SeriesViews.swift in Sources */,
 				A1000000000000000000B052 /* BookmarkTagsSheet.swift in Sources */,
 				A1000000000000000000B053 /* SearchHistoryStore.swift in Sources */,
+				A1000000000000000000B054 /* UgoiraPlayer.swift in Sources */,
+				A1000000000000000000B055 /* UserSeriesListView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -590,6 +598,7 @@
 				DEVELOPMENT_ASSET_PATHS = "\"Shaft-iOS/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save illustrations to your photo library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -618,6 +627,7 @@
 				DEVELOPMENT_ASSET_PATHS = "\"Shaft-iOS/Preview Content\"";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save illustrations to your photo library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

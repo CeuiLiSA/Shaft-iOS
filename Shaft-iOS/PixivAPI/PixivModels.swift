@@ -418,6 +418,118 @@ struct AutoCompleteResponse: Codable, Sendable {
     let tags: [AutoCompleteTag]
 }
 
+// MARK: - Ugoira (animated illust)
+
+struct UgoiraFrame: Codable, Hashable, Sendable {
+    let file: String?
+    /// Frame delay in milliseconds.
+    let delay: Int?
+}
+
+struct UgoiraMetadata: Codable, Hashable, Sendable {
+    let zipUrls: ImageUrls?
+    let frames: [UgoiraFrame]
+
+    enum CodingKeys: String, CodingKey {
+        case zipUrls = "zip_urls"
+        case frames
+    }
+}
+
+struct UgoiraMetadataResponse: Codable, Sendable {
+    let ugoiraMetadata: UgoiraMetadata
+
+    enum CodingKeys: String, CodingKey {
+        case ugoiraMetadata = "ugoira_metadata"
+    }
+}
+
+// MARK: - User series lists (a user's own illust / novel series)
+
+struct IllustSeriesListItem: Codable, Hashable, Sendable, Identifiable {
+    let id: Int64?
+    let title: String?
+    let caption: String?
+    let coverImageUrls: ImageUrls?
+    let seriesWorkCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, caption
+        case coverImageUrls = "cover_image_urls"
+        case seriesWorkCount = "series_work_count"
+    }
+}
+
+struct IllustSeriesListResponse: Codable, Sendable {
+    let illustSeriesDetails: [IllustSeriesListItem]
+    let nextUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case illustSeriesDetails = "illust_series_details"
+        case nextUrl = "next_url"
+    }
+}
+
+struct NovelSeriesListItem: Codable, Hashable, Sendable, Identifiable {
+    let id: Int64?
+    let title: String?
+    /// Series description — Shaft's `NovelSeriesAdapter` reads `display_text`.
+    let displayText: String?
+    let contentCount: Int?
+    let totalCharacterCount: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title
+        case displayText = "display_text"
+        case contentCount = "content_count"
+        case totalCharacterCount = "total_character_count"
+    }
+}
+
+struct NovelSeriesListResponse: Codable, Sendable {
+    let novelSeriesDetails: [NovelSeriesListItem]
+    let nextUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case novelSeriesDetails = "novel_series_details"
+        case nextUrl = "next_url"
+    }
+}
+
+// MARK: - Bookmark detail (existing tags + visibility for a work)
+
+struct BookmarkDetail: Codable, Hashable, Sendable {
+    let isBookmarked: Bool?
+    let tags: [BookmarkDetailTag]
+    let restrict: String?
+
+    enum CodingKeys: String, CodingKey {
+        case isBookmarked = "is_bookmarked"
+        case tags, restrict
+    }
+
+    /// Tags the user has registered on this bookmark.
+    var registeredTags: [String] { tags.filter { $0.isRegistered == true }.compactMap { $0.name } }
+}
+
+struct BookmarkDetailTag: Codable, Hashable, Sendable {
+    let name: String?
+    let isRegistered: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case isRegistered = "is_registered"
+    }
+}
+
+struct BookmarkDetailResponse: Codable, Sendable {
+    let bookmarkDetail: BookmarkDetail
+
+    enum CodingKeys: String, CodingKey {
+        case bookmarkDetail = "bookmark_detail"
+    }
+}
+
 struct SelfProfileResponse: Codable, Sendable {
     let profile: SelfProfile
 

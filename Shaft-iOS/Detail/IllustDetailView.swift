@@ -71,6 +71,14 @@ final class IllustDetailViewModel {
         }
     }
 
+    /// Existing bookmark state (registered tags + visibility) for pre-filling
+    /// the bookmark sheet. Nil when the work isn't bookmarked yet.
+    func bookmarkDetail() async -> (restrict: String, tags: [String])? {
+        guard illust?.isBookmarked == true else { return nil }
+        guard let d = try? await api.illustBookmarkDetail(illustId).bookmarkDetail else { return nil }
+        return (d.restrict ?? "public", d.registeredTags)
+    }
+
     /// Bookmark with explicit restrict + tags. Re-applies if already bookmarked
     /// (Pixiv replaces the bookmark with the new tag/restrict set).
     func bookmark(restrict: String, tags: [String]) async {
@@ -221,7 +229,8 @@ struct IllustDetailView: View {
         }
         .sheet(isPresented: $showBookmarkSheet) {
             BookmarkTagsSheet(
-                existingTags: (vm.illust?.tags ?? []).compactMap { $0.name }
+                existingTags: (vm.illust?.tags ?? []).compactMap { $0.name },
+                loadInitial: { await vm.bookmarkDetail() }
             ) { restrict, tags in
                 await vm.bookmark(restrict: restrict, tags: tags)
             }
@@ -236,16 +245,28 @@ struct IllustPagesHero: View {
 
     var body: some View {
         let urls = Self.urls(for: illust)
-        TabView(selection: $index) {
-            ForEach(Array(urls.enumerated()), id: \.offset) { i, url in
-                PixivAsyncImage(url: url, contentMode: .fit)
-                    .frame(maxWidth: .infinity)
-                    .frame(maxHeight: 480)
-                    .onTapGesture { onTap() }
-                    .tag(i)
+        Group {
+            if illust.type == "ugoira" {
+                UgoiraView(
+                    illustId: illust.id,
+                    fallbackURL: urls.first,
+                    contentMode: .fit,
+                    onTap: onTap
+                )
+                .frame(maxWidth: .infinity)
+            } else {
+                TabView(selection: $index) {
+                    ForEach(Array(urls.enumerated()), id: \.offset) { i, url in
+                        PixivAsyncImage(url: url, contentMode: .fit)
+                            .frame(maxWidth: .infinity)
+                            .frame(maxHeight: 480)
+                            .onTapGesture { onTap() }
+                            .tag(i)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: urls.count > 1 ? .always : .never))
             }
         }
-        .tabViewStyle(.page(indexDisplayMode: urls.count > 1 ? .always : .never))
         .frame(height: heroHeight)
         .background(Color(.secondarySystemBackground))
     }

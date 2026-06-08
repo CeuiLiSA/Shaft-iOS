@@ -175,6 +175,8 @@ final class SearchResultsViewModel {
     var userNext: String?
     var sort: String = "date_desc"
     var searchTarget: String = "partial_match_for_tags"
+    /// nil = any time; otherwise within_last_day/week/month.
+    var duration: String? = nil
     var isLoading = false
     var isLoadingMoreIllusts = false
     var isLoadingMoreNovels = false
@@ -212,6 +214,16 @@ final class SearchResultsViewModel {
         await load()
     }
 
+    func setDuration(_ d: String?) async {
+        guard d != duration else { return }
+        duration = d
+        illusts = []
+        novels = []
+        illustNext = nil
+        novelNext = nil
+        await load()
+    }
+
     func load() async {
         isLoading = true
         errorMessage = nil
@@ -220,7 +232,8 @@ final class SearchResultsViewModel {
             group.addTask { @MainActor [weak self] in
                 guard let self else { return }
                 let r = try? await self.api.searchIllust(
-                    word: self.word, sort: self.sort, searchTarget: self.searchTarget
+                    word: self.word, sort: self.sort, searchTarget: self.searchTarget,
+                    duration: self.duration
                 )
                 self.illusts = r?.illusts ?? []
                 self.illustNext = r?.nextUrl
@@ -228,7 +241,8 @@ final class SearchResultsViewModel {
             group.addTask { @MainActor [weak self] in
                 guard let self else { return }
                 let r = try? await self.api.searchNovel(
-                    word: self.word, sort: self.sort, searchTarget: self.searchTarget
+                    word: self.word, sort: self.sort, searchTarget: self.searchTarget,
+                    duration: self.duration
                 )
                 self.novels = r?.novels ?? []
                 self.novelNext = r?.nextUrl
@@ -283,6 +297,8 @@ struct SearchResultsView: View {
 
     private static let sortOptions = ["date_desc", "date_asc", "popular_desc"]
     private static let targetOptions = ["partial_match_for_tags", "exact_match_for_tags", "title_and_caption"]
+    /// nil sentinel uses empty string as the "any time" tag in the menu.
+    private static let durationOptions: [String?] = [nil, "within_last_day", "within_last_week", "within_last_month"]
 
     init(word: String) {
         self.word = word
@@ -306,6 +322,25 @@ struct SearchResultsView: View {
                     .buttonStyle(.plain)
                 }
                 Spacer()
+                Menu {
+                    ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, d in
+                        Button {
+                            Task { await vm.setDuration(d) }
+                        } label: {
+                            HStack {
+                                Text(durationLabel(d))
+                                if vm.duration == d { Image(systemName: "checkmark") }
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "calendar")
+                        .font(.caption)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(vm.duration == nil ? Color(.secondarySystemBackground) : Color.accentColor,
+                                    in: .capsule)
+                        .foregroundStyle(vm.duration == nil ? .primary : Color.white)
+                }
                 Menu {
                     ForEach(Self.targetOptions, id: \.self) { t in
                         Button {
@@ -382,6 +417,15 @@ struct SearchResultsView: View {
         case "exact_match_for_tags":   return l10n.t(.searchTargetExact)
         case "title_and_caption":      return l10n.t(.searchTargetTitleCaption)
         default: return t
+        }
+    }
+
+    private func durationLabel(_ d: String?) -> String {
+        switch d {
+        case "within_last_day":   return l10n.t(.searchDurationDay)
+        case "within_last_week":  return l10n.t(.searchDurationWeek)
+        case "within_last_month": return l10n.t(.searchDurationMonth)
+        default:                  return l10n.t(.searchDurationAll)
         }
     }
 }

@@ -92,6 +92,15 @@ actor PixivAPI {
         ])
     }
 
+    /// Novel ranking. `mode` accepts `day`, `week`, `day_male`, `day_female`,
+    /// `week_rookie`, `day_r18` — see Shaft `FragmentRankNovel`.
+    func rankingNovels(mode: String = "day") async throws -> NovelResponse {
+        try await get(path: "/v1/novel/ranking", query: [
+            "mode": mode,
+            "filter": "for_ios",
+        ])
+    }
+
     func walkthroughIllusts() async throws -> IllustResponse {
         try await get(path: "/v1/walkthrough/illusts")
     }
@@ -119,6 +128,21 @@ actor PixivAPI {
 
     func relatedIllusts(_ illustId: Int64) async throws -> IllustResponse {
         try await get(path: "/v2/illust/related", query: ["illust_id": "\(illustId)"])
+    }
+
+    /// Animated-illust (ugoira) frame manifest: zip URLs + per-frame delays.
+    func ugoiraMetadata(_ illustId: Int64) async throws -> UgoiraMetadataResponse {
+        try await get(path: "/v1/ugoira/metadata", query: ["illust_id": "\(illustId)"])
+    }
+
+    /// Existing bookmark state for an illust — registered tags + visibility.
+    func illustBookmarkDetail(_ illustId: Int64) async throws -> BookmarkDetailResponse {
+        try await get(path: "/v2/illust/bookmark/detail", query: ["illust_id": "\(illustId)"])
+    }
+
+    /// Existing bookmark state for a novel — registered tags + visibility.
+    func novelBookmarkDetail(_ novelId: Int64) async throws -> BookmarkDetailResponse {
+        try await get(path: "/v2/novel/bookmark/detail", query: ["novel_id": "\(novelId)"])
     }
 
     func illustComments(_ illustId: Int64) async throws -> CommentsResponse {
@@ -214,6 +238,38 @@ actor PixivAPI {
         ])
     }
 
+    /// Mutual-follow friends ("My pixiv").
+    func userMyPixiv(_ userId: Int64) async throws -> UserPreviewResponse {
+        try await get(path: "/v1/user/mypixiv", query: [
+            "user_id": "\(userId)",
+            "filter": "for_ios",
+        ])
+    }
+
+    /// Users related to a seed user (suggested similar artists).
+    func userRelated(_ userId: Int64) async throws -> UserPreviewResponse {
+        try await get(path: "/v1/user/related", query: [
+            "seed_user_id": "\(userId)",
+            "filter": "for_ios",
+        ])
+    }
+
+    /// A user's own illust series.
+    func userIllustSeries(_ userId: Int64) async throws -> IllustSeriesListResponse {
+        try await get(path: "/v1/user/illust-series", query: [
+            "user_id": "\(userId)",
+            "filter": "for_ios",
+        ])
+    }
+
+    /// A user's own novel series.
+    func userNovelSeries(_ userId: Int64) async throws -> NovelSeriesListResponse {
+        try await get(path: "/v1/user/novel-series", query: [
+            "user_id": "\(userId)",
+            "filter": "for_ios",
+        ])
+    }
+
     func selfProfile() async throws -> SelfProfileResponse {
         try await get(path: "/v1/user/me/state")
     }
@@ -294,29 +350,45 @@ actor PixivAPI {
 
     // MARK: Search
 
+    /// `duration` accepts `within_last_day`, `within_last_week`,
+    /// `within_last_month` (or nil). `startDate`/`endDate` are `yyyy-MM-dd`.
     func searchIllust(
         word: String,
         sort: String = "date_desc",
-        searchTarget: String = "partial_match_for_tags"
+        searchTarget: String = "partial_match_for_tags",
+        duration: String? = nil,
+        startDate: String? = nil,
+        endDate: String? = nil
     ) async throws -> IllustResponse {
-        try await get(path: "/v1/search/illust", query: [
+        var q: [String: String] = [
             "word": word,
             "sort": sort,
             "search_target": searchTarget,
             "filter": "for_ios",
-        ])
+        ]
+        if let duration { q["duration"] = duration }
+        if let startDate { q["start_date"] = startDate }
+        if let endDate { q["end_date"] = endDate }
+        return try await get(path: "/v1/search/illust", query: q)
     }
 
     func searchNovel(
         word: String,
         sort: String = "date_desc",
-        searchTarget: String = "partial_match_for_tags"
+        searchTarget: String = "partial_match_for_tags",
+        duration: String? = nil,
+        startDate: String? = nil,
+        endDate: String? = nil
     ) async throws -> NovelResponse {
-        try await get(path: "/v1/search/novel", query: [
+        var q: [String: String] = [
             "word": word,
             "sort": sort,
             "search_target": searchTarget,
-        ])
+        ]
+        if let duration { q["duration"] = duration }
+        if let startDate { q["start_date"] = startDate }
+        if let endDate { q["end_date"] = endDate }
+        return try await get(path: "/v1/search/novel", query: q)
     }
 
     func searchUser(word: String) async throws -> UserPreviewResponse {
