@@ -76,4 +76,20 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case settingsTitle, aboutTitle
     case settingsLanguage, settingsContent, settingsHideR18, settingsColumns
     case settingsNetwork, settingsDirectConnect
+
+    // Search filter (V3)
+    case filterTitle, filterReset, filterApply, filterAny
+    case filterMatch, filterBookmarks, filterPopularityTag
+    case filterDatePosted, filterCustomRange
+    case filterAIWorks, filterExcludeAI, filterOnlyAI
+    case filterAgeRating, filterSafeOnly, filterR18Only
+    case filterWorkType, filterAspectRatio, filterResolution
+    case filterTool, filterGenre, filterLengthUnit, filterLength
+    case filterOriginalOnly, filterReplaceableOnly
+    case sortPopularMale, sortPopularFemale
+    case targetText, targetKeyword
+    case durationHalfYear, durationYear
+    case ratioLandscape, ratioPortrait, ratioSquare
+    case bodyUnitChars, bodyUnitWords, bodyUnitReadingTime
+    case typeIllust, typeUgoira
 }

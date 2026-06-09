@@ -84,6 +84,10 @@ struct Illust: Codable, Hashable, Sendable, Identifiable {
     let metaSinglePage: MetaSinglePage?
     let metaPages: [MetaPage]?
     let series: IllustSeriesRef?
+    /// Real age rating: 0 = all-ages, 1 = R-18, 2 = R-18G. Drives search R-18 filtering.
+    let xRestrict: Int?
+    /// 0/1 = human, 2 = AI-generated. Drives search "only AI" / "exclude AI" filtering.
+    let illustAIType: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, title, caption, type
@@ -98,6 +102,8 @@ struct Illust: Codable, Hashable, Sendable, Identifiable {
         case metaSinglePage = "meta_single_page"
         case metaPages = "meta_pages"
         case series
+        case xRestrict = "x_restrict"
+        case illustAIType = "illust_ai_type"
     }
 }
 
@@ -266,6 +272,10 @@ struct Novel: Codable, Hashable, Sendable, Identifiable {
     let totalView: Int?
     let createDate: String?
     let series: NovelSeries?
+    /// Real age rating: 0 = all-ages, 1 = R-18, 2 = R-18G. Drives search R-18 filtering.
+    let xRestrict: Int?
+    /// 0/1 = human, 2 = AI-generated. Drives search "only AI" / "exclude AI" filtering.
+    let novelAIType: Int?
 
     enum CodingKeys: String, CodingKey {
         case id, title, caption
@@ -278,6 +288,8 @@ struct Novel: Codable, Hashable, Sendable, Identifiable {
         case totalView = "total_view"
         case createDate = "create_date"
         case series
+        case xRestrict = "x_restrict"
+        case novelAIType = "novel_ai_type"
     }
 }
 
@@ -416,6 +428,45 @@ struct AutoCompleteTag: Codable, Hashable, Sendable, Identifiable {
 
 struct AutoCompleteResponse: Codable, Sendable {
     let tags: [AutoCompleteTag]
+}
+
+// MARK: - Search options (`/v1/search/options`)
+
+/// Dynamic, account-aware filter options pixiv's iOS app pulls to populate the
+/// search filter's tool / genre / language pickers. `illust` and `novel` scopes
+/// are near-symmetric (illust carries `tool`, novel carries `genre`).
+struct SearchOptionsResponse: Codable, Sendable {
+    let illust: Scope?
+    let novel: Scope?
+
+    struct Scope: Codable, Sendable {
+        let tool: ToolOptions?
+        let genre: GenreOptions?
+        let lang: LangOptions?
+    }
+
+    struct ToolOptions: Codable, Sendable {
+        let options: [String]
+    }
+
+    struct GenreOptions: Codable, Sendable {
+        let options: [GenreOption]
+    }
+
+    struct GenreOption: Codable, Sendable, Hashable, Identifiable {
+        let id: Int
+        let label: String
+    }
+
+    struct LangOptions: Codable, Sendable {
+        let options: [LangOption]
+    }
+
+    struct LangOption: Codable, Sendable, Hashable, Identifiable {
+        let code: String
+        let name: String
+        var id: String { code }
+    }
 }
 
 // MARK: - Ugoira (animated illust)

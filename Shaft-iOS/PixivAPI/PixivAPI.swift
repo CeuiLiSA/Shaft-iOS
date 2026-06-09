@@ -350,45 +350,25 @@ actor PixivAPI {
 
     // MARK: Search
 
-    /// `duration` accepts `within_last_day`, `within_last_week`,
-    /// `within_last_month` (or nil). `startDate`/`endDate` are `yyyy-MM-dd`.
-    func searchIllust(
-        word: String,
-        sort: String = "date_desc",
-        searchTarget: String = "partial_match_for_tags",
-        duration: String? = nil,
-        startDate: String? = nil,
-        endDate: String? = nil
-    ) async throws -> IllustResponse {
-        var q: [String: String] = [
-            "word": word,
-            "sort": sort,
-            "search_target": searchTarget,
-            "filter": "for_ios",
-        ]
-        if let duration { q["duration"] = duration }
-        if let startDate { q["start_date"] = startDate }
-        if let endDate { q["end_date"] = endDate }
-        return try await get(path: "/v1/search/illust", query: q)
+    /// Full V3 illust search — every dimension is built by `SearchFilter.queryItems`.
+    func searchIllust(word: String, filter: SearchFilter = SearchFilter()) async throws -> IllustResponse {
+        try await get(path: "/v1/search/illust", query: filter.queryItems(word: word, isNovel: false))
     }
 
-    func searchNovel(
-        word: String,
-        sort: String = "date_desc",
-        searchTarget: String = "partial_match_for_tags",
-        duration: String? = nil,
-        startDate: String? = nil,
-        endDate: String? = nil
-    ) async throws -> NovelResponse {
-        var q: [String: String] = [
-            "word": word,
-            "sort": sort,
-            "search_target": searchTarget,
-        ]
-        if let duration { q["duration"] = duration }
-        if let startDate { q["start_date"] = startDate }
-        if let endDate { q["end_date"] = endDate }
-        return try await get(path: "/v1/search/novel", query: q)
+    /// Full V3 novel search.
+    func searchNovel(word: String, filter: SearchFilter = SearchFilter()) async throws -> NovelResponse {
+        try await get(path: "/v1/search/novel", query: filter.queryItems(word: word, isNovel: true))
+    }
+
+    /// Curated "popular preview" illust search — the endpoint non-premium users are
+    /// routed to for popular sorts (returns a single un-paginated preview page).
+    func searchPopularPreviewIllust(word: String, filter: SearchFilter = SearchFilter()) async throws -> IllustResponse {
+        try await get(path: "/v1/search/popular-preview/illust", query: filter.queryItems(word: word, isNovel: false))
+    }
+
+    /// Curated "popular preview" novel search.
+    func searchPopularPreviewNovel(word: String, filter: SearchFilter = SearchFilter()) async throws -> NovelResponse {
+        try await get(path: "/v1/search/popular-preview/novel", query: filter.queryItems(word: word, isNovel: true))
     }
 
     func searchUser(word: String) async throws -> UserPreviewResponse {
@@ -396,6 +376,11 @@ actor PixivAPI {
             "word": word,
             "filter": "for_ios",
         ])
+    }
+
+    /// Dynamic, account-aware filter options (tool / genre / language pickers).
+    func searchOptions() async throws -> SearchOptionsResponse {
+        try await get(path: "/v1/search/options", query: ["filter": "for_ios"])
     }
 
     func autocompleteTags(prefix: String) async throws -> AutoCompleteResponse {

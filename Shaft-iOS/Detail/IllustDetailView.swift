@@ -101,7 +101,7 @@ final class IllustDetailViewModel {
             totalBookmarks: i.totalBookmarks, totalView: i.totalView,
             isBookmarked: isBookmarked, createDate: i.createDate,
             metaSinglePage: i.metaSinglePage, metaPages: i.metaPages,
-            series: i.series
+            series: i.series, xRestrict: i.xRestrict, illustAIType: i.illustAIType
         )
         illust = i
     }

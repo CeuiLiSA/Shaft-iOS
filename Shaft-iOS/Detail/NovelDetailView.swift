@@ -88,7 +88,8 @@ final class NovelDetailViewModel {
             user: n.user, tags: n.tags, pageCount: n.pageCount,
             textLength: n.textLength, isBookmarked: isBookmarked,
             totalBookmarks: n.totalBookmarks, totalView: n.totalView,
-            createDate: n.createDate, series: n.series
+            createDate: n.createDate, series: n.series,
+            xRestrict: n.xRestrict, novelAIType: n.novelAIType
         )
         novel = n
     }

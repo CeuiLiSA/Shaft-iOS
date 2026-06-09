@@ -167,16 +167,28 @@ enum PixivLinkParser {
 @Observable
 final class SearchResultsViewModel {
     let word: String
+
+    /// Displayed (post client-side filter) results; raw pages kept separately so
+    /// re-filtering on a filter change doesn't need a re-fetch.
     var illusts: [Illust] = []
     var novels: [Novel] = []
     var users: [UserPreview] = []
+    @ObservationIgnored private var rawIllusts: [Illust] = []
+    @ObservationIgnored private var rawNovels: [Novel] = []
+    @ObservationIgnored private var rawUsers: [UserPreview] = []
+
     var illustNext: String?
     var novelNext: String?
     var userNext: String?
-    var sort: String = "date_desc"
-    var searchTarget: String = "partial_match_for_tags"
-    /// nil = any time; otherwise within_last_day/week/month.
-    var duration: String? = nil
+
+    /// The full V3 search filter — single source of truth for both tabs.
+    var filter: SearchFilter
+    /// Dynamic tool / genre / language options, loaded once.
+    var options: SearchOptionsResponse?
+    /// Premium gates the male/female popular sorts and the popular-preview routing.
+    var isPremium = false
+    @ObservationIgnored private var accountLoaded = false
+
     var isLoading = false
     var isLoadingMoreIllusts = false
     var isLoadingMoreNovels = false
@@ -187,40 +199,36 @@ final class SearchResultsViewModel {
 
     init(word: String) {
         self.word = word
+        self.filter = SearchFilter.makeDefault(hideR18: MuteStore.shared.hideR18)
         self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
     }
 
     func loadIfNeeded() async {
-        if illusts.isEmpty && novels.isEmpty && users.isEmpty { await load() }
+        if rawIllusts.isEmpty && rawNovels.isEmpty && rawUsers.isEmpty { await load() }
     }
 
-    func setSort(_ s: String) async {
-        guard s != sort else { return }
-        sort = s
-        illusts = []
-        novels = []
-        illustNext = nil
-        novelNext = nil
-        await load()
+    func loadOptionsIfNeeded() async {
+        guard options == nil else { return }
+        options = try? await api.searchOptions()
     }
 
-    func setSearchTarget(_ t: String) async {
-        guard t != searchTarget else { return }
-        searchTarget = t
-        illusts = []
-        novels = []
-        illustNext = nil
-        novelNext = nil
-        await load()
+    /// Resolves premium status (self id → user detail) so popular sorts route
+    /// correctly. Best-effort; defaults to non-premium until known.
+    func loadAccountIfNeeded() async {
+        guard !accountLoaded else { return }
+        guard let uid = try? await api.selfProfile().profile.userId else { return }
+        if let detail = try? await api.userDetail(uid) {
+            isPremium = detail.profile?.isPremium ?? false
+            accountLoaded = true
+        }
     }
 
-    func setDuration(_ d: String?) async {
-        guard d != duration else { return }
-        duration = d
-        illusts = []
-        novels = []
-        illustNext = nil
-        novelNext = nil
+    /// Apply an edited filter: reset pages and reload both tabs.
+    func apply(_ newFilter: SearchFilter) async {
+        filter = newFilter
+        rawIllusts = []; rawNovels = []; rawUsers = []
+        illusts = []; novels = []; users = []
+        illustNext = nil; novelNext = nil; userNext = nil
         await load()
     }
 
@@ -228,30 +236,34 @@ final class SearchResultsViewModel {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
+        let f = filter
+        // Non-premium popular sorts must hit the popular-preview endpoint instead.
+        let usePreview = SortType.usesPopularPreview(f.sort, isPremium: isPremium)
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor [weak self] in
                 guard let self else { return }
-                let r = try? await self.api.searchIllust(
-                    word: self.word, sort: self.sort, searchTarget: self.searchTarget,
-                    duration: self.duration
-                )
-                self.illusts = r?.illusts ?? []
+                let r = usePreview
+                    ? try? await self.api.searchPopularPreviewIllust(word: self.word, filter: f)
+                    : try? await self.api.searchIllust(word: self.word, filter: f)
+                self.rawIllusts = r?.illusts ?? []
                 self.illustNext = r?.nextUrl
+                self.recomputeIllusts()
             }
             group.addTask { @MainActor [weak self] in
                 guard let self else { return }
-                let r = try? await self.api.searchNovel(
-                    word: self.word, sort: self.sort, searchTarget: self.searchTarget,
-                    duration: self.duration
-                )
-                self.novels = r?.novels ?? []
+                let r = usePreview
+                    ? try? await self.api.searchPopularPreviewNovel(word: self.word, filter: f)
+                    : try? await self.api.searchNovel(word: self.word, filter: f)
+                self.rawNovels = r?.novels ?? []
                 self.novelNext = r?.nextUrl
+                self.recomputeNovels()
             }
             group.addTask { @MainActor [weak self] in
                 guard let self else { return }
                 let r = try? await self.api.searchUser(word: self.word)
-                self.users = r?.userPreviews ?? []
+                self.rawUsers = r?.userPreviews ?? []
                 self.userNext = r?.nextUrl
+                self.recomputeUsers()
             }
         }
     }
@@ -261,8 +273,9 @@ final class SearchResultsViewModel {
         isLoadingMoreIllusts = true
         defer { isLoadingMoreIllusts = false }
         if let r: IllustResponse = try? await api.nextPage(url) {
-            illusts.append(contentsOf: r.illusts)
+            rawIllusts.append(contentsOf: r.illusts)
             illustNext = r.nextUrl
+            recomputeIllusts()
         }
     }
 
@@ -271,8 +284,9 @@ final class SearchResultsViewModel {
         isLoadingMoreNovels = true
         defer { isLoadingMoreNovels = false }
         if let r: NovelResponse = try? await api.nextPage(url) {
-            novels.append(contentsOf: r.novels)
+            rawNovels.append(contentsOf: r.novels)
             novelNext = r.nextUrl
+            recomputeNovels()
         }
     }
 
@@ -281,9 +295,28 @@ final class SearchResultsViewModel {
         isLoadingMoreUsers = true
         defer { isLoadingMoreUsers = false }
         if let r: UserPreviewResponse = try? await api.nextPage(url) {
-            users.append(contentsOf: r.userPreviews)
+            rawUsers.append(contentsOf: r.userPreviews)
             userNext = r.nextUrl
+            recomputeUsers()
         }
+    }
+
+    // MARK: Client-side filtering
+    //
+    // Muted users/tags still apply, but global R-18 hiding is skipped (applyR18:
+    // false) so the per-search R-18 mode — which filters by the real `x_restrict`
+    // field, plus the AI "only AI" mode — fully governs visibility.
+
+    private func recomputeIllusts() {
+        illusts = MuteStore.shared.filter(rawIllusts, applyR18: false).filter { filter.accepts($0) }
+    }
+
+    private func recomputeNovels() {
+        novels = MuteStore.shared.filter(rawNovels, applyR18: false).filter { filter.accepts($0) }
+    }
+
+    private func recomputeUsers() {
+        users = rawUsers.filter { !MuteStore.shared.isUserMuted($0.user.id) }
     }
 }
 
@@ -291,79 +324,23 @@ struct SearchResultsView: View {
     let word: String
     @State private var vm: SearchResultsViewModel
     @State private var section: Section = .illust
+    @State private var showFilter = false
     @Environment(OnboardingStore.self) private var l10n
 
     enum Section: Hashable, CaseIterable { case illust, novel, user }
-
-    private static let sortOptions = ["date_desc", "date_asc", "popular_desc"]
-    private static let targetOptions = ["partial_match_for_tags", "exact_match_for_tags", "title_and_caption"]
-    /// nil sentinel uses empty string as the "any time" tag in the menu.
-    private static let durationOptions: [String?] = [nil, "within_last_day", "within_last_week", "within_last_month"]
 
     init(word: String) {
         self.word = word
         _vm = State(wrappedValue: SearchResultsViewModel(word: word))
     }
 
+    /// Active dimensions on the tab currently in view, for the toolbar badge.
+    private var activeCount: Int {
+        vm.filter.activeCount(isNovel: section == .novel)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                ForEach(Self.sortOptions, id: \.self) { s in
-                    Button {
-                        Task { await vm.setSort(s) }
-                    } label: {
-                        Text(sortLabel(s))
-                            .font(.caption.weight(vm.sort == s ? .bold : .regular))
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(vm.sort == s ? Color.accentColor : Color(.secondarySystemBackground),
-                                        in: .capsule)
-                            .foregroundStyle(vm.sort == s ? Color.white : .primary)
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer()
-                Menu {
-                    ForEach(Array(Self.durationOptions.enumerated()), id: \.offset) { _, d in
-                        Button {
-                            Task { await vm.setDuration(d) }
-                        } label: {
-                            HStack {
-                                Text(durationLabel(d))
-                                if vm.duration == d { Image(systemName: "checkmark") }
-                            }
-                        }
-                    }
-                } label: {
-                    Image(systemName: "calendar")
-                        .font(.caption)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(vm.duration == nil ? Color(.secondarySystemBackground) : Color.accentColor,
-                                    in: .capsule)
-                        .foregroundStyle(vm.duration == nil ? .primary : Color.white)
-                }
-                Menu {
-                    ForEach(Self.targetOptions, id: \.self) { t in
-                        Button {
-                            Task { await vm.setSearchTarget(t) }
-                        } label: {
-                            HStack {
-                                Text(targetLabel(t))
-                                if vm.searchTarget == t {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    Label(targetLabel(vm.searchTarget), systemImage: "line.3.horizontal.decrease.circle")
-                        .font(.caption)
-                        .padding(.horizontal, 10).padding(.vertical, 5)
-                        .background(Color(.secondarySystemBackground), in: .capsule)
-                        .foregroundStyle(.primary)
-                }
-            }
-            .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 4)
-
             PagerTabBar(
                 titles: Section.allCases.map { ($0, label(for: $0)) },
                 selection: $section
@@ -374,7 +351,8 @@ struct SearchResultsView: View {
                     errorMessage: vm.errorMessage,
                     onRefresh: { await vm.load() },
                     onLoadMore: { await vm.loadMoreIllusts() },
-                    hasMore: vm.illustNext != nil
+                    hasMore: vm.illustNext != nil,
+                    prefiltered: true
                 ).tag(Section.illust)
                 NovelList(
                     novels: vm.novels,
@@ -391,7 +369,38 @@ struct SearchResultsView: View {
         }
         .navigationTitle("\u{201C}\(word)\u{201D}")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showFilter = true } label: {
+                    Image(systemName: activeCount > 0
+                          ? "line.3.horizontal.decrease.circle.fill"
+                          : "line.3.horizontal.decrease.circle")
+                        .overlay(alignment: .topTrailing) {
+                            if activeCount > 0 {
+                                Text("\(activeCount)")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(3)
+                                    .background(.red, in: .circle)
+                                    .offset(x: 8, y: -8)
+                            }
+                        }
+                }
+            }
+        }
+        .sheet(isPresented: $showFilter) {
+            SearchFilterSheet(
+                filter: vm.filter,
+                options: vm.options,
+                isNovelTab: section == .novel,
+                isPremium: vm.isPremium
+            ) { newFilter in
+                await vm.apply(newFilter)
+            }
+        }
         .task { await vm.loadIfNeeded() }
+        .task { await vm.loadOptionsIfNeeded() }
+        .task { await vm.loadAccountIfNeeded() }
     }
 
     private func label(for s: Section) -> String {
@@ -399,33 +408,6 @@ struct SearchResultsView: View {
         case .illust: return l10n.t(.searchTabIllust)
         case .novel:  return l10n.t(.searchTabNovel)
         case .user:   return l10n.t(.searchTabUser)
-        }
-    }
-
-    private func sortLabel(_ s: String) -> String {
-        switch s {
-        case "date_desc":    return l10n.t(.searchSortDateDesc)
-        case "date_asc":     return l10n.t(.searchSortDateAsc)
-        case "popular_desc": return l10n.t(.searchSortPopular)
-        default: return s
-        }
-    }
-
-    private func targetLabel(_ t: String) -> String {
-        switch t {
-        case "partial_match_for_tags": return l10n.t(.searchTargetPartial)
-        case "exact_match_for_tags":   return l10n.t(.searchTargetExact)
-        case "title_and_caption":      return l10n.t(.searchTargetTitleCaption)
-        default: return t
-        }
-    }
-
-    private func durationLabel(_ d: String?) -> String {
-        switch d {
-        case "within_last_day":   return l10n.t(.searchDurationDay)
-        case "within_last_week":  return l10n.t(.searchDurationWeek)
-        case "within_last_month": return l10n.t(.searchDurationMonth)
-        default:                  return l10n.t(.searchDurationAll)
         }
     }
 }

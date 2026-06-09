@@ -69,12 +69,16 @@ final class MuteStore {
 
     /// Filter helper used by feeds to drop muted users, muted tags, and
     /// (optionally) R-18/R-18G content before display.
-    func filter<T: HasMuteAttributes>(_ items: [T]) -> [T] {
+    ///
+    /// Search passes `applyR18: false` because its per-search R-18 mode governs
+    /// age visibility (by real `x_restrict`, not the tag hack) — the global
+    /// `hideR18` toggle must not double-filter those results.
+    func filter<T: HasMuteAttributes>(_ items: [T], applyR18: Bool = true) -> [T] {
         items.filter { item in
             if let uid = item.muteUserID, mutedUserIDs.contains(uid) { return false }
             if let tags = item.muteTags, !tags.isEmpty {
                 if !mutedTags.isDisjoint(with: tags) { return false }
-                if hideR18, !Self.r18Tags.isDisjoint(with: tags) { return false }
+                if applyR18, hideR18, !Self.r18Tags.isDisjoint(with: tags) { return false }
             }
             return true
         }

@@ -11,6 +11,9 @@ struct IllustWaterfallList: View {
     let onRefresh: () async -> Void
     let onLoadMore: (() async -> Void)?
     let hasMore: Bool
+    /// When true the caller already applied mute / R-18 filtering (e.g. search,
+    /// whose per-search R-18 mode governs) — skip the built-in `mute.filter`.
+    let prefiltered: Bool
 
     @State private var mute = MuteStore.shared
 
@@ -20,7 +23,8 @@ struct IllustWaterfallList: View {
         errorMessage: String?,
         onRefresh: @escaping () async -> Void,
         onLoadMore: (() async -> Void)? = nil,
-        hasMore: Bool = false
+        hasMore: Bool = false,
+        prefiltered: Bool = false
     ) {
         self.illusts = illusts
         self.isLoading = isLoading
@@ -28,10 +32,11 @@ struct IllustWaterfallList: View {
         self.onRefresh = onRefresh
         self.onLoadMore = onLoadMore
         self.hasMore = hasMore
+        self.prefiltered = prefiltered
     }
 
     var body: some View {
-        let visible = mute.filter(illusts)
+        let visible = prefiltered ? illusts : mute.filter(illusts)
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 if illusts.isEmpty, let err = errorMessage {
