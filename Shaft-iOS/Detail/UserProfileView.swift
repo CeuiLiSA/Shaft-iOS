@@ -383,7 +383,9 @@ struct UserProfileView: View {
                 Text(user.isFollowed == true ? l10n.t(.profileFollowing) : l10n.t(.profileFollow))
                     .font(.subheadline.bold())
                     .padding(.horizontal, 24).padding(.vertical, 8)
-                    .background(user.isFollowed == true ? Color(.secondarySystemBackground) : Color.accentColor,
+                    .background(user.isFollowed == true
+                                ? AnyShapeStyle(Color(.secondarySystemBackground))
+                                : AnyShapeStyle(Theme.brandGradient),
                                 in: .capsule)
                     .foregroundStyle(user.isFollowed == true ? Color.primary : .white)
             }

@@ -98,8 +98,9 @@ struct LoginView: View {
                             .font(.system(size: 17, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .frame(height: 52)
-                            .foregroundStyle(.black)
-                            .background(.white, in: .rect(cornerRadius: 14))
+                            .foregroundStyle(.white)
+                            .background(Theme.brandGradient, in: .rect(cornerRadius: 14))
+                            .shadow(color: Theme.brandShadow, radius: 18, y: 8)
                     }
                     .disabled(auth.isLoading)
 

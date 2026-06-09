@@ -128,8 +128,13 @@ struct RecommendView: View {
                     .tag(SubTab.hotTag)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
+            // The paged TabView would otherwise honor the floating tab bar's
+            // bottom safe-area inset and stop the inner ScrollViews above the
+            // bar, leaving a dead gap. Let it reach the screen's bottom edge so
+            // the waterfall scrolls under the glass bar (iOS re-adds the scroll
+            // content inset automatically so the last row still clears the bar).
+            .ignoresSafeArea(.container, edges: .bottom)
         }
-        .background(Color(.systemBackground))
     }
 }
 
@@ -160,7 +165,7 @@ struct RecommendedWorksView: View {
                         spacing: 8,
                         estimatedRelativeHeight: relativeHeight(for:)
                     ) { illust in
-                        NavigationLink(value: AppRoute.illustDetail(illust.id)) {
+                        NavigationLink(value: illust) {
                             IllustWaterfallCell(illust: illust)
                         }
                         .buttonStyle(.plain)
@@ -245,7 +250,7 @@ private struct RankingStrip: View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: 10) {
                 ForEach(Array(illusts.prefix(Self.homeStripCap).enumerated()), id: \.element.id) { idx, illust in
-                    NavigationLink(value: AppRoute.illustDetail(illust.id)) {
+                    NavigationLink(value: illust) {
                         RankingCard(rank: idx + 1, illust: illust)
                     }
                     .buttonStyle(.plain)
@@ -307,7 +312,7 @@ private struct RankingCard: View {
     }
 }
 
-private struct TagGridCell: View {
+struct TagGridCell: View {
     let tag: TrendingTag
 
     var body: some View {

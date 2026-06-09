@@ -7,10 +7,25 @@ final class IllustDetailViewModel {
     var illust: Illust?
     var related: [Illust] = []
     var comments: [CommentItem] = []
+    var authorWorks: [Illust] = []
     var totalComments: Int?
     var isLoading = false
     var errorMessage: String?
     var isBookmarking = false
+    /// Author follow state, seeded from the embedded `illust.user.is_followed`
+    /// and toggled optimistically by the artist card's follow button.
+    var authorFollowed = false
+
+    // Lazy section state. Comments / author works / related each fire their
+    // request only when that section first scrolls into view (parity with V3
+    // `ArtworkDetailAdapter.onViewAttachedToWindow`). `*Loaded` flips true once
+    // an attempt finishes so the section can swap its spinner for content/empty.
+    var commentsLoaded = false
+    var relatedLoaded = false
+    var authorWorksLoaded = false
+    @ObservationIgnored private var commentsTriggered = false
+    @ObservationIgnored private var relatedTriggered = false
+    @ObservationIgnored private var authorWorksTriggered = false
 
     @ObservationIgnored private let api: PixivAPI
 
@@ -19,19 +34,34 @@ final class IllustDetailViewModel {
         self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
     }
 
+    /// Seed with the full `Illust` the list already holds, so the detail renders
+    /// immediately; `load()` then refreshes it and fetches related + comments +
+    /// author works (which the list doesn't carry).
+    init(illust: Illust) {
+        self.illustId = illust.id
+        self.illust = illust
+        self.authorFollowed = illust.user?.isFollowed ?? false
+        self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
+    }
+
+    private var hasLoaded = false
+
     func loadIfNeeded() async {
-        if illust == nil { await load() }
+        guard !hasLoaded else { return }
+        hasLoaded = true
+        await load()
     }
 
     func load() async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor [weak self] in await self?.loadDetail() }
-            group.addTask { @MainActor [weak self] in await self?.loadRelated() }
-            group.addTask { @MainActor [weak self] in await self?.loadComments() }
-        }
+        apiLog.notice("▶︎ illust-detail OPEN id=\(self.illustId, privacy: .public) — only /illust/detail up front; comments, author works & related load lazily on scroll")
+        // Only the work itself loads up front. Comments / author works / related
+        // are deferred to when their section scrolls into view, so a quick
+        // glance-and-back doesn't burn three extra requests.
+        await loadDetail()
+        authorFollowed = illust?.user?.isFollowed ?? authorFollowed
     }
 
     private func loadDetail() async {
@@ -39,19 +69,56 @@ final class IllustDetailViewModel {
             let resp = try await api.illustDetail(illustId)
             illust = resp.illust
         } catch {
-            errorMessage = error.localizedDescription
+            // Keep any seeded illust so the page still renders (issue #569 parity).
+            if illust == nil { errorMessage = error.localizedDescription }
         }
     }
 
-    private func loadRelated() async {
+    /// Fired from `V3RelatedSection.onAppear` — once per page.
+    func loadRelatedIfNeeded() async {
+        guard !relatedTriggered else { return }
+        relatedTriggered = true
         let resp = try? await api.relatedIllusts(illustId)
         related = resp?.illusts ?? []
+        relatedLoaded = true
     }
 
-    private func loadComments() async {
+    /// Fired from `V3CommentsSection.onAppear` — once per page.
+    func loadCommentsIfNeeded() async {
+        guard !commentsTriggered else { return }
+        commentsTriggered = true
         let resp = try? await api.illustComments(illustId)
         comments = resp?.comments ?? []
         totalComments = resp?.totalComments
+        commentsLoaded = true
+    }
+
+    /// Fired from `V3AuthorWorksSection.onAppear` — once per page. Needs the
+    /// artist id, which the detail load (or seed) has already provided by the
+    /// time this section can scroll into view.
+    func loadAuthorWorksIfNeeded() async {
+        guard !authorWorksTriggered, let uid = illust?.user?.id else { return }
+        authorWorksTriggered = true
+        let resp = try? await api.userIllusts(uid, type: "illust")
+        authorWorks = (resp?.illusts ?? []).filter { $0.id != illustId }
+        authorWorksLoaded = true
+    }
+
+    /// Optimistically flip the artist's follow state, then call the API; revert on
+    /// failure. Long-press on the button follows privately.
+    func toggleFollow(restrict: String = "public") async {
+        guard let uid = illust?.user?.id else { return }
+        let target = !authorFollowed
+        authorFollowed = target
+        do {
+            if target {
+                _ = try await api.followUser(uid, restrict: restrict)
+            } else {
+                _ = try await api.unfollowUser(uid)
+            }
+        } catch {
+            authorFollowed = !target
+        }
     }
 
     func toggleBookmark(restrict: String = "public") async {
@@ -107,86 +174,88 @@ final class IllustDetailViewModel {
     }
 }
 
-/// V3-style illust detail: hero pages full-bleed at the top, scroll-aware
-/// header that fades into the content, sections below for title/stats/tags
-/// and related works. Bottom action bar overlays.
+/// V3-style illust detail (`ArtworkV3Fragment`): pages stack vertically at the
+/// top (multi-page collapses to the first page behind an "expand" pill), then
+/// the title/meta, series, artist (with follow), caption, tags, stats, the
+/// collapsible "Artwork Details" glass panel, comments, the author's other
+/// works and related works — in that order. A floating download/bookmark pill
+/// overlays and hides on scroll-down.
 struct IllustDetailView: View {
     let illustId: Int64
     @State private var vm: IllustDetailViewModel
     @State private var showViewer = false
     @State private var viewerIndex = 0
     @State private var showBookmarkSheet = false
+    @State private var actionBarVisible = true
+    @State private var lastScrollOffset: CGFloat = 0
+    @State private var pagesExpanded = false
+    @State private var detailPanelExpanded = true
     @Environment(OnboardingStore.self) private var l10n
     @Environment(\.openURL) private var openURL
+
+    private static let scrollSpace = "illustDetailScroll"
 
     init(illustId: Int64) {
         self.illustId = illustId
         _vm = State(wrappedValue: IllustDetailViewModel(illustId: illustId))
     }
 
+    init(illust: Illust) {
+        self.illustId = illust.id
+        _vm = State(wrappedValue: IllustDetailViewModel(illust: illust))
+    }
+
     private var pixivURL: URL {
         URL(string: "https://www.pixiv.net/artworks/\(illustId)")!
+    }
+
+    /// Hide the action pill on scroll-down, reveal on scroll-up (Shaft V3
+    /// behavior). `offset` is the content's top relative to the scroll view — it
+    /// decreases as the user scrolls down. The anchor only advances past an 8pt
+    /// threshold so slow scrolls still accumulate to a direction.
+    private func handleScroll(_ offset: CGFloat) {
+        if offset > -10 { setActionBar(visible: true); lastScrollOffset = offset; return }
+        let delta = offset - lastScrollOffset
+        if delta <= -8 { setActionBar(visible: false); lastScrollOffset = offset }
+        else if delta >= 8 { setActionBar(visible: true); lastScrollOffset = offset }
+    }
+
+    private func setActionBar(visible: Bool) {
+        guard actionBarVisible != visible else { return }
+        withAnimation(.easeOut(duration: 0.2)) { actionBarVisible = visible }
     }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 16) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     if let illust = vm.illust {
-                        IllustPagesHero(illust: illust, onTap: { showViewer = true })
-                        IllustMetaSection(illust: illust)
-                            .padding(.horizontal, 16)
-                        IllustAuthorSection(illust: illust)
-                            .padding(.horizontal, 16)
-                        if let tags = illust.tags, !tags.isEmpty {
-                            IllustTagsSection(tags: tags)
-                                .padding(.horizontal, 16)
-                        }
-                        if !vm.related.isEmpty {
-                            SectionLabel(title: l10n.t(.detailRelated))
-                                .padding(.horizontal, 16)
-                            WaterfallGrid(
-                                items: Array(vm.related.prefix(20)),
-                                columns: 2, spacing: 8,
-                                estimatedRelativeHeight: { i in
-                                    let w = max(Double(i.width ?? 1), 1)
-                                    let h = max(Double(i.height ?? 1), 1)
-                                    return 1.0 / max(0.5, min(w/h, 2.0)) + 0.18
-                                }
-                            ) { item in
-                                NavigationLink(value: AppRoute.illustDetail(item.id)) {
-                                    IllustWaterfallCell(illust: item)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .padding(.horizontal, 8)
-                        }
-                        if !vm.comments.isEmpty {
-                            SectionLabel(title: l10n.t(.commentsTitle))
-                                .padding(.horizontal, 16)
-                            VStack(spacing: 12) {
-                                ForEach(vm.comments.prefix(5)) { CommentRow(comment: $0) }
-                                NavigationLink(value: AppRoute.comments(target: .illust(illustId))) {
-                                    Text(l10n.t(.viewAllComments))
-                                        .font(.footnote)
-                                        .foregroundStyle(.tint)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                        }
-                        Color.clear.frame(height: 88) // space for bottom bar
+                        content(for: illust)
                     } else if vm.isLoading {
-                        ProgressView().frame(maxWidth: .infinity).padding(.top, 80)
+                        ProgressView().frame(maxWidth: .infinity).padding(.top, 120)
                     } else if let err = vm.errorMessage {
                         InlineError(message: err) { Task { await vm.load() } }
                             .padding()
                     }
                 }
-                .padding(.vertical, 8)
+                .background(GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: ScrollOffsetPreferenceKey.self,
+                        value: proxy.frame(in: .named(Self.scrollSpace)).minY
+                    )
+                })
             }
+            .coordinateSpace(name: Self.scrollSpace)
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+                handleScroll(offset)
+            }
+            .ignoresSafeArea(.container, edges: .top)
             BottomActionBar(vm: vm, onShowBookmarkSheet: { showBookmarkSheet = true })
+                .offset(y: actionBarVisible ? 0 : 180)
+                .opacity(actionBarVisible ? 1 : 0)
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -236,128 +305,371 @@ struct IllustDetailView: View {
             }
         }
     }
+
+    @ViewBuilder
+    private func content(for illust: Illust) -> some View {
+        IllustPagesStack(
+            illust: illust,
+            expanded: $pagesExpanded,
+            scrollSpace: Self.scrollSpace,
+            onTapPage: { i in viewerIndex = i; showViewer = true }
+        )
+
+        V3TitleCard(illust: illust)
+
+        if let series = illust.series, let title = series.title, !title.isEmpty, series.id != nil {
+            V3SeriesStrip(series: series)
+        }
+
+        V3ArtistCard(vm: vm)
+
+        if let caption = illust.caption, !V3Caption.plain(caption).isEmpty {
+            V3CaptionView(caption: caption)
+        }
+
+        if let tags = illust.tags, !tags.isEmpty {
+            V3TagsSection(tags: tags)
+        }
+
+        V3StatsCard(illust: illust)
+
+        V3DetailPanel(illust: illust, expanded: $detailPanelExpanded)
+
+        V3CommentsSection(vm: vm, illustId: illustId)
+
+        V3AuthorWorksSection(vm: vm, user: illust.user)
+
+        V3RelatedSection(vm: vm, illustId: illustId)
+
+        Color.clear.frame(height: 96) // clearance for the floating action pill
+    }
 }
 
-struct IllustPagesHero: View {
+// MARK: - Pages (vertical stack, collapsible, stretchy first page)
+
+private struct IllustPagesStack: View {
     let illust: Illust
-    var onTap: () -> Void = {}
-    @State private var index = 0
+    @Binding var expanded: Bool
+    let scrollSpace: String
+    var onTapPage: (Int) -> Void
+
+    /// Works with more than this many pages collapse to the first page behind an
+    /// "expand" pill so tags / comments / related are reachable without a long
+    /// scroll (parity with `CollapsibleIllustAdapter`).
+    private static let collapseThreshold = 3
+
+    private var firstAspect: CGFloat {
+        let w = max(CGFloat(illust.width ?? 1), 1)
+        let h = max(CGFloat(illust.height ?? 1), 1)
+        return w / h
+    }
 
     var body: some View {
-        let urls = Self.urls(for: illust)
-        Group {
+        let pages = IllustPagesHero.pages(for: illust)
+        let collapsible = pages.count > Self.collapseThreshold
+        let collapsed = collapsible && !expanded
+
+        VStack(spacing: 0) {
             if illust.type == "ugoira" {
                 UgoiraView(
                     illustId: illust.id,
-                    fallbackURL: urls.first,
+                    fallbackURL: pages.first?.large ?? pages.first?.original,
                     contentMode: .fit,
-                    onTap: onTap
+                    onTap: { onTapPage(0) }
                 )
                 .frame(maxWidth: .infinity)
+                .frame(height: UIScreen.main.bounds.width / max(firstAspect, 0.1))
+            } else if let first = pages.first {
+                StretchyFirstPage(urls: first, aspect: firstAspect, scrollSpace: scrollSpace) {
+                    onTapPage(0)
+                }
+                .overlay(alignment: .topTrailing) {
+                    if pages.count > 1 {
+                        Label("\(pages.count)", systemImage: "square.on.square")
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 7).padding(.vertical, 3)
+                            .background(.black.opacity(0.55), in: .capsule)
+                            .foregroundStyle(.white)
+                            .padding(12)
+                    }
+                }
+                .overlay(alignment: .bottom) {
+                    if collapsed {
+                        ExpandPagesPill(remaining: pages.count - 1) {
+                            withAnimation(.easeInOut(duration: 0.25)) { expanded = true }
+                        }
+                    }
+                }
+
+                if !collapsed {
+                    ForEach(Array(pages.enumerated()).dropFirst(), id: \.offset) { idx, page in
+                        StackedPage(urls: page) { onTapPage(idx) }
+                    }
+                    if collapsible {
+                        CollapsePagesPill {
+                            withAnimation(.easeInOut(duration: 0.25)) { expanded = false }
+                        }
+                        .padding(.vertical, 12)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// First page with the classic iOS stretchy-header effect: pulling the scroll
+/// view past its top enlarges the image (filling the revealed gap and zooming).
+private struct StretchyFirstPage: View {
+    let urls: HeroPageURLs
+    let aspect: CGFloat
+    let scrollSpace: String
+    var onTap: () -> Void
+
+    @State private var loader = HeroImageLoader()
+
+    private var baseHeight: CGFloat { UIScreen.main.bounds.width / max(aspect, 0.1) }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let minY = proxy.frame(in: .named(scrollSpace)).minY
+            let stretch = max(0, minY)
+            ZStack {
+                Rectangle().fill(Color(.secondarySystemBackground))
+                if let image = loader.image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    ProgressView()
+                }
+                if loader.isLoadingOriginal {
+                    HeroOriginalProgress(progress: loader.progress)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                        .allowsHitTesting(false)
+                }
+            }
+            .frame(width: proxy.size.width, height: baseHeight + stretch)
+            .clipped()
+            .offset(y: -stretch)
+            .contentShape(Rectangle())
+            .onTapGesture { onTap() }
+        }
+        .frame(height: baseHeight)
+        .task(id: urls.original) {
+            await loader.run(large: urls.large, original: urls.original)
+        }
+    }
+}
+
+/// A non-first page in the vertical stack — laid out at the image's natural
+/// aspect (Pixiv `meta_pages` carry no per-page dimensions, so the height
+/// settles once the image loads).
+private struct StackedPage: View {
+    let urls: HeroPageURLs
+    var onTap: () -> Void
+
+    @State private var loader = HeroImageLoader()
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            if let image = loader.image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity)
             } else {
-                TabView(selection: $index) {
-                    ForEach(Array(urls.enumerated()), id: \.offset) { i, url in
-                        PixivAsyncImage(url: url, contentMode: .fit)
-                            .frame(maxWidth: .infinity)
-                            .frame(maxHeight: 480)
-                            .onTapGesture { onTap() }
-                            .tag(i)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: urls.count > 1 ? .always : .never))
+                Rectangle()
+                    .fill(Color(.secondarySystemBackground))
+                    .aspectRatio(0.8, contentMode: .fit)
+                    .overlay(ProgressView())
+            }
+            if loader.isLoadingOriginal {
+                HeroOriginalProgress(progress: loader.progress).allowsHitTesting(false)
             }
         }
-        .frame(height: heroHeight)
-        .background(Color(.secondarySystemBackground))
-    }
-
-    static func urls(for illust: Illust) -> [URL] {
-        if let pages = illust.metaPages, !pages.isEmpty {
-            return pages.compactMap { $0.imageUrls?.large.flatMap(URL.init(string:)) }
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }
+        .task(id: urls.original) {
+            await loader.run(large: urls.large, original: urls.original)
         }
-        if let s = illust.metaSinglePage?.originalImageUrl
-            ?? illust.imageUrls?.large
-            ?? illust.imageUrls?.medium {
-            return [URL(string: s)].compactMap { $0 }
-        }
-        return []
-    }
-
-    private var heroHeight: CGFloat {
-        let w = max(CGFloat(illust.width ?? 1), 1)
-        let h = max(CGFloat(illust.height ?? 1), 1)
-        let aspect = max(0.5, min(w / h, 2.0))
-        return min(540, UIScreen.main.bounds.width / aspect + 24)
     }
 }
 
-private struct IllustMetaSection: View {
-    let illust: Illust
+private struct ExpandPagesPill: View {
+    let remaining: Int
+    var onTap: () -> Void
+    @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        ZStack(alignment: .bottom) {
+            LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
+                .frame(height: 88)
+                .allowsHitTesting(false)
+            Button(action: onTap) {
+                HStack(spacing: 8) {
+                    Image(systemName: "rectangle.stack.fill")
+                    Text(l10n.t(.detailExpandRemainingFmt, "\(remaining)"))
+                        .font(.system(size: 13, weight: .bold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16).padding(.vertical, 9)
+                .background(.black.opacity(0.55), in: .capsule)
+                .overlay(Capsule().strokeBorder(.white.opacity(0.25)))
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 14)
+        }
+    }
+}
+
+private struct CollapsePagesPill: View {
+    var onTap: () -> Void
+    @Environment(OnboardingStore.self) private var l10n
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.up")
+                Text(l10n.t(.detailCollapsePages)).font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundStyle(Theme.v3Text2)
+            .padding(.horizontal, 16).padding(.vertical, 8)
+            .v3Glass(corner: 18)
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - V3 sections
+
+private struct V3TitleCard: View {
+    let illust: Illust
+    @Environment(OnboardingStore.self) private var l10n
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
             Text(illust.title ?? "")
-                .font(.title3.bold())
-            if let series = illust.series,
-               let title = series.title, !title.isEmpty,
-               let sid = series.id {
-                NavigationLink(value: AppRoute.illustSeries(seriesId: sid)) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "rectangle.stack")
-                        Text(title)
-                    }
-                    .font(.footnote)
-                    .foregroundStyle(.tint)
-                }
+                .font(.system(size: 23, weight: .bold))
+                .tracking(-0.5)
+                .foregroundStyle(Theme.v3Text1)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineSpacing(2)
+
+            HStack(spacing: 8) {
+                Text(typeLabel)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Theme.v3Text2)
+                dot
+                Text(V3Date.dateTime(illust.createDate))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.v3Text3)
+                dot
+                Text(pagesLabel)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.v3Text3)
             }
-            HStack(spacing: 14) {
-                if let v = illust.totalView {
-                    Label("\(v)", systemImage: "eye")
-                }
-                if let b = illust.totalBookmarks {
-                    Label("\(b)", systemImage: "heart")
-                }
-                if let date = illust.createDate {
-                    Text(formatDate(date))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .font(.footnote)
-            .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 16)
+    }
+
+    private var dot: some View {
+        Circle().fill(Theme.v3Text3).frame(width: 3, height: 3)
+    }
+
+    private var typeLabel: String {
+        switch illust.type {
+        case "manga": return l10n.t(.detailTypeManga)
+        case "ugoira": return l10n.t(.detailTypeUgoira)
+        default: return l10n.t(.detailTypeIllust)
         }
     }
 
-    private func formatDate(_ s: String) -> String {
-        let f = ISO8601DateFormatter()
-        guard let d = f.date(from: s) else { return s }
-        return d.formatted(date: .abbreviated, time: .omitted)
+    private var pagesLabel: String {
+        let n = illust.pageCount ?? 1
+        return n <= 1 ? l10n.t(.detailPageOne) : l10n.t(.detailPagesFmt, "\(n)")
     }
 }
 
-private struct IllustAuthorSection: View {
-    let illust: Illust
+private struct V3SeriesStrip: View {
+    let series: IllustSeriesRef
+    @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
-        if let user = illust.user {
-            NavigationLink(value: AppRoute.userProfile(user.id)) {
-                HStack(spacing: 12) {
-                    PixivAsyncImage(url: avatarURL(for: user))
-                        .frame(width: 40, height: 40)
-                        .clipShape(.circle)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(user.name ?? "")
-                            .font(.subheadline.weight(.semibold))
-                        Text("@\(user.account ?? "")")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(.tertiary)
-                        .font(.caption)
+        NavigationLink(value: AppRoute.illustSeries(seriesId: series.id ?? 0)) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.18))
+                    Image(systemName: "rectangle.stack.fill").font(.system(size: 14)).foregroundStyle(.white)
                 }
-                .foregroundStyle(.primary)
+                .frame(width: 32, height: 32)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(l10n.t(.detailSeriesLabel).uppercased())
+                        .font(.system(size: 9, weight: .bold))
+                        .tracking(1)
+                        .foregroundStyle(.white.opacity(0.7))
+                    Text(series.title ?? "")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.white.opacity(0.8))
             }
+            .padding(12)
+            .background(Theme.brandGradient, in: .rect(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 16)
+    }
+}
+
+private struct V3ArtistCard: View {
+    let vm: IllustDetailViewModel
+    @Environment(OnboardingStore.self) private var l10n
+
+    var body: some View {
+        if let user = vm.illust?.user {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    NavigationLink(value: AppRoute.userProfile(user.id)) {
+                        HStack(spacing: 12) {
+                            PixivAsyncImage(url: avatarURL(for: user), showsProgress: false)
+                                .frame(width: 58, height: 58)
+                                .clipShape(.circle)
+                                .overlay(Circle().strokeBorder(Theme.v3Border, lineWidth: 3))
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(user.name ?? "")
+                                    .font(.system(size: 16, weight: .bold))
+                                    .foregroundStyle(Theme.v3Text1)
+                                    .lineLimit(1)
+                                Text("@\(user.account ?? "")")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Theme.v3Text3)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer(minLength: 8)
+
+                    FollowButton(followed: vm.authorFollowed) {
+                        Task { await vm.toggleFollow() }
+                    } onLongPress: {
+                        Task { await vm.toggleFollow(restrict: "private") }
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 18)
+            .v3Glass(corner: 28)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 18)
         }
     }
 
@@ -367,106 +679,718 @@ private struct IllustAuthorSection: View {
     }
 }
 
-private struct IllustTagsSection: View {
-    let tags: [Tag]
+private struct FollowButton: View {
+    let followed: Bool
+    var onTap: () -> Void
+    var onLongPress: () -> Void
+    @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
-        FlowLayout(spacing: 6) {
-            ForEach(Array(tags.enumerated()), id: \.offset) { _, tag in
-                NavigationLink(value: AppRoute.tagResults(tag: tag.name ?? "")) {
-                    HStack(spacing: 4) {
-                        Text("#\(tag.name ?? "")")
-                            .font(.caption.bold())
-                        if let translated = tag.translatedName, !translated.isEmpty {
-                            Text(translated)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+        Button(action: onTap) {
+            Text(followed ? l10n.t(.detailUnfollow) : l10n.t(.detailFollow))
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(followed ? AnyShapeStyle(Theme.v3Text2) : AnyShapeStyle(Color.white))
+                .padding(.horizontal, 18)
+                .frame(height: 32)
+                .background {
+                    if followed {
+                        Capsule().fill(Theme.v3Surface).overlay(Capsule().strokeBorder(Theme.v3Border, lineWidth: 1))
+                    } else {
+                        Capsule().fill(Theme.brandGradient)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(LongPressGesture().onEnded { _ in if !followed { onLongPress() } })
+    }
+}
+
+private struct V3CaptionView: View {
+    let caption: String
+
+    var body: some View {
+        Text(V3Caption.plain(caption))
+            .font(.system(size: 13))
+            .foregroundStyle(Theme.v3Text2)
+            .lineSpacing(5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .textSelection(.enabled)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 18)
+    }
+}
+
+private struct V3TagsSection: View {
+    let tags: [Tag]
+    @Environment(OnboardingStore.self) private var l10n
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            V3Label(l10n.t(.detailTagsLabel))
+            FlowLayout(spacing: 6) {
+                ForEach(Array(tags.enumerated()), id: \.offset) { _, tag in
+                    NavigationLink(value: AppRoute.tagResults(tag: tag.name ?? "")) {
+                        HStack(spacing: 4) {
+                            Text("#\(tag.name ?? "")")
+                                .font(.caption.bold())
+                                .foregroundStyle(Theme.v3Ambient)
+                            if let translated = tag.translatedName, !translated.isEmpty {
+                                Text(translated)
+                                    .font(.caption)
+                                    .foregroundStyle(Theme.v3Text3)
+                            }
+                        }
+                        .padding(.horizontal, 9).padding(.vertical, 5)
+                        .background(Theme.v3Surface, in: .capsule)
+                        .overlay(Capsule().strokeBorder(Theme.v3Border, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 18)
+    }
+}
+
+private struct V3StatsCard: View {
+    let illust: Illust
+    @Environment(OnboardingStore.self) private var l10n
+
+    var body: some View {
+        HStack(spacing: 0) {
+            stat(value: illust.totalView ?? 0, label: l10n.t(.detailViewsLabel), gradient: Theme.v3ViewsGradient)
+            Rectangle().fill(Theme.v3Border).frame(width: 1, height: 36)
+            stat(value: illust.totalBookmarks ?? 0, label: l10n.t(.detailBookmarksLabel), gradient: Theme.v3BookmarksGradient)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 16)
+        .v3Glass(corner: 20)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 18)
+    }
+
+    private func stat(value: Int, label: String, gradient: LinearGradient) -> some View {
+        VStack(spacing: 3) {
+            Text(value.formatted(.number.grouping(.automatic)))
+                .font(.system(size: 20, weight: .bold))
+                .tracking(-0.5)
+                .foregroundStyle(gradient)
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .bold))
+                .tracking(1)
+                .foregroundStyle(Theme.v3Text3)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+private struct V3DetailPanel: View {
+    let illust: Illust
+    @Binding var expanded: Bool
+    @Environment(OnboardingStore.self) private var l10n
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(.easeOut(duration: 0.25)) { expanded.toggle() }
+            } label: {
+                HStack {
+                    V3Label(l10n.t(.detailArtworkDetails))
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Theme.v3Text3)
+                        .rotationEffect(.degrees(expanded ? 0 : 180))
+                }
+            }
+            .buttonStyle(.plain)
+
+            if expanded {
+                VStack(spacing: 8) {
+                    ForEach(Array(rows.enumerated()), id: \.offset) { _, pair in
+                        HStack(spacing: 8) {
+                            chip(pair.0)
+                            if let second = pair.1 { chip(second) } else { Color.clear.frame(maxWidth: .infinity) }
                         }
                     }
-                    .padding(.horizontal, 8).padding(.vertical, 5)
-                    .background(Color(.secondarySystemBackground), in: .capsule)
+                }
+                .padding(18)
+                .v3Glass(corner: 28)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 18)
+    }
+
+    private struct Chip { let label: String; let value: String; let color: Color; let mono: Bool }
+
+    private func chip(_ c: Chip) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(c.label.uppercased())
+                .font(.system(size: 9, weight: .regular))
+                .tracking(0.7)
+                .foregroundStyle(Theme.v3Text3)
+            Text(c.value)
+                .font(c.mono ? .system(size: 13, weight: .bold).monospaced() : .system(size: 13, weight: .bold))
+                .foregroundStyle(c.color)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(Theme.v3Surface, in: .rect(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.v3Border, lineWidth: 1))
+        .contentShape(Rectangle())
+        .onTapGesture { UIPasteboard.general.string = c.value }
+    }
+
+    private var rows: [(Chip, Chip?)] {
+        let all = chips
+        var out: [(Chip, Chip?)] = []
+        var i = 0
+        while i < all.count {
+            out.append((all[i], i + 1 < all.count ? all[i + 1] : nil))
+            i += 2
+        }
+        return out
+    }
+
+    private var chips: [Chip] {
+        let aiType = illust.illustAIType ?? 0
+        let restrict = illust.xRestrict ?? 0
+        let typeValue: String = {
+            switch illust.type {
+            case "manga": return l10n.t(.detailTypeManga)
+            case "ugoira": return l10n.t(.detailTypeUgoira)
+            default: return l10n.t(.detailTypeIllust)
+            }
+        }()
+        let restrictValue: String = restrict == 1 ? "R-18" : (restrict == 2 ? "R-18G" : l10n.t(.dpAllAges))
+        return [
+            Chip(label: l10n.t(.dpArtworkId), value: "\(illust.id)", color: Theme.v3Ambient, mono: true),
+            Chip(label: l10n.t(.dpUserId), value: illust.user.map { "\($0.id)" } ?? "--", color: Theme.v3Ambient, mono: true),
+            Chip(label: l10n.t(.dpType), value: typeValue, color: Theme.v3Text1, mono: false),
+            Chip(label: l10n.t(.dpResolution), value: "\(illust.width ?? 0) × \(illust.height ?? 0)", color: Theme.v3Text1, mono: false),
+            Chip(label: l10n.t(.dpPages), value: "\(illust.pageCount ?? 1)", color: Theme.v3Text1, mono: false),
+            Chip(label: l10n.t(.dpAI), value: aiType == 2 ? l10n.t(.dpAIYes) : l10n.t(.dpAINo), color: aiType == 2 ? Theme.v3Purple : Theme.v3Green, mono: false),
+            Chip(label: l10n.t(.dpRestriction), value: restrictValue, color: restrict > 0 ? Theme.v3Pink : Theme.v3Blue, mono: false),
+            Chip(label: l10n.t(.dpPublished), value: V3Date.dateTime(illust.createDate), color: Theme.v3Text1, mono: false),
+        ]
+    }
+}
+
+private struct V3CommentsSection: View {
+    let vm: IllustDetailViewModel
+    let illustId: Int64
+    @Environment(OnboardingStore.self) private var l10n
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            V3Label(l10n.t(.commentsTitle))
+                .padding(.bottom, 4)
+            if !vm.commentsLoaded {
+                ProgressView().frame(maxWidth: .infinity).padding(.vertical, 20)
+            } else if vm.comments.isEmpty {
+                Text(l10n.t(.commentsEmpty))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.v3Text3)
+                    .padding(.vertical, 16)
+            } else {
+                ForEach(Array(vm.comments.prefix(3).enumerated()), id: \.element.id) { idx, comment in
+                    if idx > 0 { Rectangle().fill(Theme.v3Border).frame(height: 1) }
+                    V3CommentRow(comment: comment)
+                }
+                NavigationLink(value: AppRoute.comments(target: .illust(illustId))) {
+                    Text(l10n.t(.viewAllComments))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.v3Ambient)
+                        .padding(.top, 12)
                 }
                 .buttonStyle(.plain)
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 18)
+        .onScrolledIntoView { Task { await vm.loadCommentsIfNeeded() } }
     }
 }
 
-private struct BottomActionBar: View {
-    let vm: IllustDetailViewModel
-    let onShowBookmarkSheet: () -> Void
-    @Environment(OnboardingStore.self) private var l10n
-
-    var body: some View {
-        HStack(spacing: 24) {
-            Spacer()
-            Button {
-                Task { await vm.toggleBookmark() }
-            } label: {
-                Image(systemName: (vm.illust?.isBookmarked == true) ? "heart.fill" : "heart")
-                    .font(.title3)
-                    .foregroundStyle((vm.illust?.isBookmarked == true) ? .pink : .primary)
-                    .frame(width: 44, height: 44)
-            }
-            .disabled(vm.isBookmarking || vm.illust == nil)
-            .contextMenu {
-                if vm.illust?.isBookmarked != true {
-                    Button {
-                        Task { await vm.toggleBookmark(restrict: "public") }
-                    } label: {
-                        Label(l10n.t(.bookmarkPublic), systemImage: "heart")
-                    }
-                    Button {
-                        Task { await vm.toggleBookmark(restrict: "private") }
-                    } label: {
-                        Label(l10n.t(.bookmarkPrivate), systemImage: "lock")
-                    }
-                }
-                Button {
-                    onShowBookmarkSheet()
-                } label: {
-                    Label(l10n.t(.bookmarkWithTags), systemImage: "tag")
-                }
-            }
-
-            ShareLink(item: shareURL) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.title3)
-                    .frame(width: 44, height: 44)
-            }
-            Spacer()
-        }
-        .padding(.vertical, 8)
-        .background(.thinMaterial)
-    }
-
-    private var shareURL: URL {
-        URL(string: "https://www.pixiv.net/artworks/\(vm.illustId)")!
-    }
-}
-
-private struct CommentRow: View {
+private struct V3CommentRow: View {
     let comment: CommentItem
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            PixivAsyncImage(url: avatarURL)
-                .frame(width: 32, height: 32)
+        HStack(alignment: .top, spacing: 12) {
+            PixivAsyncImage(url: avatarURL, showsProgress: false)
+                .frame(width: 36, height: 36)
                 .clipShape(.circle)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(comment.user?.name ?? "")
-                    .font(.caption.bold())
-                Text(comment.comment ?? "")
-                    .font(.caption)
-                    .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(comment.user?.name ?? "")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.v3Text1)
+                    Text(V3Date.relative(comment.date))
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.v3Text3)
+                }
+                if let text = comment.comment, !text.isEmpty {
+                    Text(text)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.v3Text1.opacity(0.72))
+                        .lineSpacing(4)
+                }
             }
-            Spacer()
+            Spacer(minLength: 0)
         }
+        .padding(.vertical, 14)
     }
 
     private var avatarURL: URL? {
         (comment.user?.profileImageUrls?.medium ?? comment.user?.profileImageUrls?.px170x170)
             .flatMap(URL.init(string:))
+    }
+}
+
+private struct V3AuthorWorksSection: View {
+    let vm: IllustDetailViewModel
+    let user: PixivUser?
+    @Environment(OnboardingStore.self) private var l10n
+
+    var body: some View {
+        Group {
+            if !vm.authorWorksLoaded {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack { V3Label(l10n.t(.detailAuthorWorksFmt, user?.name ?? "")); Spacer() }
+                    ProgressView().frame(maxWidth: .infinity, minHeight: 110)
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 18)
+            } else if !vm.authorWorks.isEmpty, let user {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        V3Label(l10n.t(.detailAuthorWorksFmt, user.name ?? ""))
+                        Spacer()
+                        NavigationLink(value: AppRoute.userProfile(user.id)) {
+                            Text(l10n.t(.detailSeeMore))
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.v3Ambient)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    ScrollView(.horizontal) {
+                        LazyHStack(spacing: 8) {
+                            ForEach(vm.authorWorks.prefix(12)) { work in
+                                NavigationLink(value: work) {
+                                    PixivAsyncImage(url: thumbURL(work))
+                                        .frame(width: 110, height: 110)
+                                        .clipShape(.rect(cornerRadius: 10))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .scrollIndicators(.hidden)
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 18)
+            }
+            // Loaded but empty → render nothing (the section collapses).
+        }
+        .onScrolledIntoView { Task { await vm.loadAuthorWorksIfNeeded() } }
+    }
+
+    private func thumbURL(_ illust: Illust) -> URL? {
+        (illust.imageUrls?.squareMedium ?? illust.imageUrls?.medium).flatMap(URL.init(string:))
+    }
+}
+
+private struct V3RelatedSection: View {
+    let vm: IllustDetailViewModel
+    let illustId: Int64
+    @Environment(OnboardingStore.self) private var l10n
+    @State private var mute = MuteStore.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                V3Label(l10n.t(.detailRelated))
+                Spacer()
+                if !vm.related.isEmpty {
+                    NavigationLink(value: AppRoute.relatedIllusts(illustId: illustId)) {
+                        Text(l10n.t(.detailSeeMore))
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.v3Ambient)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12)
+
+            if !vm.relatedLoaded {
+                ProgressView()
+                    .frame(maxWidth: .infinity, minHeight: 280)
+            } else {
+                let visible = mute.filter(vm.related)
+                if visible.isEmpty {
+                    Text(l10n.t(.detailNoRelated))
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.v3Text3)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 48)
+                } else {
+                    WaterfallGrid(
+                        items: visible,
+                        columns: mute.waterfallColumns,
+                        spacing: 8,
+                        estimatedRelativeHeight: { i in
+                            let w = max(Double(i.width ?? 1), 1)
+                            let h = max(Double(i.height ?? 1), 1)
+                            return 1.0 / max(0.5, min(w / h, 2.0)) + 0.18
+                        }
+                    ) { item in
+                        NavigationLink(value: item) {
+                            IllustWaterfallCell(illust: item)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu { IllustCellContextMenuItems(illust: item) }
+                    }
+                    .padding(.horizontal, 8)
+                }
+            }
+        }
+        .onScrolledIntoView { Task { await vm.loadRelatedIfNeeded() } }
+    }
+}
+
+/// Fires `action` once — when the view's top edge first scrolls up into the
+/// screen. Used to defer a section's API request until it is genuinely visible.
+/// Gating on the global frame (not `onAppear`) is robust whether `LazyVStack`
+/// realizes the row lazily or — because these sections come from a single
+/// `@ViewBuilder` function — eagerly as one unit.
+private struct OnScrolledIntoView: ViewModifier {
+    let action: () -> Void
+    @State private var fired = false
+
+    func body(content: Content) -> some View {
+        content.background(
+            GeometryReader { geo in
+                let minY = geo.frame(in: .global).minY
+                Color.clear
+                    .onAppear { fire(whenTopAt: minY) }
+                    .onChange(of: minY) { _, newValue in fire(whenTopAt: newValue) }
+            }
+        )
+    }
+
+    private func fire(whenTopAt minY: CGFloat) {
+        // minY is the section's top in screen coords. Fire once it has scrolled
+        // up past the lower ~15% of the screen — i.e. the section is genuinely
+        // in view, not peeking a sliver at the very bottom edge. This keeps the
+        // three stacked sections firing in turn as each is reached, rather than
+        // all at once the instant the region's top edge appears.
+        guard !fired, minY < UIScreen.main.bounds.height * 0.85 else { return }
+        fired = true
+        action()
+    }
+}
+
+private extension View {
+    func onScrolledIntoView(perform action: @escaping () -> Void) -> some View {
+        modifier(OnScrolledIntoView(action: action))
+    }
+}
+
+/// Small uppercase section label — `v3_text_3`, tracked, bold (the recurring
+/// "TAGS" / "ARTWORK DETAILS" / "RELATED" header style).
+private struct V3Label: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: 12, weight: .bold))
+            .tracking(1.2)
+            .foregroundStyle(Theme.v3Text3)
+    }
+}
+
+// MARK: - HTML caption + date helpers
+
+enum V3Caption {
+    /// Pixiv captions are HTML; render their text content (line breaks kept,
+    /// tags stripped, common entities decoded). Links aren't tappable but the
+    /// text is shown — parity with the V3 description block.
+    static func plain(_ html: String) -> String {
+        var s = html
+        for br in ["<br />", "<br/>", "<br>", "</p>", "</P>"] {
+            s = s.replacingOccurrences(of: br, with: "\n")
+        }
+        s = s.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        let entities = [
+            "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"",
+            "&#39;": "'", "&apos;": "'", "&nbsp;": " ",
+        ]
+        for (k, v) in entities { s = s.replacingOccurrences(of: k, with: v) }
+        return s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+enum V3Date {
+    private static let iso: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private static func parse(_ s: String?) -> Date? {
+        guard let s else { return nil }
+        return iso.date(from: s)
+    }
+
+    static func dateTime(_ s: String?) -> String {
+        guard let d = parse(s) else { return s ?? "" }
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f.string(from: d)
+    }
+
+    static func relative(_ s: String?) -> String {
+        guard let d = parse(s) else { return "" }
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f.localizedString(for: d, relativeTo: Date())
+    }
+}
+
+// MARK: - Hero page URL helpers + progressive loader
+
+/// Per-page (`large`, `original`) URL pairs for an illust, plus the full-res
+/// URL list for the zoom viewer / downloader.
+enum IllustPagesHero {
+    /// The hero paints `large` first — the same URL the waterfall caches, so it
+    /// appears instantly — then upgrades to `original`. `large` falls back to
+    /// `medium`; `original` falls back to `large`.
+    static func pages(for illust: Illust) -> [HeroPageURLs] {
+        func u(_ s: String?) -> URL? { s.flatMap(URL.init(string:)) }
+        if let metaPages = illust.metaPages, !metaPages.isEmpty {
+            return metaPages.map {
+                HeroPageURLs(
+                    large: u($0.imageUrls?.large ?? $0.imageUrls?.medium),
+                    original: u($0.imageUrls?.original ?? $0.imageUrls?.large)
+                )
+            }
+        }
+        let large = illust.imageUrls?.large ?? illust.imageUrls?.medium
+        let original = illust.metaSinglePage?.originalImageUrl ?? illust.imageUrls?.original ?? large
+        return [HeroPageURLs(large: u(large), original: u(original))]
+    }
+
+    /// Full-resolution page URLs for the zoom viewer (`original`, fallback `large`).
+    static func urls(for illust: Illust) -> [URL] {
+        pages(for: illust).compactMap { $0.original ?? $0.large }
+    }
+}
+
+struct HeroPageURLs: Hashable {
+    let large: URL?
+    let original: URL?
+}
+
+/// Drives the two-stage hero load (cached `large` → progress-tracked `original`).
+/// `@MainActor` so its observable state is mutated safely; the structured `.task`
+/// that calls `run` cancels the download when the page leaves the screen.
+@MainActor
+@Observable
+private final class HeroImageLoader {
+    var image: UIImage?
+    var progress: Double = 0
+    var isLoadingOriginal = false
+    private var showedOriginal = false
+
+    func run(large: URL?, original: URL?) async {
+        if let large {
+            if let cached = PixivImageCache.shared.image(for: large) {
+                if !showedOriginal { image = cached }
+            } else if let img = await PixivImageCache.shared.load(large), !showedOriginal {
+                image = img
+            }
+        }
+        if Task.isCancelled { return }
+
+        // Already at full res, or nothing better to fetch — done.
+        guard let original, original != large else { return }
+        if let cached = PixivImageCache.shared.image(for: original) {
+            image = cached
+            showedOriginal = true
+            return
+        }
+
+        isLoadingOriginal = true
+        let img = await PixivImageCache.shared.loadWithProgress(original) { [weak self] p in
+            self?.progress = p
+        }
+        isLoadingOriginal = false
+        guard !Task.isCancelled, let img else { return }
+        image = img
+        showedOriginal = true
+    }
+}
+
+/// Small ring + percentage shown while the `original` downloads over the
+/// already-visible `large` image.
+private struct HeroOriginalProgress: View {
+    let progress: Double
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ZStack {
+                Circle().stroke(.white.opacity(0.3), lineWidth: 2)
+                Circle()
+                    .trim(from: 0, to: max(0.02, progress))
+                    .stroke(.white, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+            }
+            .frame(width: 15, height: 15)
+            Text("\(Int(progress * 100))%")
+                .font(.caption2.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.black.opacity(0.55), in: .capsule)
+        .padding(12)
+    }
+}
+
+/// Tracks the detail scroll view's content top so the action pill can hide on
+/// scroll-down / show on scroll-up.
+private struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {}
+}
+
+/// Floating download + bookmark pill (Shaft V3 `fab_bar`). No full-width mask —
+/// a compact capsule that floats over the content; the parent slides/fades it
+/// with scroll direction.
+private struct BottomActionBar: View {
+    let vm: IllustDetailViewModel
+    let onShowBookmarkSheet: () -> Void
+    @Environment(OnboardingStore.self) private var l10n
+
+    @State private var download: DownloadState = .idle
+
+    enum DownloadState: Equatable {
+        case idle, downloading(Double), done, failed
+        var isActive: Bool { if case .downloading = self { return true }; return false }
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            downloadButton
+            Divider().frame(height: 22)
+            bookmarkButton
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(.regularMaterial, in: .capsule)
+        .overlay(Capsule().strokeBorder(.primary.opacity(0.08)))
+        .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+        .padding(.bottom, 10)
+    }
+
+    // MARK: Download
+
+    private var downloadButton: some View {
+        Button {
+            Task { await runDownload() }
+        } label: {
+            Group {
+                switch download {
+                case .idle:
+                    Image(systemName: "arrow.down.to.line").font(.title3)
+                case .downloading(let p):
+                    ZStack {
+                        Circle().stroke(.secondary.opacity(0.3), lineWidth: 2)
+                        Circle().trim(from: 0, to: max(0.02, p))
+                            .stroke(Theme.brand, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                        Text("\(Int(p * 100))")
+                            .font(.system(size: 9, weight: .bold).monospacedDigit())
+                    }
+                    .frame(width: 22, height: 22)
+                case .done:
+                    Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(.green)
+                case .failed:
+                    Image(systemName: "exclamationmark.triangle").font(.title3).foregroundStyle(.orange)
+                }
+            }
+            .frame(width: 56, height: 44)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(download.isActive || vm.illust == nil)
+        .accessibilityLabel(l10n.t(.downloadsTitle))
+    }
+
+    private func runDownload() async {
+        guard let illust = vm.illust else { return }
+        let urls = IllustPagesHero.urls(for: illust)   // originals (fallback large)
+        guard !urls.isEmpty else { return }
+        guard await PhotoLibrarySaver.requestAuthorization() else { await flashFailed(); return }
+
+        let total = Double(urls.count)
+        download = .downloading(0)
+        for (i, url) in urls.enumerated() {
+            let img = await PixivImageCache.shared.loadWithProgress(url) { p in
+                download = .downloading((Double(i) + p) / total)
+            }
+            guard let img else { await flashFailed(); return }
+            do { try await PhotoLibrarySaver.save(img) } catch { await flashFailed(); return }
+            download = .downloading(Double(i + 1) / total)
+        }
+        download = .done
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        if download == .done { download = .idle }
+    }
+
+    private func flashFailed() async {
+        download = .failed
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        if download == .failed { download = .idle }
+    }
+
+    // MARK: Bookmark
+
+    private var bookmarkButton: some View {
+        Button {
+            Task { await vm.toggleBookmark() }
+        } label: {
+            Image(systemName: (vm.illust?.isBookmarked == true) ? "heart.fill" : "heart")
+                .font(.title3)
+                .foregroundStyle((vm.illust?.isBookmarked == true) ? .pink : .primary)
+                .frame(width: 56, height: 44)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(vm.isBookmarking || vm.illust == nil)
+        .contextMenu {
+            if vm.illust?.isBookmarked != true {
+                Button {
+                    Task { await vm.toggleBookmark(restrict: "public") }
+                } label: {
+                    Label(l10n.t(.bookmarkPublic), systemImage: "heart")
+                }
+                Button {
+                    Task { await vm.toggleBookmark(restrict: "private") }
+                } label: {
+                    Label(l10n.t(.bookmarkPrivate), systemImage: "lock")
+                }
+            }
+            Button {
+                onShowBookmarkSheet()
+            } label: {
+                Label(l10n.t(.bookmarkWithTags), systemImage: "tag")
+            }
+        }
     }
 }
 

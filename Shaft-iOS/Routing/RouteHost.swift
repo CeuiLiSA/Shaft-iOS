@@ -7,8 +7,25 @@ struct RouteHost: ViewModifier {
     let auth: AuthViewModel
 
     func body(content: Content) -> some View {
-        content.navigationDestination(for: AppRoute.self) { route in
-            switch route {
+        content
+            // Pushed pages hide the bottom tab bar — it belongs only to the tab
+            // roots (推荐 / 发现 / 动态). It slides back in when you pop to a root.
+            .navigationDestination(for: AppRoute.self) { route in
+                destination(for: route)
+                    .toolbar(.hidden, for: .tabBar)
+            }
+            // Value-based navigation: pushing a full `Illust` (from a waterfall /
+            // ranking cell) seeds the detail view so it paints instantly. ID-only
+            // entry points (links, history) still use `AppRoute.illustDetail`.
+            .navigationDestination(for: Illust.self) { illust in
+                IllustDetailView(illust: illust)
+                    .toolbar(.hidden, for: .tabBar)
+            }
+    }
+
+    @ViewBuilder
+    private func destination(for route: AppRoute) -> some View {
+        switch route {
             case .illustDetail(let id):
                 IllustDetailView(illustId: id)
             case .novelDetail(let id):
@@ -73,7 +90,6 @@ struct RouteHost: ViewModifier {
                 SettingsView()
             case .about:
                 AboutView()
-            }
         }
     }
 }

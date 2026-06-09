@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// Reusable two-column waterfall illust list with built-in loading / error /
-/// pull-to-refresh / load-more wiring. Each cell pushes `illustDetail(id)`
-/// onto the nearest navigation stack and exposes a context menu with share,
+/// pull-to-refresh / load-more wiring. Each cell pushes the full `Illust`
+/// (value-based navigation → instant detail render) onto the nearest navigation
+/// stack and exposes a context menu with share,
 /// copy link, open in browser, and mute artist.
 struct IllustWaterfallList: View {
     let illusts: [Illust]
@@ -50,7 +51,7 @@ struct IllustWaterfallList: View {
                         spacing: 8,
                         estimatedRelativeHeight: relativeHeight(for:)
                     ) { illust in
-                        NavigationLink(value: AppRoute.illustDetail(illust.id)) {
+                        NavigationLink(value: illust) {
                             IllustWaterfallCell(illust: illust)
                         }
                         .buttonStyle(.plain)
@@ -120,8 +121,10 @@ struct IllustWaterfallCell: View {
     }
 
     private var imageURL: URL? {
-        let s = illust.imageUrls?.medium
-            ?? illust.imageUrls?.large
+        // `large` (not `medium`) so the cache entry is shared with the detail
+        // hero, which shows this same URL instantly before fetching the original.
+        let s = illust.imageUrls?.large
+            ?? illust.imageUrls?.medium
             ?? illust.imageUrls?.squareMedium
         return s.flatMap(URL.init(string:))
     }

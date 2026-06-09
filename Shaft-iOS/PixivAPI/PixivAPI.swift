@@ -1,6 +1,15 @@
 import Foundation
 import CryptoKit
 import UIKit
+import os
+
+/// App-wide API request logger. Every Pixiv API call funnels through
+/// `PixivAPI.perform` / `novelText`, so logging there records exactly one line
+/// per network request — image loads go through `PixivImageCache`, not here, so
+/// they're excluded by construction. Stream from a booted simulator with:
+///   xcrun simctl spawn booted log stream --predicate \
+///     'subsystem == "com.shaft.ShaftiOS" AND category == "API"' --style compact
+let apiLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Shaft-iOS", category: "API")
 
 protocol PixivTokenProvider: Sendable {
     func currentAccessToken() async -> String?
@@ -311,6 +320,7 @@ actor PixivAPI {
         var req = URLRequest(url: comps.url!)
         guard let token = await tokenProvider.currentAccessToken() else { throw APIError.noToken }
         applyHeaders(&req, accessToken: token)
+        Self.logRequest(req)
         let (data, resp) = try await session.data(for: req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw APIError.http(code: (resp as? HTTPURLResponse)?.statusCode ?? 0,
@@ -474,6 +484,7 @@ actor PixivAPI {
         var req = original
         applyHeaders(&req, accessToken: token)
 
+        Self.logRequest(req)
         var (data, response) = try await session.data(for: req)
         if let http = response as? HTTPURLResponse,
            http.statusCode == 400, isTokenError(data: data) {
@@ -497,6 +508,16 @@ actor PixivAPI {
         } catch {
             throw APIError.decoding(String(describing: error))
         }
+    }
+
+    /// One log line per outgoing API request: method + path + query (host and
+    /// auth headers omitted — the token lives in headers, not the URL).
+    private static func logRequest(_ req: URLRequest) {
+        let method = req.httpMethod ?? "GET"
+        let comps = req.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+        let path = comps?.path ?? req.url?.absoluteString ?? "?"
+        let query = comps?.query.map { "?\($0)" } ?? ""
+        apiLog.info("→ \(method, privacy: .public) \(path, privacy: .public)\(query, privacy: .public)")
     }
 
     private func applyHeaders(_ req: inout URLRequest, accessToken: String) {

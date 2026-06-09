@@ -17,17 +17,17 @@ struct PagerTabBar<T: Hashable>: View {
                     VStack(spacing: 6) {
                         Text(item.title)
                             .font(.system(size: 15, weight: selection == item.value ? .semibold : .regular))
-                            .foregroundStyle(selection == item.value ? Color.primary : Color.secondary)
+                            .foregroundStyle(selection == item.value ? AnyShapeStyle(Theme.brand) : AnyShapeStyle(Color.secondary))
                             .padding(.horizontal, 12)
                             .padding(.top, 10)
                         ZStack {
                             Capsule()
                                 .fill(.clear)
-                                .frame(height: 2)
+                                .frame(height: 3)
                             if selection == item.value {
                                 Capsule()
-                                    .fill(.tint)
-                                    .frame(width: 24, height: 2)
+                                    .fill(Theme.glowGradient)
+                                    .frame(width: 28, height: 3)
                                     .matchedGeometryEffect(id: "underline", in: underline)
                             }
                         }

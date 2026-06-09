@@ -3,83 +3,163 @@ import SwiftUI
 struct SearchView: View {
     @State private var word: String = ""
     @State private var suggestions: [AutoCompleteTag] = []
+    @State private var trending: [TrendingTag] = []
+    @State private var loadingTrending = false
     @State private var history = SearchHistoryStore.shared
     @Environment(OnboardingStore.self) private var l10n
 
     @ObservationIgnored private let api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
 
+    private let gridColumns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8),
+    ]
+
     var body: some View {
         VStack(spacing: 0) {
+            searchBar
+            content
+        }
+        .navigationTitle(l10n.t(.searchTitle))
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await loadTrendingIfNeeded() }
+        .task(id: word) {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !word.isEmpty else { suggestions = []; return }
+            suggestions = (try? await api.autocompleteTags(prefix: word))?.tags ?? []
+        }
+    }
+
+    // MARK: Search bar
+
+    private var searchBar: some View {
+        HStack {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField(l10n.t(.searchPlaceholder), text: $word)
+                .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+            if !word.isEmpty {
+                Button { word = ""; suggestions = [] } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .padding(10)
+        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 10))
+        .padding(.horizontal, 12).padding(.top, 8)
+    }
+
+    // MARK: Content — empty (history + trending) vs typing (autocomplete)
+
+    @ViewBuilder private var content: some View {
+        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            emptyState
+        } else {
+            suggestionList(trimmed: trimmed)
+        }
+    }
+
+    /// The landing surface: recent-search chips plus the trending-tags grid.
+    private var emptyState: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                if !history.entries.isEmpty {
+                    historySection
+                }
+                trendingSection
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 14)
+            .padding(.bottom, 24)
+        }
+    }
+
+    private var historySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField(l10n.t(.searchPlaceholder), text: $word)
-                    .textInputAutocapitalization(.never)
-                    .submitLabel(.search)
-                    .onSubmit {
-                        // navigation handled via list item — direct submit also navigates
-                    }
-                if !word.isEmpty {
-                    Button { word = ""; suggestions = [] } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+                Text(l10n.t(.searchRecent)).font(.headline)
+                Spacer()
+                Button(l10n.t(.actionClear)) { history.clear() }
+                    .font(.subheadline)
+            }
+            FlowLayout(spacing: 8) {
+                ForEach(history.entries, id: \.self) { term in
+                    historyChip(term)
+                }
+            }
+        }
+    }
+
+    private func historyChip(_ term: String) -> some View {
+        NavigationLink(value: AppRoute.searchResults(word: term)) {
+            HStack(spacing: 5) {
+                Image(systemName: "clock").font(.caption2).foregroundStyle(.secondary)
+                Text(term).font(.subheadline).lineLimit(1)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(Color(.secondarySystemBackground), in: .capsule)
+            .foregroundStyle(.primary)
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(TapGesture().onEnded { history.record(term) })
+        .contextMenu {
+            Button(role: .destructive) { history.remove(term) } label: {
+                Label(l10n.t(.actionDelete), systemImage: "trash")
+            }
+        }
+    }
+
+    @ViewBuilder private var trendingSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(l10n.t(.subPopularTags)).font(.headline)
+            if trending.isEmpty && loadingTrending {
+                HStack { Spacer(); ProgressView(); Spacer() }
+                    .padding(.vertical, 40)
+            } else {
+                LazyVGrid(columns: gridColumns, spacing: 8) {
+                    ForEach(trending) { tag in
+                        NavigationLink(value: AppRoute.tagResults(tag: tag.tag ?? "")) {
+                            TagGridCell(tag: tag)
+                        }
+                        .buttonStyle(.plain)
+                        .simultaneousGesture(TapGesture().onEnded {
+                            if let t = tag.tag { history.record(t) }
+                        })
                     }
                 }
             }
-            .padding(10)
-            .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 10))
-            .padding(.horizontal, 12).padding(.top, 8)
+        }
+    }
 
-            List {
-                let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
-                let shortcuts = PixivLinkParser.shortcuts(for: trimmed)
-                if !shortcuts.isEmpty {
-                    Section(l10n.t(.searchOpenLink)) {
-                        ForEach(Array(shortcuts.enumerated()), id: \.offset) { _, s in
-                            NavigationLink(value: s.route) {
-                                Label(s.title, systemImage: s.systemImage)
-                            }
+    /// Typing surface: link shortcuts, the literal-search row, then keyword
+    /// suggestions (关键词联想) from `/v2/search/autocomplete`.
+    private func suggestionList(trimmed: String) -> some View {
+        List {
+            let shortcuts = PixivLinkParser.shortcuts(for: trimmed)
+            if !shortcuts.isEmpty {
+                Section(l10n.t(.searchOpenLink)) {
+                    ForEach(Array(shortcuts.enumerated()), id: \.offset) { _, s in
+                        NavigationLink(value: s.route) {
+                            Label(s.title, systemImage: s.systemImage)
                         }
                     }
                 }
-                if !trimmed.isEmpty {
-                    NavigationLink(value: AppRoute.searchResults(word: trimmed)) {
-                        Label(trimmed, systemImage: "magnifyingglass")
-                    }
-                    .simultaneousGesture(TapGesture().onEnded { history.record(trimmed) })
-                }
-                if trimmed.isEmpty, !history.entries.isEmpty {
-                    Section {
-                        ForEach(history.entries, id: \.self) { term in
-                            NavigationLink(value: AppRoute.searchResults(word: term)) {
-                                Label(term, systemImage: "clock")
-                            }
-                            .simultaneousGesture(TapGesture().onEnded { history.record(term) })
-                            .swipeActions(edge: .trailing) {
-                                Button(role: .destructive) {
-                                    history.remove(term)
-                                } label: {
-                                    Image(systemName: "trash")
-                                }
-                            }
-                        }
-                    } header: {
-                        HStack {
-                            Text(l10n.t(.searchRecent))
-                            Spacer()
-                            Button(l10n.t(.actionClear)) {
-                                history.clear()
-                            }
-                            .font(.caption)
-                            .textCase(nil)
-                        }
-                    }
-                }
+            }
+            NavigationLink(value: AppRoute.searchResults(word: trimmed)) {
+                Label(trimmed, systemImage: "magnifyingglass")
+            }
+            .simultaneousGesture(TapGesture().onEnded { history.record(trimmed) })
+            if !suggestions.isEmpty {
                 Section {
                     ForEach(suggestions) { tag in
                         NavigationLink(value: AppRoute.tagResults(tag: tag.name ?? "")) {
-                            VStack(alignment: .leading) {
+                            HStack {
                                 Text(tag.name ?? "")
                                 if let t = tag.translatedName, !t.isEmpty {
+                                    Spacer()
                                     Text(t).font(.caption).foregroundStyle(.secondary)
+                                        .lineLimit(1)
                                 }
                             }
                         }
@@ -89,15 +169,17 @@ struct SearchView: View {
                     }
                 }
             }
-            .listStyle(.plain)
         }
-        .navigationTitle(l10n.t(.searchTitle))
-        .navigationBarTitleDisplayMode(.inline)
-        .task(id: word) {
-            try? await Task.sleep(nanoseconds: 250_000_000)
-            guard !word.isEmpty else { suggestions = []; return }
-            suggestions = (try? await api.autocompleteTags(prefix: word))?.tags ?? []
-        }
+        .listStyle(.plain)
+    }
+
+    // MARK: Loading
+
+    private func loadTrendingIfNeeded() async {
+        guard trending.isEmpty, !loadingTrending else { return }
+        loadingTrending = true
+        defer { loadingTrending = false }
+        trending = (try? await api.trendingTags())?.trendTags ?? []
     }
 }
 
@@ -381,7 +463,7 @@ struct SearchResultsView: View {
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundStyle(.white)
                                     .padding(3)
-                                    .background(.red, in: .circle)
+                                    .background(Theme.brand, in: .circle)
                                     .offset(x: 8, y: -8)
                             }
                         }

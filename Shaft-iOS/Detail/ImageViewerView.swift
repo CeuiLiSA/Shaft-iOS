@@ -135,7 +135,10 @@ struct ImageViewerView: View {
     private func saveAll() async {
         let total = urls.count
         guard total > 0 else { return }
-        guard await ensurePhotosAuthorization() else { return }
+        guard await PhotoLibrarySaver.requestAuthorization() else {
+            saveStatus = .failed("Photos access denied")
+            return
+        }
         for (i, u) in urls.enumerated() {
             saveStatus = .savingAll(current: i + 1, total: total)
             if !(await saveOne(u, alreadyAuthorized: true)) { return }
@@ -152,33 +155,44 @@ struct ImageViewerView: View {
             return false
         }
         if !alreadyAuthorized {
-            guard await ensurePhotosAuthorization() else { return false }
+            guard await PhotoLibrarySaver.requestAuthorization() else {
+                saveStatus = .failed("Photos access denied")
+                return false
+            }
         }
         do {
-            try await PHPhotoLibrary.shared().performChanges {
-                let req = PHAssetCreationRequest.forAsset()
-                if let data = image.pngData() ?? image.jpegData(compressionQuality: 0.95) {
-                    req.addResource(with: .photo, data: data, options: nil)
-                }
-            }
+            try await PhotoLibrarySaver.save(image)
             return true
         } catch {
             saveStatus = .failed(error.localizedDescription)
             return false
         }
     }
-
-    private func ensurePhotosAuthorization() async -> Bool {
-        let auth = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-        if auth == .authorized || auth == .limited { return true }
-        saveStatus = .failed("Photos access denied")
-        return false
-    }
 }
 
 private extension Array {
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
+    }
+}
+
+/// Shared "save image to Photos" helper used by the image viewer and the illust
+/// detail download button. Add-only authorization; PNG with JPEG fallback.
+enum PhotoLibrarySaver {
+    /// Requests add-only Photos access. Returns true if granted (or limited).
+    static func requestAuthorization() async -> Bool {
+        let auth = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+        return auth == .authorized || auth == .limited
+    }
+
+    /// Writes one image to the Photo library. Throws on failure.
+    static func save(_ image: UIImage) async throws {
+        try await PHPhotoLibrary.shared().performChanges {
+            let req = PHAssetCreationRequest.forAsset()
+            if let data = image.pngData() ?? image.jpegData(compressionQuality: 0.95) {
+                req.addResource(with: .photo, data: data, options: nil)
+            }
+        }
     }
 }
 

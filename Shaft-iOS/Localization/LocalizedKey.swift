@@ -25,6 +25,15 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case detailRelated, commentsTitle, viewAllComments, commentsEmpty
     case novelRead
 
+    // V3 illust detail
+    case detailArtworkDetails, detailTagsLabel, detailViewsLabel, detailBookmarksLabel
+    case detailSeriesLabel, detailFollow, detailUnfollow, detailSeeMore, detailNoRelated
+    case detailAuthorWorksFmt, detailPageOne, detailPagesFmt
+    case detailExpandRemainingFmt, detailCollapsePages
+    case dpArtworkId, dpUserId, dpType, dpResolution, dpPages, dpAI, dpRestriction, dpPublished
+    case dpAIYes, dpAINo, dpAllAges
+    case detailTypeIllust, detailTypeManga, detailTypeUgoira
+
     // Profile sections
     case profileIllusts, profileManga, profileNovels, profileBookmarks
     case profileFollow, profileFollowing
@@ -34,7 +43,7 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case searchTabIllust, searchTabNovel, searchTabUser
     case searchSortDateDesc, searchSortDateAsc, searchSortPopular, searchSortLabel
     case searchTargetPartial, searchTargetExact, searchTargetTitleCaption
-    case searchOpenLink, searchRecent, actionClear
+    case searchOpenLink, searchRecent, actionClear, actionDelete
 
     // Following restrict
     case followingPublic, followingPrivate, followingMyPixiv
