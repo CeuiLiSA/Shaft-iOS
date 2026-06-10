@@ -44,8 +44,12 @@ struct RouteHost: ViewModifier {
                 RelatedIllustsView(illustId: id)
             case .userIllusts(let userId, let type):
                 UserIllustsView(userId: userId, type: type)
+            case .userIllustTag(let userId, let tag):
+                UserIllustTagView(userId: userId, tag: tag)
             case .userBookmarks(let userId):
                 UserBookmarksView(userId: userId)
+            case .userNovelBookmarks(let userId):
+                UserNovelBookmarksView(userId: userId)
             case .userNovels(let userId):
                 UserNovelsView(userId: userId)
             case .illustSeries(let seriesId):

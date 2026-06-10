@@ -193,8 +193,6 @@ struct IllustDetailView: View {
     @Environment(OnboardingStore.self) private var l10n
     @Environment(\.openURL) private var openURL
 
-    private static let scrollSpace = "illustDetailScroll"
-
     init(illustId: Int64) {
         self.illustId = illustId
         _vm = State(wrappedValue: IllustDetailViewModel(illustId: illustId))
@@ -239,13 +237,16 @@ struct IllustDetailView: View {
                     }
                 }
                 .background(GeometryReader { proxy in
+                    // .global, not a named scroll space: named-space frames
+                    // come back stuck at 0 on iOS 26. Content top == screen
+                    // top (top safe area ignored), so global minY is the
+                    // scroll offset.
                     Color.clear.preference(
                         key: ScrollOffsetPreferenceKey.self,
-                        value: proxy.frame(in: .named(Self.scrollSpace)).minY
+                        value: proxy.frame(in: .global).minY
                     )
                 })
             }
-            .coordinateSpace(name: Self.scrollSpace)
             .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
                 handleScroll(offset)
             }
@@ -311,7 +312,6 @@ struct IllustDetailView: View {
         IllustPagesStack(
             illust: illust,
             expanded: $pagesExpanded,
-            scrollSpace: Self.scrollSpace,
             onTapPage: { i in viewerIndex = i; showViewer = true }
         )
 
@@ -350,7 +350,6 @@ struct IllustDetailView: View {
 private struct IllustPagesStack: View {
     let illust: Illust
     @Binding var expanded: Bool
-    let scrollSpace: String
     var onTapPage: (Int) -> Void
 
     /// Works with more than this many pages collapse to the first page behind an
@@ -380,7 +379,7 @@ private struct IllustPagesStack: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: UIScreen.main.bounds.width / max(firstAspect, 0.1))
             } else if let first = pages.first {
-                StretchyFirstPage(urls: first, aspect: firstAspect, scrollSpace: scrollSpace) {
+                StretchyFirstPage(urls: first, aspect: firstAspect) {
                     onTapPage(0)
                 }
                 .overlay(alignment: .topTrailing) {
@@ -422,7 +421,6 @@ private struct IllustPagesStack: View {
 private struct StretchyFirstPage: View {
     let urls: HeroPageURLs
     let aspect: CGFloat
-    let scrollSpace: String
     var onTap: () -> Void
 
     @State private var loader = HeroImageLoader()
@@ -431,7 +429,9 @@ private struct StretchyFirstPage: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let minY = proxy.frame(in: .named(scrollSpace)).minY
+            // Global frame: the hero is the first element of scroll content
+            // that starts at the screen top, so global minY > 0 == overscroll.
+            let minY = proxy.frame(in: .global).minY
             let stretch = max(0, minY)
             ZStack {
                 Rectangle().fill(Color(.secondarySystemBackground))

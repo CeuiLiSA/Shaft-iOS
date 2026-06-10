@@ -38,6 +38,16 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case profileIllusts, profileManga, profileNovels, profileBookmarks
     case profileFollow, profileFollowing
 
+    // V3 user profile (UserActivityV3 parity)
+    case v3LabelFollowing, v3LabelMyPixiv, v3LabelNavigate, v3LabelIllustTags
+    case v3LabelProfileDetails, v3LabelWorkspace, v3LabelSocial
+    case v3Official, v3FollowsYou, v3MyPixivBadge, v3BlockUserWorks
+    case navIllustWorks, navMangaWorks, navIllustSeries, navNovelWorks
+    case navNovelSeries, navIllustBookmarks, navNovelBookmarks, navRelatedUsers
+    case chipUserId, chipAccount, chipGender, chipRegion, chipBirthday, chipJob
+    case chipPremium, chipPixivUrl, chipPremiumUser, chipStandard
+    case genderMale, genderFemale
+
     // Search
     case searchTitle, searchPlaceholder
     case searchTabIllust, searchTabNovel, searchTabUser

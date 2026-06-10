@@ -617,3 +617,152 @@ struct NovelRecommendView: View {
         .task { await vm.loadIfNeeded() }
     }
 }
+
+// MARK: - User novel bookmarks (V3 profile "小说收藏" nav chip)
+
+@MainActor
+@Observable
+private final class UserNovelBookmarksVM {
+    let userId: Int64
+    var novels: [Novel] = []
+    var nextUrl: String?
+    var isLoading = false; var isLoadingMore = false
+    var errorMessage: String?
+
+    @ObservationIgnored private let api: PixivAPI
+
+    init(userId: Int64) {
+        self.userId = userId
+        self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
+    }
+
+    func loadIfNeeded() async { if novels.isEmpty { await load() } }
+    func load() async {
+        isLoading = true; errorMessage = nil
+        defer { isLoading = false }
+        do {
+            let r = try await api.userBookmarkedNovels(userId)
+            novels = r.novels
+            nextUrl = r.nextUrl
+        } catch { errorMessage = error.localizedDescription }
+    }
+    func loadMore() async {
+        guard let url = nextUrl, !isLoadingMore else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        if let r: NovelResponse = try? await api.nextPage(url) {
+            novels.append(contentsOf: r.novels)
+            nextUrl = r.nextUrl
+        }
+    }
+}
+
+struct UserNovelBookmarksView: View {
+    let userId: Int64
+    @State private var vm: UserNovelBookmarksVM
+    @Environment(OnboardingStore.self) private var l10n
+
+    init(userId: Int64) {
+        self.userId = userId
+        _vm = State(wrappedValue: UserNovelBookmarksVM(userId: userId))
+    }
+
+    var body: some View {
+        NovelList(
+            novels: vm.novels,
+            onLoadMore: { await vm.loadMore() },
+            hasMore: vm.nextUrl != nil
+        )
+        .refreshable { await vm.load() }
+        .overlay {
+            if vm.novels.isEmpty && vm.isLoading { ProgressView() }
+            else if vm.novels.isEmpty, let err = vm.errorMessage {
+                InlineError(message: err) { Task { await vm.load() } }.padding()
+            }
+        }
+        .navigationTitle(l10n.t(.navNovelBookmarks))
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await vm.loadIfNeeded() }
+    }
+}
+
+// MARK: - User illusts filtered by tag (V3 profile "插画标签" chips)
+
+/// Pages the author's illusts through the app API and keeps only works carrying
+/// `tag`. Upstream UserActivityV3 routes this to a web-ajax page; the app API
+/// equivalent pages + filters client-side, auto-fetching while matches are thin.
+@MainActor
+@Observable
+private final class UserIllustTagVM {
+    let userId: Int64
+    let tag: String
+    var illusts: [Illust] = []
+    var nextUrl: String?
+    var isLoading = false; var isLoadingMore = false
+    var errorMessage: String?
+
+    @ObservationIgnored private let api: PixivAPI
+
+    init(userId: Int64, tag: String) {
+        self.userId = userId; self.tag = tag
+        self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
+    }
+
+    private func matches(_ illust: Illust) -> Bool {
+        illust.tags?.contains { $0.name == tag } ?? false
+    }
+
+    func loadIfNeeded() async { if illusts.isEmpty { await load() } }
+    func load() async {
+        isLoading = true; errorMessage = nil
+        defer { isLoading = false }
+        do {
+            let r = try await api.userIllusts(userId, type: "illust")
+            illusts = r.illusts.filter(matches)
+            nextUrl = r.nextUrl
+            await fillIfThin()
+        } catch { errorMessage = error.localizedDescription }
+    }
+    func loadMore() async {
+        guard let url = nextUrl, !isLoadingMore else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        if let r: IllustResponse = try? await api.nextPage(url) {
+            illusts.append(contentsOf: r.illusts.filter(matches))
+            nextUrl = r.nextUrl
+        }
+    }
+    /// A page can filter down to zero matches; chase a few more pages so the
+    /// first screen isn't empty even though more matches exist further in.
+    private func fillIfThin() async {
+        var hops = 0
+        while illusts.count < 10, nextUrl != nil, hops < 5 {
+            await loadMore()
+            hops += 1
+        }
+    }
+}
+
+struct UserIllustTagView: View {
+    let userId: Int64
+    let tag: String
+    @State private var vm: UserIllustTagVM
+
+    init(userId: Int64, tag: String) {
+        self.userId = userId; self.tag = tag
+        _vm = State(wrappedValue: UserIllustTagVM(userId: userId, tag: tag))
+    }
+
+    var body: some View {
+        IllustWaterfallList(
+            illusts: vm.illusts, isLoading: vm.isLoading,
+            errorMessage: vm.errorMessage,
+            onRefresh: { await vm.load() },
+            onLoadMore: { await vm.loadMore() },
+            hasMore: vm.nextUrl != nil
+        )
+        .navigationTitle("#\(tag)")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await vm.loadIfNeeded() }
+    }
+}

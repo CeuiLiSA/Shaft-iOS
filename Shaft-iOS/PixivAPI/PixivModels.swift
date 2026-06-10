@@ -42,11 +42,25 @@ struct PixivUser: Codable, Hashable, Sendable, Identifiable {
     let account: String?
     let profileImageUrls: ImageUrls?
     let isFollowed: Bool?
+    /// User bio (HTML-ish plain text). Only present on `userDetail` responses.
+    let comment: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, name, account
+        case id, name, account, comment
         case profileImageUrls = "profile_image_urls"
         case isFollowed = "is_followed"
+    }
+
+    init(
+        id: Int64, name: String?, account: String?,
+        profileImageUrls: ImageUrls?, isFollowed: Bool?, comment: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.account = account
+        self.profileImageUrls = profileImageUrls
+        self.isFollowed = isFollowed
+        self.comment = comment
     }
 }
 
@@ -172,31 +186,57 @@ struct UserProfile: Codable, Hashable, Sendable {
     let totalIllustBookmarksPublic: Int?
     let totalIllustSeries: Int?
     let totalNovelSeries: Int?
+    let totalFollowUsers: Int?
+    let totalMypixivUsers: Int?
     let backgroundImageUrl: String?
     let twitterAccount: String?
     let twitterUrl: String?
     let pawooUrl: String?
     let isPremium: Bool?
+    let gender: String?
+    let region: String?
+    let birthDay: String?
+    let job: String?
 
     enum CodingKeys: String, CodingKey {
-        case webpage
+        case webpage, gender, region, job
         case totalIllusts = "total_illusts"
         case totalManga = "total_manga"
         case totalNovels = "total_novels"
         case totalIllustBookmarksPublic = "total_illust_bookmarks_public"
         case totalIllustSeries = "total_illust_series"
         case totalNovelSeries = "total_novel_series"
+        case totalFollowUsers = "total_follow_users"
+        case totalMypixivUsers = "total_mypixiv_users"
         case backgroundImageUrl = "background_image_url"
         case twitterAccount = "twitter_account"
         case twitterUrl = "twitter_url"
         case pawooUrl = "pawoo_url"
         case isPremium = "is_premium"
+        case birthDay = "birth_day"
     }
+}
+
+/// Drawing environment from the user-detail response (`workspace`).
+struct PixivWorkspace: Codable, Hashable, Sendable {
+    let pc: String?
+    let monitor: String?
+    let tool: String?
+    let scanner: String?
+    let tablet: String?
+    let mouse: String?
+    let printer: String?
+    let desktop: String?
+    let music: String?
+    let desk: String?
+    let chair: String?
+    let comment: String?
 }
 
 struct UserDetailResponse: Codable, Sendable {
     let user: PixivUser
     let profile: UserProfile?
+    let workspace: PixivWorkspace?
 }
 
 struct UserPreview: Codable, Hashable, Sendable, Identifiable {

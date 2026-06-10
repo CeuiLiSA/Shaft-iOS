@@ -43,6 +43,13 @@ enum Theme {
     // ramps are the same ink/paper hue at descending opacity; surfaces/borders
     // are near-transparent so the glass cards read against the dark detail bg.
 
+    /// Page background — `v3_bg` (#FAFAFA / #08080C). The user-profile banner
+    /// gradient and the avatar border must resolve to this exact color.
+    static let v3Bg = Color(light: 0xFAFAFA, dark: 0x08080C)
+    /// Premium gold pair — avatar ring `#FFD700`, badge/official `#FFC233`.
+    static let v3GoldRing = Color(hex: 0xFFD700)
+    static let v3Gold = Color(hex: 0xFFC233)
+
     static let v3Text1 = Color(light: 0x1A1A2E, dark: 0xF4F4F8)
     static let v3Text2 = Color(light: 0x1A1A2E, dark: 0xF4F4F8, lightAlpha: 0.60, darkAlpha: 0.62)
     static let v3Text3 = Color(light: 0x1A1A2E, dark: 0xF4F4F8, lightAlpha: 0.33, darkAlpha: 0.36)
