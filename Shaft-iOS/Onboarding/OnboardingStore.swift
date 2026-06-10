@@ -5,18 +5,23 @@ import Observation
 @Observable
 final class OnboardingStore {
     private let defaults = UserDefaults.standard
-    private let configuredKey = "app_locale_configured"
-    private let chosenTagKey = "app_locale_chosen_tag"
+    private static let configuredKey = "app_locale_configured"
+    private static let chosenTagKey = "app_locale_chosen_tag"
     private let appleLanguagesKey = "AppleLanguages"
 
+    // Stored (not computed straight off UserDefaults): @Observable only tracks
+    // stored properties, and ContentView switches pages on these.
     var hasUserConfigured: Bool {
-        get { defaults.bool(forKey: configuredKey) }
-        set { defaults.set(newValue, forKey: configuredKey) }
+        didSet { defaults.set(hasUserConfigured, forKey: Self.configuredKey) }
     }
 
     var chosenTag: String? {
-        get { defaults.string(forKey: chosenTagKey) }
-        set { defaults.set(newValue, forKey: chosenTagKey) }
+        didSet { defaults.set(chosenTag, forKey: Self.chosenTagKey) }
+    }
+
+    init() {
+        hasUserConfigured = UserDefaults.standard.bool(forKey: Self.configuredKey)
+        chosenTag = UserDefaults.standard.string(forKey: Self.chosenTagKey)
     }
 
     /// The active language tag — chosen tag, or system fallback.
