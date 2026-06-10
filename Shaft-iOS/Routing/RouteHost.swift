@@ -92,6 +92,10 @@ struct RouteHost: ViewModifier {
                 MutedView()
             case .settings:
                 SettingsView()
+            case .settingsSub(let title):
+                PlaceholderView(title: title, systemImage: "wrench.and.screwdriver")
+                    .navigationTitle(title)
+                    .navigationBarTitleDisplayMode(.inline)
             case .about:
                 AboutView()
             case .notifications:

@@ -120,4 +120,56 @@ enum LocalizedKey: String, CaseIterable, Sendable {
 
     // Novel markers (小说书签)
     case novelMarkersTitle, markerPageFmt
+
+    // Settings — 1:1 port of Pixiv-Shaft fragment_settings.xml
+    // Sections
+    case stSectionNormal, stSectionUI, stSectionPersonalize, stSectionCache
+    case stSectionExperimental, stSectionBackup
+    // Account
+    case stAccountManage, stEditAccount, stEmailBackup, stEditProfile, stWorkspace
+    case stR18Setting, stPremiumSetting, stLogoutConfirmTitle, stDeleteAccountInfo
+    // Network
+    case stDirectConnect, stSeePixEz, stSecureDns, stSecureDnsHint
+    case stLargeThumbnail, stShowOriginalPreview, stOriginalHint
+    // Normal
+    case stSaveViewHistory, stCloudHistorySync, stClearCloudHistory
+    case stFilterStarSearch, stFilterRankBookmarked, stFilterInvalidBookmarks
+    case stDeleteAIIllust, stToastDownloadResult, stSearchFilter, stSearchSort
+    case stBottomBarOrder, stFilterComment, stR18DefaultFilter, stR18DefaultFilterHint
+    case stOptNoLimit, stOptBookmarksOverFmt
+    case stOptSortNewest, stOptSortOldest, stOptSortPopular, stOptSortPopularBuiltin
+    // UI
+    case stMainViewR18, stNavInitPosition, stOptNavLastClosed
+    case stIllustDetailNew, stIllustDetailV3, stFabOrder
+    case stOptFabDownloadLeft, stOptFabBookmarkLeft
+    case stThemeMode, stOptThemeSystem, stOptThemeLight, stOptThemeDark
+    case stThemeColor, stLayoutMode, stOptStaggered, stOptLinear
+    case stLineCount, stOptColumnsFmt
+    // Download
+    case stStorageChoice, stOptStoragePictures, stOptStorageDownloads, stOptStorageSaf
+    case stOverwritePolicy, stOptPolicySkip, stOptPolicyReplace, stOptPolicyRename
+    case stCustomFileName, stTapToSet, stAria2Title, stAria2Desc
+    case stNovelHeader, stNovelHeaderDesc
+    case stNovelFormat, stOptAlwaysAsk, stOptFormatTxt, stOptFormatEpub
+    case stImageResolution, stOptResOriginal, stOptResLarge, stOptResMedium, stOptResSquareMedium
+    case stPageIndex, stOptPageFrom0, stOptPageFrom1
+    case stLongPressDownload, stDownloadLimitType, stOptWifiOnly, stOptNoAutoDownload
+    case stMaxConcurrent, stOptSerialOne, stOptConcurrentFmt
+    // Personalization
+    case stPrivateStar, stShowNovelTags, stHideStarButton, stSelectAllTags
+    case stKeepStatusBar, stSynonymEnable, stSynonymDict, stTransformMode
+    case stShowRelatedWhenStar, stAutoLikeWhenDownload, stAutoFollowAfterStar
+    case stAutoDownloadAfterStar, stKeepScreenOn
+    case stCustomDoubleTapZoom, stZoomScale, stZoomScaleHint
+    case stThreeLevelZoom, stThreeLevelZoomHint, stLongPressReset, stLongPressResetHint
+    case stFirebase, stUpscaleModel, stRembgModel, stNotSet, stBubbleModel, stOcrModel
+    // Cache
+    case stClearImageCache, stClearGifCache, stClearBulkData
+    // Experimental
+    case stChatRoomEntry, stChatRoomWarning, stChatRoomPushBanner, stPlazaEntry
+    // Backup & restore
+    case stBackup, stRestore, stBackupHistoryToo, stMoonUpload, stMoonSync
+    // Misc
+    case stNotAvailable, stDone, stSure
+    case stSectionAccount, stOptFollowSystem, stModelNotReadyFmt
 }

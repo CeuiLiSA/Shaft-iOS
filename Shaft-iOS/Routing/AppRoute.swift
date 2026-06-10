@@ -36,6 +36,7 @@ enum AppRoute: Hashable, Codable, Sendable {
     case downloads
     case mute
     case settings
+    case settingsSub(title: String)
     case about
     case notifications
     case notificationViewMore(notificationId: Int64, title: String)
