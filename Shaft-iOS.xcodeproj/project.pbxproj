@@ -68,6 +68,9 @@
 		A1000000000000000000B059 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F059 /* NotificationsView.swift */; };
 		A1000000000000000000B060 /* WatchlistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F060 /* WatchlistView.swift */; };
 		A1000000000000000000B061 /* NovelMarkersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F061 /* NovelMarkersView.swift */; };
+		A1000000000000000000B062 /* TracedTunnel.metal in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F062 /* TracedTunnel.metal */; };
+		A1000000000000000000B063 /* tunnel-atlas.webp in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F063 /* tunnel-atlas.webp */; };
+		A1000000000000000000B064 /* tunnel-atlas-lq.webp in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F064 /* tunnel-atlas-lq.webp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -133,6 +136,9 @@
 		A1000000000000000000F059 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F060 /* WatchlistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchlistView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F061 /* NovelMarkersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelMarkersView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F062 /* TracedTunnel.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = TracedTunnel.metal; sourceTree = "<group>"; };
+		A1000000000000000000F063 /* tunnel-atlas.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "tunnel-atlas.webp"; sourceTree = "<group>"; };
+		A1000000000000000000F064 /* tunnel-atlas-lq.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "tunnel-atlas-lq.webp"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -337,6 +343,9 @@
 				A1000000000000000000F012 /* AppLocales.swift */,
 				A1000000000000000000F013 /* OnboardingStore.swift */,
 				A1000000000000000000F014 /* TunnelBackgroundView.swift */,
+				A1000000000000000000F062 /* TracedTunnel.metal */,
+				A1000000000000000000F063 /* tunnel-atlas.webp */,
+				A1000000000000000000F064 /* tunnel-atlas-lq.webp */,
 				A1000000000000000000F015 /* LanguageOnboardingView.swift */,
 			);
 			path = Onboarding;
@@ -418,6 +427,8 @@
 			files = (
 				A1000000000000000000B004 /* Preview Assets.xcassets in Resources */,
 				A1000000000000000000B003 /* Assets.xcassets in Resources */,
+				A1000000000000000000B063 /* tunnel-atlas.webp in Resources */,
+				A1000000000000000000B064 /* tunnel-atlas-lq.webp in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -487,6 +498,7 @@
 				A1000000000000000000B059 /* NotificationsView.swift in Sources */,
 				A1000000000000000000B060 /* WatchlistView.swift in Sources */,
 				A1000000000000000000B061 /* NovelMarkersView.swift in Sources */,
+				A1000000000000000000B062 /* TracedTunnel.metal in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
