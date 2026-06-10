@@ -28,16 +28,16 @@ struct HomeView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
-                        NavigationLink(value: AppRoute.search) {
-                            Image(systemName: "magnifyingglass")
-                        }
-                        .accessibilityLabel(l10n.t(.searchTitle))
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
                         NavigationLink(value: AppRoute.more) {
                             Image(systemName: "person.crop.circle")
                         }
                         .accessibilityLabel(l10n.t(.moreTitle))
+                    }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink(value: AppRoute.search) {
+                            Image(systemName: "magnifyingglass")
+                        }
+                        .accessibilityLabel(l10n.t(.searchTitle))
                     }
                 }
                 .registerRoutes(auth: auth)
