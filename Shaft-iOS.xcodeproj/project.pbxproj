@@ -65,6 +65,9 @@
 		A1000000000000000000B056 /* SearchFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F056 /* SearchFilter.swift */; };
 		A1000000000000000000B057 /* SearchFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F057 /* SearchFilterSheet.swift */; };
 		A1000000000000000000B058 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F058 /* Theme.swift */; };
+		A1000000000000000000B059 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F059 /* NotificationsView.swift */; };
+		A1000000000000000000B060 /* WatchlistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F060 /* WatchlistView.swift */; };
+		A1000000000000000000B061 /* NovelMarkersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F061 /* NovelMarkersView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -127,6 +130,9 @@
 		A1000000000000000000F056 /* SearchFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchFilter.swift; sourceTree = "<group>"; };
 		A1000000000000000000F057 /* SearchFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchFilterSheet.swift; sourceTree = "<group>"; };
 		A1000000000000000000F058 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		A1000000000000000000F059 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F060 /* WatchlistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchlistView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F061 /* NovelMarkersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelMarkersView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -306,6 +312,9 @@
 				A1000000000000000000F039 /* MoreView.swift */,
 				A1000000000000000000F040 /* SettingsView.swift */,
 				A1000000000000000000F041 /* AboutAndPlaceholders.swift */,
+				A1000000000000000000F059 /* NotificationsView.swift */,
+				A1000000000000000000F060 /* WatchlistView.swift */,
+				A1000000000000000000F061 /* NovelMarkersView.swift */,
 			);
 			path = More;
 			sourceTree = "<group>";
@@ -475,6 +484,9 @@
 				A1000000000000000000B056 /* SearchFilter.swift in Sources */,
 				A1000000000000000000B057 /* SearchFilterSheet.swift in Sources */,
 				A1000000000000000000B058 /* Theme.swift in Sources */,
+				A1000000000000000000B059 /* NotificationsView.swift in Sources */,
+				A1000000000000000000B060 /* WatchlistView.swift in Sources */,
+				A1000000000000000000B061 /* NovelMarkersView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

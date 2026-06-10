@@ -16,6 +16,9 @@ final class CommentsViewModel {
     var loadingReplies: Set<Int64> = []
     var expandedReplies: Set<Int64> = []
 
+    /// Signed-in user id — only that user's comments offer delete.
+    @ObservationIgnored let myUserId: Int64? = KeychainTokenStore.shared.load()?.user?.id
+
     @ObservationIgnored private let api: PixivAPI
 
     init(target: AppRoute.CommentTarget) {
@@ -102,6 +105,28 @@ final class CommentsViewModel {
             return false
         }
     }
+
+    /// Delete one of the signed-in user's own comments — optimistic removal,
+    /// reload on failure to restore server truth.
+    func delete(_ comment: CommentItem, parentId: Int64? = nil) async {
+        if let parentId {
+            replies[parentId]?.removeAll { $0.id == comment.id }
+        } else {
+            comments.removeAll { $0.id == comment.id }
+            if let total = totalComments { totalComments = max(0, total - 1) }
+        }
+        do {
+            let type: String
+            switch target {
+            case .illust: type = "illust"
+            case .novel:  type = "novel"
+            }
+            _ = try await api.deleteComment(type: type, commentId: comment.id)
+        } catch {
+            errorMessage = error.localizedDescription
+            await load()
+        }
+    }
 }
 
 struct CommentsView: View {
@@ -128,10 +153,14 @@ struct CommentsView: View {
                             isExpanded: vm.expandedReplies.contains(c.id),
                             isLoadingReplies: vm.loadingReplies.contains(c.id),
                             replies: vm.replies[c.id],
+                            myUserId: vm.myUserId,
                             onToggleReplies: { Task { await vm.toggleReplies(for: c.id) } },
                             onReply: { target in
                                 replyTarget = target
                                 inputFocused = true
+                            },
+                            onDelete: { comment, parentId in
+                                Task { await vm.delete(comment, parentId: parentId) }
                             }
                         )
                         Divider()
@@ -220,8 +249,11 @@ private struct CommentCell: View {
     let isExpanded: Bool
     let isLoadingReplies: Bool
     let replies: [CommentItem]?
+    let myUserId: Int64?
     let onToggleReplies: () -> Void
     let onReply: (CommentItem) -> Void
+    /// (comment, parentId) — parentId nil for top-level comments.
+    let onDelete: (CommentItem, Int64?) -> Void
 
     @Environment(OnboardingStore.self) private var l10n
 
@@ -229,6 +261,7 @@ private struct CommentCell: View {
         VStack(alignment: .leading, spacing: 6) {
             commentRow(comment)
                 .padding(.vertical, 4)
+                .contextMenu { deleteMenu(comment, parentId: nil) }
 
             HStack(spacing: 14) {
                 Button(action: { onReply(comment) }) {
@@ -260,10 +293,23 @@ private struct CommentCell: View {
                                 commentRow(reply)
                             }
                             .padding(.vertical, 2)
+                            .contextMenu { deleteMenu(reply, parentId: comment.id) }
                         }
                     }
                     .padding(.top, 4)
                 }
+            }
+        }
+    }
+
+    /// Own comments only — pixiv lets you delete just your own.
+    @ViewBuilder
+    private func deleteMenu(_ c: CommentItem, parentId: Int64?) -> some View {
+        if let mine = myUserId, c.user?.id == mine {
+            Button(role: .destructive) {
+                onDelete(c, parentId)
+            } label: {
+                Label(l10n.t(.actionDelete), systemImage: "trash")
             }
         }
     }

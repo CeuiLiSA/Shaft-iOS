@@ -349,6 +349,71 @@ actor PixivAPI {
         return try await post(path: "/v1/novel/comment/add", form: form)
     }
 
+    /// Delete one of the signed-in user's own comments. `type` is `illust` or
+    /// `novel` — upstream Shaft uses one templated path for both.
+    @discardableResult
+    func deleteComment(type: String, commentId: Int64) async throws -> EmptyResponse {
+        try await post(path: "/v1/\(type)/comment/delete", form: ["comment_id": "\(commentId)"])
+    }
+
+    // MARK: Notifications & announcements
+
+    func notificationList() async throws -> NotificationListResponse {
+        try await get(path: "/v1/notification/list")
+    }
+
+    /// Flattened sub-list of a grouped notification (one with `view_more`).
+    func notificationViewMore(_ notificationId: Int64) async throws -> NotificationListResponse {
+        try await get(path: "/v1/notification/view-more", query: [
+            "notification_id": "\(notificationId)",
+        ])
+    }
+
+    func infoLatest() async throws -> InfoLatestResponse {
+        try await get(path: "/v1/info/latest")
+    }
+
+    func infoList(categoryId: Int) async throws -> InfoListResponse {
+        try await get(path: "/v1/info/list", query: ["cid": "\(categoryId)"])
+    }
+
+    // MARK: Watchlist (追更)
+
+    /// `kind` is `manga` or `novel` — the two endpoints are symmetric.
+    func watchlist(kind: String) async throws -> WatchlistResponse {
+        try await get(path: "/v1/watchlist/\(kind)")
+    }
+
+    @discardableResult
+    func addToWatchlist(kind: String, seriesId: Int64) async throws -> EmptyResponse {
+        try await post(path: "/v1/watchlist/\(kind)/add", form: ["series_id": "\(seriesId)"])
+    }
+
+    @discardableResult
+    func removeFromWatchlist(kind: String, seriesId: Int64) async throws -> EmptyResponse {
+        try await post(path: "/v1/watchlist/\(kind)/delete", form: ["series_id": "\(seriesId)"])
+    }
+
+    // MARK: Novel markers (小说书签)
+
+    func novelMarkers() async throws -> NovelMarkersResponse {
+        try await get(path: "/v2/novel/markers")
+    }
+
+    /// One marker per novel — re-adding with a different page overwrites it.
+    @discardableResult
+    func addNovelMarker(_ novelId: Int64, page: Int) async throws -> EmptyResponse {
+        try await post(path: "/v1/novel/marker/add", form: [
+            "novel_id": "\(novelId)",
+            "page": "\(page)",
+        ])
+    }
+
+    @discardableResult
+    func deleteNovelMarker(_ novelId: Int64) async throws -> EmptyResponse {
+        try await post(path: "/v1/novel/marker/delete", form: ["novel_id": "\(novelId)"])
+    }
+
     /// Generic GET against an absolute pixiv next_url (already includes base
     /// + query params). Used by paginating list view models.
     func nextPage<T: Decodable>(_ next: String) async throws -> T {

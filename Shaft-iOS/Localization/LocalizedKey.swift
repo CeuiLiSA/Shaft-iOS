@@ -101,4 +101,13 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case ratioLandscape, ratioPortrait, ratioSquare
     case bodyUnitChars, bodyUnitWords, bodyUnitReadingTime
     case typeIllust, typeUgoira
+
+    // Notifications & announcements
+    case notificationsTitle, notificationsTab, notificationsInfoTab
+
+    // Watchlist (追更)
+    case watchlistTitle, watchlistAdd, watchlistAdded, episodesFmt
+
+    // Novel markers (小说书签)
+    case novelMarkersTitle, markerPageFmt
 }

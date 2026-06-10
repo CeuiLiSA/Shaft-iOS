@@ -90,6 +90,16 @@ struct RouteHost: ViewModifier {
                 SettingsView()
             case .about:
                 AboutView()
+            case .notifications:
+                NotificationsView()
+            case .notificationViewMore(let id, let title):
+                NotificationViewMoreView(notificationId: id, title: title)
+            case .infoCategory(let cid, let title):
+                InfoCategoryView(categoryId: cid, title: title)
+            case .watchlist:
+                WatchlistView()
+            case .novelMarkers:
+                NovelMarkersView()
         }
     }
 }

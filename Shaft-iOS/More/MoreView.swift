@@ -25,6 +25,9 @@ struct MoreView: View {
             }
 
             Section {
+                NavigationLink(value: AppRoute.notifications) {
+                    Label(l10n.t(.notificationsTitle), systemImage: "bell")
+                }
                 NavigationLink(value: AppRoute.history) {
                     Label(l10n.t(.historyTitle), systemImage: "clock.arrow.circlepath")
                 }
@@ -41,6 +44,12 @@ struct MoreView: View {
                     NavigationLink(value: AppRoute.userFollowing(userId: me.id)) {
                         Label(l10n.t(.profileFollowing), systemImage: "person.2")
                     }
+                }
+                NavigationLink(value: AppRoute.watchlist) {
+                    Label(l10n.t(.watchlistTitle), systemImage: "sparkles.tv")
+                }
+                NavigationLink(value: AppRoute.novelMarkers) {
+                    Label(l10n.t(.novelMarkersTitle), systemImage: "bookmark")
                 }
             }
 

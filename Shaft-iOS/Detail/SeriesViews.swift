@@ -101,6 +101,9 @@ private final class NovelSeriesVM {
     var isLoading = false
     var isLoadingMore = false
     var errorMessage: String?
+    /// Watchlist (追更) toggle state, seeded from `novel_series_detail.watchlist_added`.
+    var watchlistAdded = false
+    var isTogglingWatchlist = false
 
     @ObservationIgnored private let api: PixivAPI
 
@@ -120,8 +123,27 @@ private final class NovelSeriesVM {
             detail = r.novelSeriesDetail
             novels = r.novels
             nextUrl = r.nextUrl
+            watchlistAdded = r.novelSeriesDetail?.watchlistAdded == true
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Optimistic toggle, rolled back on failure — Shaft `toggleWatchlist`.
+    func toggleWatchlist() async {
+        guard !isTogglingWatchlist else { return }
+        isTogglingWatchlist = true
+        defer { isTogglingWatchlist = false }
+        let next = !watchlistAdded
+        watchlistAdded = next
+        do {
+            if next {
+                _ = try await api.addToWatchlist(kind: "novel", seriesId: seriesId)
+            } else {
+                _ = try await api.removeFromWatchlist(kind: "novel", seriesId: seriesId)
+            }
+        } catch {
+            watchlistAdded = !next
         }
     }
 
@@ -149,17 +171,39 @@ struct NovelSeriesView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let d = vm.detail {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(d.title ?? "")
-                        .font(.title3.bold())
-                    if let count = d.contentCount {
-                        Text("\(count)").font(.caption).foregroundStyle(.secondary)
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(d.title ?? "")
+                            .font(.title3.bold())
+                        if let count = d.contentCount {
+                            Text("\(count)").font(.caption).foregroundStyle(.secondary)
+                        }
+                        if let cap = d.caption, !cap.isEmpty {
+                            Text(cap).font(.footnote).foregroundStyle(.secondary).lineLimit(3)
+                        }
                     }
-                    if let cap = d.caption, !cap.isEmpty {
-                        Text(cap).font(.footnote).foregroundStyle(.secondary).lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    // 追更 toggle — pixiv's native series-header watchlist switch.
+                    Button {
+                        Task { await vm.toggleWatchlist() }
+                    } label: {
+                        Label(
+                            l10n.t(vm.watchlistAdded ? .watchlistAdded : .watchlistAdd),
+                            systemImage: vm.watchlistAdded ? "checkmark" : "plus"
+                        )
+                        .font(.caption.bold())
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(
+                            vm.watchlistAdded
+                                ? AnyShapeStyle(Color(.secondarySystemBackground))
+                                : AnyShapeStyle(Color.accentColor.opacity(0.15)),
+                            in: .capsule
+                        )
+                        .foregroundStyle(vm.watchlistAdded ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
                     }
+                    .buttonStyle(.plain)
+                    .disabled(vm.isTogglingWatchlist)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16).padding(.vertical, 8)
                 Divider()
             }

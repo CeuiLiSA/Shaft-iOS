@@ -333,10 +333,14 @@ struct NovelSeriesDetail: Codable, Hashable, Sendable {
     let caption: String?
     let contentCount: Int?
     let user: PixivUser?
+    /// Whether the series is in the signed-in user's watchlist (追更) —
+    /// initial state for the series-page toggle.
+    let watchlistAdded: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, title, caption, user
         case contentCount = "content_count"
+        case watchlistAdded = "watchlist_added"
     }
 }
 
@@ -579,6 +583,186 @@ struct BookmarkDetailResponse: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case bookmarkDetail = "bookmark_detail"
     }
+}
+
+// MARK: - Notifications (`/v1/notification/list`, `/v1/notification/view-more`)
+
+/// Both endpoints share this envelope — view-more is a flattened sub-list of a
+/// grouped item (one whose `view_more` is non-nil). See Shaft
+/// `NotificationResponse.kt`.
+struct NotificationListResponse: Codable, Sendable {
+    let notifications: [NotificationItem]
+    let nextUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case notifications
+        case nextUrl = "next_url"
+    }
+}
+
+struct NotificationItem: Codable, Hashable, Sendable, Identifiable {
+    let id: Int64
+    let createdDatetime: String?
+    /// Server hint only (7 = bookmark, 8 = follow observed); rendering relies
+    /// 100% on the HTML in `content.text`, so unknown types don't break.
+    let type: Int?
+    let content: NotificationContent?
+    /// Non-nil means this row is a group head; tapping "view more" loads the
+    /// full sub-list via `/v1/notification/view-more?notification_id=id`.
+    let viewMore: NotificationViewMore?
+    /// Always a `pixiv://` scheme URL (illusts/users/novels) — routed in-app.
+    let targetUrl: String?
+    let isRead: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, content
+        case createdDatetime = "created_datetime"
+        case viewMore = "view_more"
+        case targetUrl = "target_url"
+        case isRead = "is_read"
+    }
+}
+
+struct NotificationContent: Codable, Hashable, Sendable {
+    /// HTML with the user name in `<b>` — render bold from that, nothing else.
+    let text: String?
+    let leftIcon: String?
+    let leftImage: String?
+    let rightIcon: String?
+    let rightImage: String?
+
+    enum CodingKeys: String, CodingKey {
+        case text
+        case leftIcon = "left_icon"
+        case leftImage = "left_image"
+        case rightIcon = "right_icon"
+        case rightImage = "right_image"
+    }
+}
+
+struct NotificationViewMore: Codable, Hashable, Sendable {
+    let unreadExists: Bool?
+    let title: String?
+
+    enum CodingKeys: String, CodingKey {
+        case unreadExists = "unread_exists"
+        case title
+    }
+}
+
+// MARK: - Announcements (`/v1/info/latest`, `/v1/info/list`)
+
+/// First-screen aggregate: a few recent entries per category, no pagination.
+struct InfoLatestResponse: Codable, Sendable {
+    let categorizedInfos: [CategorizedInfo]
+
+    enum CodingKeys: String, CodingKey {
+        case categorizedInfos = "categorized_infos"
+    }
+}
+
+/// Single-category drill-in (`?cid=N`) — note the *singular* field name.
+struct InfoListResponse: Codable, Sendable {
+    let categorizedInfo: CategorizedInfo?
+    let nextUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case categorizedInfo = "categorized_info"
+        case nextUrl = "next_url"
+    }
+}
+
+struct CategorizedInfo: Codable, Hashable, Sendable, Identifiable {
+    let categoryId: Int
+    let categoryTitle: String?
+    let infoList: [InfoItem]
+
+    enum CodingKeys: String, CodingKey {
+        case categoryId = "category_id"
+        case categoryTitle = "category_title"
+        case infoList = "info_list"
+    }
+
+    var id: Int { categoryId }
+}
+
+struct InfoItem: Codable, Hashable, Sendable, Identifiable {
+    let id: Int64
+    let title: String?
+    let date: String?
+    let url: String?
+    let isRecent: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, date, url
+        case isRecent = "is_recent"
+    }
+}
+
+// MARK: - Watchlist (`/v1/watchlist/{manga|novel}`)
+
+/// Both manga and novel watchlists return `{series: […]}` with this item shape.
+struct WatchlistResponse: Codable, Sendable {
+    let series: [WatchlistItem]
+    let nextUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case series
+        case nextUrl = "next_url"
+    }
+}
+
+struct WatchlistItem: Codable, Hashable, Sendable, Identifiable {
+    let id: Int64
+    let title: String?
+    let url: String?
+    /// Non-nil with empty title/user means the series is masked (deleted /
+    /// restricted) — show the mask text, disable navigation.
+    let maskText: String?
+    let publishedContentCount: Int?
+    let lastPublishedContentDatetime: String?
+    let latestContentId: Int64?
+    let user: PixivUser?
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, url, user
+        case maskText = "mask_text"
+        case publishedContentCount = "published_content_count"
+        case lastPublishedContentDatetime = "last_published_content_datetime"
+        case latestContentId = "latest_content_id"
+    }
+
+    var isMasked: Bool {
+        (title ?? "").isEmpty && maskText != nil && (user == nil || user?.id == 0)
+    }
+}
+
+// MARK: - Novel markers (`/v2/novel/markers`)
+
+struct NovelMarkersResponse: Codable, Sendable {
+    let markedNovels: [MarkedNovel]
+    let nextUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case markedNovels = "marked_novels"
+        case nextUrl = "next_url"
+    }
+}
+
+struct MarkedNovel: Codable, Hashable, Sendable, Identifiable {
+    let novel: Novel
+    let novelMarker: NovelMarker?
+
+    enum CodingKeys: String, CodingKey {
+        case novel
+        case novelMarker = "novel_marker"
+    }
+
+    var id: Int64 { novel.id }
+}
+
+struct NovelMarker: Codable, Hashable, Sendable {
+    let page: Int?
 }
 
 struct SelfProfileResponse: Codable, Sendable {

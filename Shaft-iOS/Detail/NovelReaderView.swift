@@ -10,6 +10,11 @@ final class NovelReaderViewModel {
     var pages: [String] = []
     var isLoading = false
     var errorMessage: String?
+    /// 1-based reader page the marker sits on; 0 = no marker. Shaft semantics:
+    /// one marker per novel — marking another page overwrites, marking the
+    /// same page removes it.
+    var markerPage: Int = 0
+    var isTogglingMarker = false
 
     @ObservationIgnored private let api: PixivAPI
 
@@ -41,8 +46,27 @@ final class NovelReaderViewModel {
             author = extracted.author
             rawText = extracted.text
             pages = paginate(extracted.text)
+            markerPage = extracted.markerPage
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func toggleMarker(at page: Int) async {
+        guard !isTogglingMarker else { return }
+        isTogglingMarker = true
+        defer { isTogglingMarker = false }
+        let previous = markerPage
+        do {
+            if markerPage == page {
+                markerPage = 0
+                _ = try await api.deleteNovelMarker(novelId)
+            } else {
+                markerPage = page
+                _ = try await api.addNovelMarker(novelId, page: page)
+            }
+        } catch {
+            markerPage = previous
         }
     }
 
@@ -66,7 +90,14 @@ final class NovelReaderViewModel {
 }
 
 enum NovelHTMLExtractor {
-    struct Extracted { let title: String; let author: String; let text: String }
+    struct Extracted {
+        let title: String
+        let author: String
+        let text: String
+        /// Reading-marker page from the embedded `"marker":{"page":N}` blob —
+        /// 0 = no marker. Same source Shaft's `WebNovelParser` reads.
+        var markerPage: Int = 0
+    }
 
     static func extract(from html: String) -> Extracted {
         // pixiv.context = {…};   — single-line JSON-ish blob.
@@ -86,7 +117,15 @@ enum NovelHTMLExtractor {
             .map(unescapeJSON)
             ?? stripHTML(html)
 
-        return Extracted(title: title, author: author, text: text)
+        return Extracted(title: title, author: author, text: text, markerPage: markerPage(in: blob))
+    }
+
+    private static func markerPage(in blob: String) -> Int {
+        let pattern = #""marker"\s*:\s*\{[^}]*"page"\s*:\s*(\d+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let m = regex.firstMatch(in: blob, range: NSRange(blob.startIndex..<blob.endIndex, in: blob)),
+              let r = Range(m.range(at: 1), in: blob) else { return 0 }
+        return Int(blob[r]) ?? 0
     }
 
     private static func stringField(_ name: String, in blob: String) -> String? {
@@ -165,7 +204,19 @@ struct NovelReaderView: View {
                         Text(vm.title).font(.footnote.bold()).lineLimit(1)
                     }
                     Spacer()
-                    Color.clear.frame(width: 36, height: 36)
+                    // Reading marker (Shaft 小说书签): marks the current page;
+                    // tapping on the marked page removes it, on another page
+                    // moves it. Filled icon = this novel has a marker.
+                    Button {
+                        Task { await vm.toggleMarker(at: page + 1) }
+                    } label: {
+                        Image(systemName: vm.markerPage > 0 ? "bookmark.fill" : "bookmark")
+                            .font(.title3)
+                            .foregroundStyle(vm.markerPage > 0 ? Color.accentColor : .primary)
+                            .frame(width: 36, height: 36)
+                            .background(.thinMaterial, in: .circle)
+                    }
+                    .disabled(vm.pages.isEmpty || vm.isTogglingMarker)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
@@ -181,6 +232,12 @@ struct NovelReaderView: View {
                 }
             }
         }
-        .task { await vm.loadIfNeeded() }
+        .task {
+            await vm.loadIfNeeded()
+            // Resume from the reading marker, like Shaft's FragmentNovelHolder.
+            if vm.markerPage > 0, !vm.pages.isEmpty {
+                page = min(vm.markerPage - 1, vm.pages.count - 1)
+            }
+        }
     }
 }

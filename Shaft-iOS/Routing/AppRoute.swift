@@ -35,6 +35,11 @@ enum AppRoute: Hashable, Codable, Sendable {
     case mute
     case settings
     case about
+    case notifications
+    case notificationViewMore(notificationId: Int64, title: String)
+    case infoCategory(categoryId: Int, title: String)
+    case watchlist
+    case novelMarkers
 
     enum CommentTarget: Hashable, Codable, Sendable {
         case illust(Int64)
