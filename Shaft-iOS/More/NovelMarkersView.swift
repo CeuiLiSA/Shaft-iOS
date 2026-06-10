@@ -8,6 +8,9 @@ final class NovelMarkersVM {
     var isLoading = false
     var isLoadingMore = false
     var errorMessage: String?
+    /// Errors from row actions (remove) — shown as an alert, since the inline
+    /// error overlay only renders on an empty list.
+    var actionError: String?
 
     @ObservationIgnored private let api: PixivAPI
 
@@ -40,14 +43,17 @@ final class NovelMarkersVM {
         }
     }
 
+    /// Optimistic removal; on failure the item is re-inserted at its original
+    /// index (a whole-array snapshot would drop pages appended by a concurrent
+    /// loadMore while the request was in flight).
     func removeMarker(_ item: MarkedNovel) async {
-        let kept = items
+        let removedIndex = items.firstIndex { $0.id == item.id }
         items.removeAll { $0.id == item.id }
         do {
             _ = try await api.deleteNovelMarker(item.novel.id)
         } catch {
-            items = kept
-            errorMessage = error.localizedDescription
+            items.insert(item, at: min(removedIndex ?? items.count, items.count))
+            actionError = error.localizedDescription
         }
     }
 }
@@ -75,7 +81,7 @@ struct NovelMarkersView: View {
                                 Text(name).font(.caption).foregroundStyle(.secondary)
                             }
                             if let page = item.novelMarker?.page, page > 0 {
-                                Text(String(format: l10n.t(.markerPageFmt), "\(page)"))
+                                Text(l10n.t(.markerPageFmt, "\(page)"))
                                     .font(.caption2.bold())
                                     .padding(.horizontal, 8).padding(.vertical, 3)
                                     .background(Color.accentColor.opacity(0.15), in: .capsule)
@@ -115,6 +121,10 @@ struct NovelMarkersView: View {
         .task { await vm.loadIfNeeded() }
         .navigationTitle(l10n.t(.novelMarkersTitle))
         .navigationBarTitleDisplayMode(.inline)
+        .alert(vm.actionError ?? "", isPresented: Binding(
+            get: { vm.actionError != nil },
+            set: { if !$0 { vm.actionError = nil } }
+        )) {}
     }
 
     private func coverURL(_ novel: Novel) -> URL? {

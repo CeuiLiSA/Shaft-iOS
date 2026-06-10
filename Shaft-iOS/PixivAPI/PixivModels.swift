@@ -621,6 +621,20 @@ struct NotificationItem: Codable, Hashable, Sendable, Identifiable {
         case targetUrl = "target_url"
         case isRead = "is_read"
     }
+
+    /// Tolerate a missing `id` (defaults to 0, like upstream's `id: Long = 0L`)
+    /// — one odd row must not fail the whole list decode. The UI already
+    /// guards `id > 0` before id-dependent actions.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(Int64.self, forKey: .id) ?? 0
+        createdDatetime = try c.decodeIfPresent(String.self, forKey: .createdDatetime)
+        type = try c.decodeIfPresent(Int.self, forKey: .type)
+        content = try c.decodeIfPresent(NotificationContent.self, forKey: .content)
+        viewMore = try c.decodeIfPresent(NotificationViewMore.self, forKey: .viewMore)
+        targetUrl = try c.decodeIfPresent(String.self, forKey: .targetUrl)
+        isRead = try c.decodeIfPresent(Bool.self, forKey: .isRead)
+    }
 }
 
 struct NotificationContent: Codable, Hashable, Sendable {
@@ -697,6 +711,17 @@ struct InfoItem: Codable, Hashable, Sendable, Identifiable {
         case id, title, date, url
         case isRecent = "is_recent"
     }
+
+    /// Tolerate a missing `id` (upstream defaults to 0L) — one odd row must
+    /// not fail the whole list decode.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(Int64.self, forKey: .id) ?? 0
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        date = try c.decodeIfPresent(String.self, forKey: .date)
+        url = try c.decodeIfPresent(String.self, forKey: .url)
+        isRecent = try c.decodeIfPresent(Bool.self, forKey: .isRecent)
+    }
 }
 
 // MARK: - Watchlist (`/v1/watchlist/{manga|novel}`)
@@ -732,8 +757,12 @@ struct WatchlistItem: Codable, Hashable, Sendable, Identifiable {
         case latestContentId = "latest_content_id"
     }
 
+    /// Upstream `WatchlistMangaAdapter.isInvalidItem` parity: all four
+    /// conditions must hold (empty title, no cover url, mask text present,
+    /// zero/absent user). A missing `user` object counts as id 0 — upstream
+    /// would NPE there, which is a bug, not a behavior to copy.
     var isMasked: Bool {
-        (title ?? "").isEmpty && maskText != nil && (user == nil || user?.id == 0)
+        (title ?? "").isEmpty && url == nil && maskText != nil && (user?.id ?? 0) == 0
     }
 }
 

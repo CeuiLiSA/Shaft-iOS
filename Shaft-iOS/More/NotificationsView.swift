@@ -128,6 +128,11 @@ final class InfoCategoryVM {
 struct NotificationsView: View {
     private enum Tab: Hashable { case notifications, info }
     @State private var tab: Tab = .notifications
+    // VMs live here, not in the switched-out child pages — flipping the
+    // segmented control must keep loaded items and pagination (same pattern
+    // as WatchlistView).
+    @State private var listVM = NotificationListVM()
+    @State private var infoVM = InfoLatestVM()
     @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
@@ -141,8 +146,8 @@ struct NotificationsView: View {
             .padding(.vertical, 8)
 
             switch tab {
-            case .notifications: NotificationListPage()
-            case .info: InfoLatestPage()
+            case .notifications: NotificationListPage(vm: listVM)
+            case .info: InfoLatestPage(vm: infoVM)
             }
         }
         .navigationTitle(l10n.t(.notificationsTitle))
@@ -151,7 +156,7 @@ struct NotificationsView: View {
 }
 
 private struct NotificationListPage: View {
-    @State private var vm = NotificationListVM()
+    @Bindable var vm: NotificationListVM
     @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
@@ -262,7 +267,8 @@ private struct NotificationCell: View {
                 Text(Self.boldHTML(item.content?.text ?? ""))
                     .font(.subheadline)
                     .multilineTextAlignment(.leading)
-                if let ago = timeAgo {
+                let ago = V3Date.relative(item.createdDatetime)
+                if !ago.isEmpty {
                     Text(ago).font(.caption2).foregroundStyle(.tertiary)
                 }
             }
@@ -298,11 +304,10 @@ private struct NotificationCell: View {
         (item.content?.rightImage ?? item.content?.rightIcon).flatMap(URL.init(string:))
     }
 
-    /// `target_url` is always a `pixiv://` scheme — reuse the search link
-    /// parser for illusts/users/novels.
+    /// `target_url` is always a `pixiv://` scheme — strict resolver, unknown
+    /// types stay inert (upstream `NotificationTargetRouter` parity).
     private var targetRoute: AppRoute? {
-        guard let t = item.targetUrl, t.lowercased().hasPrefix("pixiv://") else { return nil }
-        return PixivLinkParser.shortcuts(for: t).first?.route
+        PixivDeepLink.route(for: item.targetUrl)
     }
 
     private var httpTarget: URL? {
@@ -310,41 +315,35 @@ private struct NotificationCell: View {
         return URL(string: t)
     }
 
-    private var timeAgo: String? {
-        guard let raw = item.createdDatetime,
-              let date = ISO8601DateFormatter().date(from: raw) else { return nil }
-        let fmt = RelativeDateTimeFormatter()
-        fmt.unitsStyle = .short
-        return fmt.localizedString(for: date, relativeTo: Date())
-    }
-
-    /// Server text is HTML with the user name in `<b>` — convert just that to
-    /// markdown bold, strip any other tags, and render as AttributedString.
+    /// Server text is HTML with the user name in `<b>` — bold exactly those
+    /// segments, everything else rendered literally (no markdown parsing:
+    /// user names with `*`/`[]()` must not be interpreted). Tag stripping and
+    /// entity decoding delegate to `V3Caption.plain`.
     static func boldHTML(_ html: String) -> AttributedString {
-        var s = html
-            .replacingOccurrences(of: "<b>", with: "**")
-            .replacingOccurrences(of: "</b>", with: "**")
-            .replacingOccurrences(of: "<br />", with: "\n")
-            .replacingOccurrences(of: "<br>", with: "\n")
-            .replacingOccurrences(of: "<.+?>", with: "", options: .regularExpression)
-        s = s
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&#39;", with: "'")
-        return (try? AttributedString(
-            markdown: s,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        )) ?? AttributedString(s.replacingOccurrences(of: "**", with: ""))
+        var result = AttributedString()
+        // Per-segment decode must NOT trim — it would eat the spaces around
+        // the bold name. Trim the whole string once instead.
+        var rest = Substring(html.trimmingCharacters(in: .whitespacesAndNewlines))
+        while let open = rest.range(of: "<b>", options: .caseInsensitive) {
+            result += AttributedString(V3Caption.plain(String(rest[..<open.lowerBound]), trimmed: false))
+            rest = rest[open.upperBound...]
+            let close = rest.range(of: "</b>", options: .caseInsensitive)
+                ?? rest.endIndex..<rest.endIndex
+            var bold = AttributedString(V3Caption.plain(String(rest[..<close.lowerBound]), trimmed: false))
+            bold.inlinePresentationIntent = .stronglyEmphasized
+            result += bold
+            rest = rest[close.upperBound...]
+        }
+        result += AttributedString(V3Caption.plain(String(rest), trimmed: false))
+        return result
     }
 }
 
 // MARK: - Announcements (公告)
 
 private struct InfoLatestPage: View {
-    @State private var vm = InfoLatestVM()
-    @State private var openItem: InfoItem?
+    @Bindable var vm: InfoLatestVM
+    @State private var articleURL: URL?
     @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
@@ -352,7 +351,7 @@ private struct InfoLatestPage: View {
             ForEach(vm.categories) { category in
                 Section {
                     ForEach(category.infoList) { item in
-                        InfoRow(item: item) { openItem = item }
+                        InfoRow(item: item) { articleURL = $0 }
                     }
                     NavigationLink(value: AppRoute.infoCategory(
                         categoryId: category.categoryId,
@@ -379,14 +378,7 @@ private struct InfoLatestPage: View {
         }
         .refreshable { await vm.load() }
         .task { await vm.loadIfNeeded() }
-        .navigationDestination(isPresented: Binding(
-            get: { openItem != nil },
-            set: { if !$0 { openItem = nil } }
-        )) {
-            if let url = openItem?.url.flatMap(URL.init(string:)) {
-                WebArticleView(url: url)
-            }
-        }
+        .navigationDestination(item: $articleURL) { WebArticleView(url: $0) }
     }
 }
 
@@ -394,7 +386,7 @@ private struct InfoLatestPage: View {
 struct InfoCategoryView: View {
     let title: String
     @State private var vm: InfoCategoryVM
-    @State private var openItem: InfoItem?
+    @State private var articleURL: URL?
     @Environment(OnboardingStore.self) private var l10n
 
     init(categoryId: Int, title: String) {
@@ -405,7 +397,7 @@ struct InfoCategoryView: View {
     var body: some View {
         List {
             ForEach(vm.items) { item in
-                InfoRow(item: item) { openItem = item }
+                InfoRow(item: item) { articleURL = $0 }
             }
             if vm.nextUrl != nil, !vm.items.isEmpty {
                 Color.clear
@@ -426,23 +418,20 @@ struct InfoCategoryView: View {
         .task { await vm.loadIfNeeded() }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(isPresented: Binding(
-            get: { openItem != nil },
-            set: { if !$0 { openItem = nil } }
-        )) {
-            if let url = openItem?.url.flatMap(URL.init(string:)) {
-                WebArticleView(url: url)
-            }
-        }
+        .navigationDestination(item: $articleURL) { WebArticleView(url: $0) }
     }
 }
 
 private struct InfoRow: View {
     let item: InfoItem
-    let onOpen: () -> Void
+    /// Called only with a parseable URL — rows with a missing/bad `url` stay
+    /// inert instead of pushing a blank page.
+    let onOpen: (URL) -> Void
 
     var body: some View {
-        Button(action: onOpen) {
+        Button {
+            if let url = item.url.flatMap(URL.init(string:)) { onOpen(url) }
+        } label: {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     if item.isRecent == true {

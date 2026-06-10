@@ -10,6 +10,9 @@ final class CommentsViewModel {
     var isLoading = false
     var isLoadingMore = false
     var errorMessage: String?
+    /// Errors from row actions (delete) — shown as an alert, since the inline
+    /// error overlay only renders on an empty list.
+    var actionError: String?
 
     /// Replies keyed by parent comment id.
     var replies: [Int64: [CommentItem]] = [:]
@@ -107,14 +110,24 @@ final class CommentsViewModel {
     }
 
     /// Delete one of the signed-in user's own comments — optimistic removal,
-    /// reload on failure to restore server truth.
+    /// re-inserted at its original position on failure (no full reload: that
+    /// would wipe pagination and expanded threads for one failed row).
     func delete(_ comment: CommentItem, parentId: Int64? = nil) async {
+        let removedIndex: Int?
         if let parentId {
+            removedIndex = replies[parentId]?.firstIndex { $0.id == comment.id }
             replies[parentId]?.removeAll { $0.id == comment.id }
+            // Upstream parity (CommentsDataSource): the parent's reply
+            // affordance follows the remaining children.
+            if replies[parentId]?.isEmpty == true {
+                setHasReplies(false, for: parentId)
+                expandedReplies.remove(parentId)
+            }
         } else {
+            removedIndex = comments.firstIndex { $0.id == comment.id }
             comments.removeAll { $0.id == comment.id }
-            if let total = totalComments { totalComments = max(0, total - 1) }
         }
+        if let total = totalComments { totalComments = max(0, total - 1) }
         do {
             let type: String
             switch target {
@@ -123,9 +136,26 @@ final class CommentsViewModel {
             }
             _ = try await api.deleteComment(type: type, commentId: comment.id)
         } catch {
-            errorMessage = error.localizedDescription
-            await load()
+            if let parentId {
+                var thread = replies[parentId] ?? []
+                thread.insert(comment, at: min(removedIndex ?? thread.count, thread.count))
+                replies[parentId] = thread
+                setHasReplies(true, for: parentId)
+            } else {
+                comments.insert(comment, at: min(removedIndex ?? comments.count, comments.count))
+            }
+            if let total = totalComments { totalComments = total + 1 }
+            actionError = error.localizedDescription
         }
+    }
+
+    private func setHasReplies(_ value: Bool, for commentId: Int64) {
+        guard let idx = comments.firstIndex(where: { $0.id == commentId }) else { return }
+        let c = comments[idx]
+        comments[idx] = CommentItem(
+            id: c.id, comment: c.comment, date: c.date, user: c.user,
+            hasReplies: value, parentComment: c.parentComment
+        )
     }
 }
 
@@ -236,6 +266,10 @@ struct CommentsView: View {
         .navigationTitle(l10n.t(.commentsTitle))
         .navigationBarTitleDisplayMode(.inline)
         .task { await vm.loadIfNeeded() }
+        .alert(vm.actionError ?? "", isPresented: Binding(
+            get: { vm.actionError != nil },
+            set: { if !$0 { vm.actionError = nil } }
+        )) {}
     }
 
     private func replyHint(for c: CommentItem) -> String {

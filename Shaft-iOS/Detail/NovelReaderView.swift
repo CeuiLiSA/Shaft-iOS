@@ -8,12 +8,16 @@ final class NovelReaderViewModel {
     var author: String = ""
     var rawText: String = ""
     var pages: [String] = []
+    /// 1-based `[newpage]` chapter each reader page belongs to — parallel to
+    /// `pages`. The SERVER marker unit is this chapter index (upstream
+    /// `NovelParseHelper` splits on `[newpage]`), not our char-based pages.
+    var pageChapters: [Int] = []
     var isLoading = false
     var errorMessage: String?
-    /// 1-based reader page the marker sits on; 0 = no marker. Shaft semantics:
-    /// one marker per novel — marking another page overwrites, marking the
-    /// same page removes it.
-    var markerPage: Int = 0
+    /// 1-based chapter the marker sits on; 0 = no marker. Shaft semantics:
+    /// one marker per novel — marking another chapter overwrites, marking the
+    /// same chapter removes it.
+    var markerChapter: Int = 0
     var isTogglingMarker = false
 
     @ObservationIgnored private let api: PixivAPI
@@ -45,35 +49,65 @@ final class NovelReaderViewModel {
             title = extracted.title
             author = extracted.author
             rawText = extracted.text
-            pages = paginate(extracted.text)
-            markerPage = extracted.markerPage
+            (pages, pageChapters) = Self.paginate(extracted.text)
+            markerChapter = extracted.markerPage
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    func toggleMarker(at page: Int) async {
-        guard !isTogglingMarker else { return }
+    /// First reader page of the marked chapter — where "resume from marker"
+    /// lands. nil when no marker.
+    var resumePageIndex: Int? {
+        guard markerChapter > 0 else { return nil }
+        return pageChapters.firstIndex(of: markerChapter)
+            ?? (pages.isEmpty ? nil : pages.count - 1)
+    }
+
+    /// Toggle the marker for the chapter containing the given 0-based reader
+    /// page. Same chapter → delete, other chapter → add (server overwrites).
+    func toggleMarker(atPageIndex index: Int) async {
+        guard !isTogglingMarker, pageChapters.indices.contains(index) else { return }
         isTogglingMarker = true
         defer { isTogglingMarker = false }
-        let previous = markerPage
+        let chapter = pageChapters[index]
+        let previous = markerChapter
         do {
-            if markerPage == page {
-                markerPage = 0
+            if markerChapter == chapter {
+                markerChapter = 0
                 _ = try await api.deleteNovelMarker(novelId)
             } else {
-                markerPage = page
-                _ = try await api.addNovelMarker(novelId, page: page)
+                markerChapter = chapter
+                _ = try await api.addNovelMarker(novelId, page: chapter)
             }
         } catch {
-            markerPage = previous
+            markerChapter = previous
         }
+    }
+
+    /// Two-level paginator. The text is first split on pixiv's `[newpage]`
+    /// chapter token (the unit the server marker API speaks — upstream
+    /// `NovelParseHelper` does the same), then each chapter is char-paginated
+    /// for our swipe reader. Returns the display pages plus each page's
+    /// 1-based chapter index.
+    static func paginate(_ text: String, charsPerPage: Int = 1100) -> ([String], [Int]) {
+        guard !text.isEmpty else { return ([], []) }
+        var pages: [String] = []
+        var chapters: [Int] = []
+        for (i, chapterText) in text.components(separatedBy: "[newpage]").enumerated() {
+            let trimmed = chapterText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            for p in paginateChapter(trimmed, charsPerPage: charsPerPage) {
+                pages.append(p)
+                chapters.append(i + 1)
+            }
+        }
+        return (pages, chapters)
     }
 
     /// Greedy by-character paginator. Pixiv novels use `\n\n` for paragraph
     /// breaks; we stop at the last paragraph that fits the page budget.
-    private func paginate(_ text: String, charsPerPage: Int = 1100) -> [String] {
-        guard !text.isEmpty else { return [] }
+    private static func paginateChapter(_ text: String, charsPerPage: Int) -> [String] {
         var pages: [String] = []
         var current = ""
         for paragraph in text.components(separatedBy: "\n\n") {
@@ -117,15 +151,20 @@ enum NovelHTMLExtractor {
             .map(unescapeJSON)
             ?? stripHTML(html)
 
-        return Extracted(title: title, author: author, text: text, markerPage: markerPage(in: blob))
+        // Marker lookup scans the WHOLE document, not just the captured blob:
+        // upstream `WebNovelParser` reads it from the
+        // `Object.defineProperty(window, 'pixiv', …)` script, which is a
+        // different blob than `pixiv.context`. Inside JSON string values every
+        // quote is escaped (\"), so a bare `"marker":{` can only be real JSON.
+        return Extracted(title: title, author: author, text: text, markerPage: markerPage(in: html))
     }
 
-    private static func markerPage(in blob: String) -> Int {
+    private static func markerPage(in html: String) -> Int {
         let pattern = #""marker"\s*:\s*\{[^}]*"page"\s*:\s*(\d+)"#
         guard let regex = try? NSRegularExpression(pattern: pattern),
-              let m = regex.firstMatch(in: blob, range: NSRange(blob.startIndex..<blob.endIndex, in: blob)),
-              let r = Range(m.range(at: 1), in: blob) else { return 0 }
-        return Int(blob[r]) ?? 0
+              let m = regex.firstMatch(in: html, range: NSRange(html.startIndex..<html.endIndex, in: html)),
+              let r = Range(m.range(at: 1), in: html) else { return 0 }
+        return Int(html[r]) ?? 0
     }
 
     private static func stringField(_ name: String, in blob: String) -> String? {
@@ -204,15 +243,16 @@ struct NovelReaderView: View {
                         Text(vm.title).font(.footnote.bold()).lineLimit(1)
                     }
                     Spacer()
-                    // Reading marker (Shaft 小说书签): marks the current page;
-                    // tapping on the marked page removes it, on another page
-                    // moves it. Filled icon = this novel has a marker.
+                    // Reading marker (Shaft 小说书签): marks the [newpage]
+                    // chapter containing the current page; tapping in the
+                    // marked chapter removes it, elsewhere moves it. Filled
+                    // icon = this novel has a marker.
                     Button {
-                        Task { await vm.toggleMarker(at: page + 1) }
+                        Task { await vm.toggleMarker(atPageIndex: page) }
                     } label: {
-                        Image(systemName: vm.markerPage > 0 ? "bookmark.fill" : "bookmark")
+                        Image(systemName: vm.markerChapter > 0 ? "bookmark.fill" : "bookmark")
                             .font(.title3)
-                            .foregroundStyle(vm.markerPage > 0 ? Color.accentColor : .primary)
+                            .foregroundStyle(vm.markerChapter > 0 ? Color.accentColor : .primary)
                             .frame(width: 36, height: 36)
                             .background(.thinMaterial, in: .circle)
                     }
@@ -235,8 +275,8 @@ struct NovelReaderView: View {
         .task {
             await vm.loadIfNeeded()
             // Resume from the reading marker, like Shaft's FragmentNovelHolder.
-            if vm.markerPage > 0, !vm.pages.isEmpty {
-                page = min(vm.markerPage - 1, vm.pages.count - 1)
+            if let resume = vm.resumePageIndex {
+                page = resume
             }
         }
     }

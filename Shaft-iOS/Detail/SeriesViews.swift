@@ -123,7 +123,11 @@ private final class NovelSeriesVM {
             detail = r.novelSeriesDetail
             novels = r.novels
             nextUrl = r.nextUrl
-            watchlistAdded = r.novelSeriesDetail?.watchlistAdded == true
+            // Don't clobber an in-flight optimistic toggle with a response
+            // that predates it (refresh racing the add/delete POST).
+            if !isTogglingWatchlist {
+                watchlistAdded = r.novelSeriesDetail?.watchlistAdded == true
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -143,7 +147,8 @@ private final class NovelSeriesVM {
                 _ = try await api.removeFromWatchlist(kind: "novel", seriesId: seriesId)
             }
         } catch {
-            watchlistAdded = !next
+            // Roll back only if nothing else (e.g. a refresh) already moved it.
+            if watchlistAdded == next { watchlistAdded = !next }
         }
     }
 

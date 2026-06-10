@@ -46,3 +46,25 @@ enum AppRoute: Hashable, Codable, Sendable {
         case novel(Int64)
     }
 }
+
+/// Strict `pixiv://` deep-link resolver — only the three types upstream
+/// `NotificationTargetRouter` handles (illusts/novels/users); anything else
+/// returns nil so the caller stays inert instead of guessing. The search box
+/// keeps using `PixivLinkParser`, which is intentionally fuzzier.
+enum PixivDeepLink {
+    static func route(for url: String?) -> AppRoute? {
+        guard let url else { return nil }
+        let pattern = #"^pixiv://(illusts|novels|users)/(\d+)"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let m = regex.firstMatch(in: url, range: NSRange(url.startIndex..<url.endIndex, in: url)),
+              let typeRange = Range(m.range(at: 1), in: url),
+              let idRange = Range(m.range(at: 2), in: url),
+              let id = Int64(url[idRange]) else { return nil }
+        switch url[typeRange].lowercased() {
+        case "illusts": return .illustDetail(id)
+        case "novels": return .novelDetail(id)
+        case "users": return .userProfile(id)
+        default: return nil
+        }
+    }
+}

@@ -10,6 +10,11 @@ final class WatchlistVM {
     var isLoading = false
     var isLoadingMore = false
     var errorMessage: String?
+    /// Errors from row actions (remove) — shown as an alert, since the inline
+    /// error overlay only renders on an empty list.
+    var actionError: String?
+
+    var isManga: Bool { kind == "manga" }
 
     @ObservationIgnored private let api: PixivAPI
 
@@ -43,14 +48,17 @@ final class WatchlistVM {
         }
     }
 
+    /// Optimistic removal; on failure the item is re-inserted at its original
+    /// index (a whole-array snapshot would drop pages appended by a concurrent
+    /// loadMore while the request was in flight).
     func remove(_ item: WatchlistItem) async {
-        let kept = items
+        let removedIndex = items.firstIndex { $0.id == item.id }
         items.removeAll { $0.id == item.id }
         do {
             _ = try await api.removeFromWatchlist(kind: kind, seriesId: item.id)
         } catch {
-            items = kept
-            errorMessage = error.localizedDescription
+            items.insert(item, at: min(removedIndex ?? items.count, items.count))
+            actionError = error.localizedDescription
         }
     }
 }
@@ -74,8 +82,8 @@ struct WatchlistView: View {
             .padding(.vertical, 8)
 
             switch kind {
-            case .manga: WatchlistPage(vm: mangaVM, isManga: true)
-            case .novel: WatchlistPage(vm: novelVM, isManga: false)
+            case .manga: WatchlistPage(vm: mangaVM)
+            case .novel: WatchlistPage(vm: novelVM)
             }
         }
         .navigationTitle(l10n.t(.watchlistTitle))
@@ -85,7 +93,6 @@ struct WatchlistView: View {
 
 private struct WatchlistPage: View {
     @Bindable var vm: WatchlistVM
-    let isManga: Bool
     @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
@@ -98,7 +105,7 @@ private struct WatchlistPage: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
-                    WatchlistRow(item: item, isManga: isManga)
+                    WatchlistRow(item: item, isManga: vm.isManga)
                         .swipeActions(edge: .trailing) {
                             Button(role: .destructive) {
                                 Task { await vm.remove(item) }
@@ -127,6 +134,10 @@ private struct WatchlistPage: View {
         }
         .refreshable { await vm.load() }
         .task { await vm.loadIfNeeded() }
+        .alert(vm.actionError ?? "", isPresented: Binding(
+            get: { vm.actionError != nil },
+            set: { if !$0 { vm.actionError = nil } }
+        )) {}
     }
 }
 
@@ -150,7 +161,7 @@ private struct WatchlistRow: View {
                         Text(name).font(.caption).foregroundStyle(.secondary)
                     }
                     if let count = item.publishedContentCount {
-                        Text(String(format: l10n.t(.episodesFmt), "\(count)"))
+                        Text(l10n.t(.episodesFmt, "\(count)"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }

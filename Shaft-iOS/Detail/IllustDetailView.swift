@@ -1119,7 +1119,9 @@ enum V3Caption {
     /// Pixiv captions are HTML; render their text content (line breaks kept,
     /// tags stripped, common entities decoded). Links aren't tappable but the
     /// text is shown — parity with the V3 description block.
-    static func plain(_ html: String) -> String {
+    /// `trimmed: false` keeps surrounding whitespace — needed when decoding a
+    /// fragment mid-sentence (notification text around a `<b>` name).
+    static func plain(_ html: String, trimmed: Bool = true) -> String {
         var s = html
         for br in ["<br />", "<br/>", "<br>", "</p>", "</P>"] {
             s = s.replacingOccurrences(of: br, with: "\n")
@@ -1130,7 +1132,7 @@ enum V3Caption {
             "&#39;": "'", "&apos;": "'", "&nbsp;": " ",
         ]
         for (k, v) in entities { s = s.replacingOccurrences(of: k, with: v) }
-        return s.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed ? s.trimmingCharacters(in: .whitespacesAndNewlines) : s
     }
 }
 
