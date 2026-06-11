@@ -3,6 +3,10 @@ import Foundation
 enum LocalizedKey: String, CaseIterable, Sendable {
     // Login
     case loginTitle, loginSubtitle, loginAction, loginProvisional
+    // Landing page (1:1 page_login port)
+    case loginNow, signNow, loginRestoreEmail, loginRestoreUnavailable
+    case loginProxyTitle, loginProxyMessage, loginProxyConfirm
+    case landingTermsBase, termsOfService, privacyPolicy, readAgreement
 
     // Bottom tabs
     case tabRecommend, tabDiscover, tabWhatsNew

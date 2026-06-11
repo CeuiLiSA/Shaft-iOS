@@ -60,6 +60,7 @@
 		A1000000000000000000B069 /* AppFonts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F069 /* AppFonts.swift */; };
 		A1000000000000000000B070 /* montserrat_medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F070 /* montserrat_medium.ttf */; };
 		A1000000000000000000B071 /* montserrat_bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F071 /* montserrat_bold.ttf */; };
+		A1000000000000000000B072 /* montserrat_semi_bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F072 /* montserrat_semi_bold.ttf */; };
 		A1000000000000000000B049 /* MuteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F049 /* MuteStore.swift */; };
 		A1000000000000000000B050 /* MutedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F050 /* MutedView.swift */; };
 		A1000000000000000000B051 /* SeriesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F051 /* SeriesViews.swift */; };
@@ -135,6 +136,7 @@
 		A1000000000000000000F069 /* AppFonts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFonts.swift; sourceTree = "<group>"; };
 		A1000000000000000000F070 /* montserrat_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = montserrat_medium.ttf; sourceTree = "<group>"; };
 		A1000000000000000000F071 /* montserrat_bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = montserrat_bold.ttf; sourceTree = "<group>"; };
+		A1000000000000000000F072 /* montserrat_semi_bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = montserrat_semi_bold.ttf; sourceTree = "<group>"; };
 		A1000000000000000000F049 /* MuteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuteStore.swift; sourceTree = "<group>"; };
 		A1000000000000000000F050 /* MutedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutedView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F051 /* SeriesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesViews.swift; sourceTree = "<group>"; };
@@ -245,6 +247,7 @@
 				A1000000000000000000F069 /* AppFonts.swift */,
 				A1000000000000000000F070 /* montserrat_medium.ttf */,
 				A1000000000000000000F071 /* montserrat_bold.ttf */,
+				A1000000000000000000F072 /* montserrat_semi_bold.ttf */,
 				A1000000000000000000F058 /* Theme.swift */,
 			);
 			path = Common;
@@ -450,6 +453,7 @@
 				A1000000000000000000B003 /* Assets.xcassets in Resources */,
 				A1000000000000000000B070 /* montserrat_medium.ttf in Resources */,
 				A1000000000000000000B071 /* montserrat_bold.ttf in Resources */,
+				A1000000000000000000B072 /* montserrat_semi_bold.ttf in Resources */,
 				A1000000000000000000B063 /* tunnel-atlas.webp in Resources */,
 				A1000000000000000000B064 /* tunnel-atlas-lq.webp in Resources */,
 			);
@@ -666,7 +670,7 @@
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save illustrations to your photo library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_FILE = "Shaft-iOS/Info.plist";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -696,7 +700,7 @@
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save illustrations to your photo library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_FILE = "Shaft-iOS/Info.plist";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (

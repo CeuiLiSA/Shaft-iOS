@@ -21,8 +21,10 @@ struct ContentView: View {
         }
         .environment(onboarding)
         .environment(\.locale, onboarding.currentLocale)
-        .animation(.easeInOut(duration: 0.35), value: onboarding.hasUserConfigured)
-        .animation(.easeInOut(duration: 0.35), value: auth.token != nil)
+        // Upstream crossFadeLanguagePageToLoginPage runs 380ms; the tunnel
+        // keeps rendering behind both pages so only the content fades.
+        .animation(.easeInOut(duration: 0.38), value: onboarding.hasUserConfigured)
+        .animation(.easeInOut(duration: 0.38), value: auth.token != nil)
     }
 }
 

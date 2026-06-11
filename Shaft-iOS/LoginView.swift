@@ -59,9 +59,22 @@ final class AuthViewModel {
     }
 }
 
+/// 1:1 port of upstream `page_login.xml` + `FragmentLogin`'s login page: the
+/// tunnel keeps running behind a scrim; everything sits in a bottom-pinned
+/// column — two white pill buttons (login / register), the email-restore
+/// entry, then the terms checkbox row. Both buttons gate on the checkbox
+/// (`read_agreement` alert) and show the proxy-hint dialog before starting
+/// OAuth, exactly like `checkAndNext` → `openProxyHint`.
 struct LoginView: View {
     @Bindable var auth: AuthViewModel
     @Environment(OnboardingStore.self) private var l10n
+    @Environment(\.openURL) private var openURL
+
+    @State private var termsAccepted = false
+    @State private var showProxyHint = false
+    @State private var showReadAgreement = false
+    @State private var showRestoreUnavailable = false
+    @State private var pendingProvisional = false
 
     var body: some View {
         ZStack {
@@ -70,72 +83,136 @@ struct LoginView: View {
             LoginScrimGradient()
                 .ignoresSafeArea()
 
-            VStack(spacing: 24) {
+            VStack(spacing: 0) {
                 Spacer()
 
-                VStack(spacing: 10) {
-                    Image(systemName: "person.crop.circle.badge.checkmark")
-                        .font(.system(size: 56))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.6), radius: 6, y: 2)
-                    Text(l10n.t(.loginTitle))
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.6), radius: 6, y: 2)
-                    Text(l10n.t(.loginSubtitle))
-                        .font(.footnote)
-                        .foregroundStyle(.white.opacity(0.7))
-                        .shadow(color: .black.opacity(0.6), radius: 4, y: 1)
-                }
-
-                Spacer()
-
-                VStack(spacing: 12) {
-                    Button {
-                        Task { await auth.login(provisional: false) }
-                    } label: {
-                        Text(l10n.t(.loginAction))
-                            .font(.system(size: 17, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .foregroundStyle(.white)
-                            .background(Theme.brandGradient, in: .rect(cornerRadius: 14))
-                            .shadow(color: Theme.brandShadow, radius: 18, y: 8)
-                    }
-                    .disabled(auth.isLoading)
-
-                    Button {
-                        Task { await auth.login(provisional: true) }
-                    } label: {
-                        Text(l10n.t(.loginProvisional))
-                            .font(.system(size: 17, weight: .medium))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 52)
-                            .foregroundStyle(.white)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .stroke(.white.opacity(0.45), lineWidth: 1)
-                            )
-                    }
-                    .disabled(auth.isLoading)
-                }
-                .padding(.horizontal, 30)
-
-                if auth.isLoading {
-                    ProgressView().tint(.white)
-                }
                 if let msg = auth.errorMessage {
                     Text(msg)
                         .font(.footnote)
                         .foregroundStyle(.red)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal)
+                        .padding(.horizontal, 30)
+                        .padding(.bottom, 12)
                 }
 
-                Spacer().frame(height: 24)
+                whiteActionButton(l10n.t(.loginNow)) { attempt(provisional: false) }
+                    .padding(.bottom, 10)
+                whiteActionButton(l10n.t(.signNow)) { attempt(provisional: true) }
+                    .padding(.bottom, 10)
+
+                Button { showRestoreUnavailable = true } label: {
+                    Text(l10n.t(.loginRestoreEmail))
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .opacity(0.85)
+                .padding(.bottom, 14)
+
+                termsRow
+            }
+
+            // Upstream `loading_spinner`: bare white indeterminate, centered.
+            if auth.isLoading {
+                ProgressView()
+                    .controlSize(.large)
+                    .tint(.white)
             }
         }
         .preferredColorScheme(.dark)
+        .alert(l10n.t(.loginProxyTitle), isPresented: $showProxyHint) {
+            Button(l10n.t(.actionCancel), role: .cancel) {}
+            Button(l10n.t(.loginProxyConfirm)) {
+                Task { await auth.login(provisional: pendingProvisional) }
+            }
+        } message: {
+            Text(l10n.t(.loginProxyMessage))
+        }
+        .alert(l10n.t(.readAgreement), isPresented: $showReadAgreement) {
+            Button("OK", role: .cancel) {}
+        }
+        .alert(l10n.t(.loginRestoreUnavailable), isPresented: $showRestoreUnavailable) {
+            Button("OK", role: .cancel) {}
+        }
+    }
+
+    /// Upstream `checkAndNext`: terms checkbox gates both buttons; then the
+    /// proxy-hint dialog confirms before the OAuth tab opens.
+    private func attempt(provisional: Bool) {
+        guard termsAccepted else { showReadAgreement = true; return }
+        pendingProvisional = provisional
+        showProxyHint = true
+    }
+
+    /// `round_corner_white_r20` pill: 50pt tall, white r16, Montserrat
+    /// SemiBold 16, black label, 30pt side margins.
+    private func whiteActionButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.montserratSemiBold(16))
+                .foregroundStyle(.black)
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .background(.white, in: .rect(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
+        .disabled(auth.isLoading)
+        .padding(.horizontal, 30)
+    }
+
+    /// `checkbox_one`: 40×40 tap target with the 18pt box (faint outlined
+    /// square unchecked / the upstream `terms_checked` asset checked), and the
+    /// 12pt terms text whose ToS / privacy-policy spans open pixiv's pages.
+    private var termsRow: some View {
+        HStack(alignment: .top, spacing: 0) {
+            Button { termsAccepted.toggle() } label: {
+                Group {
+                    if termsAccepted {
+                        Image("terms_checked")
+                            .resizable()
+                            .frame(width: 18, height: 18)
+                    } else {
+                        RoundedRectangle(cornerRadius: 5)
+                            .strokeBorder(.white.opacity(0.4), lineWidth: 0.5)
+                            .background(
+                                RoundedRectangle(cornerRadius: 5).fill(.white.opacity(0.048))
+                            )
+                            .frame(width: 18, height: 18)
+                    }
+                }
+                .padding(.top, 12)
+                .frame(width: 40, height: 40, alignment: .top)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+
+            Text(termsText)
+                .font(.system(size: 12))
+                .foregroundStyle(.white)
+                .tint(.white)
+                .padding(.top, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.leading, 20)
+        .padding(.trailing, 34)
+    }
+
+    private var termsText: AttributedString {
+        let tos = l10n.t(.termsOfService)
+        let pp = l10n.t(.privacyPolicy)
+        var attr = AttributedString(String(format: l10n.t(.landingTermsBase), tos, pp))
+        if let r = attr.range(of: tos) {
+            attr[r].link = URL(string: "https://www.pixiv.net/terms/?page=term&appname=pixiv_ios")
+            attr[r].underlineStyle = .single
+        }
+        if let r = attr.range(of: pp) {
+            attr[r].link = URL(string: "https://www.pixiv.net/terms/?page=privacy&appname=pixiv_ios")
+            attr[r].underlineStyle = .single
+        }
+        return attr
     }
 }
 
