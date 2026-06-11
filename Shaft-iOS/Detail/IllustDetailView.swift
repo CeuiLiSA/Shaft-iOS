@@ -307,13 +307,16 @@ struct IllustDetailView: View {
             if let i = vm.illust { HistoryStore.shared.record(illust: i) }
         }
         .fullScreenCover(isPresented: $showViewer) {
-            if let pages = vm.illust.map(IllustPages.pages(for:)), !pages.isEmpty {
-                ImageViewerView(pages: pages, index: $viewerIndex)
-                    // sourceID follows the page being viewed, so paging in the
-                    // viewer and then pulling down zooms back to the matching
-                    // inline page (center-zoom fallback when it's collapsed).
-                    .navigationTransition(.zoom(sourceID: viewerIndex, in: viewerZoom))
-            }
+            // Unconditional content with navigationTransition as the ROOT
+            // modifier: wrapping it in `if let` puts a ConditionalContent
+            // above the transition and the zoom-present silently degrades to
+            // an instant cut (dismissal still worked). sourceID follows the
+            // page being viewed, so paging in the viewer and pulling down
+            // zooms back to the matching inline page (center fallback when
+            // it's collapsed).
+            ImageViewerView(pages: vm.illust.map(IllustPages.pages(for:)) ?? [],
+                            index: $viewerIndex)
+                .navigationTransition(.zoom(sourceID: viewerIndex, in: viewerZoom))
         }
         .sheet(isPresented: $showBookmarkSheet) {
             BookmarkTagsSheet(

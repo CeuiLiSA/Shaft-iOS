@@ -187,6 +187,13 @@ final class ZoomImageScrollViewImpl: UIScrollView, UIScrollViewDelegate {
     private let container: UIView
     private var lastLayoutSize: CGSize = .zero
     private var mediumScale: CGFloat = 1
+    /// False until the user zooms, pans, or double-taps. The zoom-present
+    /// transition lays this view out at the source's small rect before
+    /// animating to full screen; scales derived from those transient bounds
+    /// misclassify (a portrait image in a wide-short rect trips read mode →
+    /// opens hugely zoomed). Until real interaction, every size change re-runs
+    /// the full first-layout decision so the final bounds win.
+    private var userHasInteracted = false
 
     init(source: TileImageSource) {
         imageSize = source.imageSize
@@ -221,12 +228,20 @@ final class ZoomImageScrollViewImpl: UIScrollView, UIScrollViewDelegate {
     override func layoutSubviews() {
         super.layoutSubviews()
         if bounds.size != lastLayoutSize, bounds.width > 0, bounds.height > 0 {
-            let isFirstLayout = lastLayoutSize == .zero
+            let isFirstLayout = !userHasInteracted
             let wasAtMin = abs(zoomScale - minimumZoomScale) < 0.001
             lastLayoutSize = bounds.size
             configureScales(isFirstLayout: isFirstLayout, wasAtMin: wasAtMin)
         }
         centerContent()
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        userHasInteracted = true
+    }
+
+    func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+        userHasInteracted = true
     }
 
     private func configureScales(isFirstLayout: Bool, wasAtMin: Bool) {
@@ -264,6 +279,7 @@ final class ZoomImageScrollViewImpl: UIScrollView, UIScrollViewDelegate {
     func scrollViewDidZoom(_ scrollView: UIScrollView) { centerContent() }
 
     @objc private func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
+        userHasInteracted = true
         if zoomScale < mediumScale - 0.001 {
             let point = recognizer.location(in: container)
             let w = bounds.width / mediumScale
@@ -306,11 +322,37 @@ struct ZoomImagePage: View {
     @State private var placeholder: UIImage?
     @State private var progress: Double = 0
     @State private var failed = false
+    /// URL the current `source` was decoded from — detects a reused page being
+    /// handed a different image.
+    @State private var loadedOriginal: URL?
+
+    init(large: URL?, original: URL?, onSingleTap: @escaping () -> Void = {}) {
+        self.large = large
+        self.original = original
+        self.onSingleTap = onSingleTap
+        // Seed the FIRST frame synchronously from the memory cache: the zoom
+        // present animates whatever the cover renders immediately, and an
+        // async-loaded image arrives after the transition finished — an empty
+        // black card zooming up reads as "no transition at all". The detail
+        // hero has just displayed this URL, so one of these virtually always
+        // hits. (View inits run during body evaluation — main thread.)
+        let seeded = MainActor.assumeIsolated {
+            original.flatMap { PixivImageCache.shared.displayImage(for: $0) }
+                ?? large.flatMap { PixivImageCache.shared.image(for: $0) }
+        }
+        _placeholder = State(initialValue: seeded)
+    }
 
     var body: some View {
         ZStack {
             if let source {
                 ZoomImageScrollView(source: source, onSingleTap: onSingleTap)
+                    // Zoom state lives in the UIScrollView, and SwiftUI reuses
+                    // representable UIViews wherever view identity survives —
+                    // tie the scroll view's lifetime to the decoded image so a
+                    // different (or re-decoded) image always starts a fresh
+                    // scroll view at fit scale, never inheriting old zoom.
+                    .id(ObjectIdentifier(source))
                     .ignoresSafeArea()
             } else {
                 if let placeholder {
@@ -348,11 +390,30 @@ struct ZoomImagePage: View {
             }
         }
         .task(id: original) { await load() }
+        .onDisappear {
+            // Page left the screen (viewer closed, or paged away): drop the
+            // tile source so the next appearance re-decodes (disk-cached,
+            // fast) into a NEW scroll view at fit scale — "every open starts
+            // at the original zoom", and the decoded pyramid is freed.
+            // `placeholder` is kept so reopening still has an instant first
+            // frame for the zoom-present transition.
+            source = nil
+            loadedOriginal = nil
+        }
     }
 
     private func load() async {
         failed = false
         progress = 0
+        if loadedOriginal != original {
+            // Fresh appearance or a reused page handed a different image:
+            // never keep the old tiles (or their zoom); re-seed the first
+            // frame from the memory cache for the incoming image.
+            loadedOriginal = original
+            source = nil
+            placeholder = original.flatMap { PixivImageCache.shared.displayImage(for: $0) }
+                ?? large.flatMap { PixivImageCache.shared.image(for: $0) }
+        }
         guard let original else {
             failed = true
             return

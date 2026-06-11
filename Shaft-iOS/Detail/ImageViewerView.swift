@@ -31,6 +31,7 @@ struct ImageViewerView: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
             TabView(selection: $index) {
                 ForEach(Array(pages.enumerated()), id: \.offset) { i, page in
                     ZoomImagePage(large: page.large, original: page.original ?? page.large) {
@@ -113,12 +114,6 @@ struct ImageViewerView: View {
         }
         .preferredColorScheme(.dark)
         .statusBarHidden(true)
-        // Opaque black backdrop. Known tradeoff: the zoom transition scales
-        // the destination INCLUDING its background (no system cross-fade), so
-        // the letterbox around the image travels as part of the zooming card.
-        // A clear background avoids that but lets the detail page show through
-        // at rest — opaque black was preferred.
-        .presentationBackground(.black)
         .onAppear {
             if AppSettingsStore.shared.illustDetailKeepScreenOn {
                 UIApplication.shared.isIdleTimerDisabled = true
