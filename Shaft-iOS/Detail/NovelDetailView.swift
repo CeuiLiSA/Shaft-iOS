@@ -300,7 +300,7 @@ struct NovelDetailView: View {
             if let n = vm.novel { HistoryStore.shared.record(novel: n) }
         }
         .fullScreenCover(isPresented: $showReader) {
-            NovelReaderView(novelId: novelId)
+            NovelReaderV3View(novelId: novelId)
         }
         .sheet(isPresented: $showBookmarkSheet) {
             BookmarkTagsSheet(

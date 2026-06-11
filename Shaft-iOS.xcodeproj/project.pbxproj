@@ -61,6 +61,19 @@
 		A1000000000000000000B070 /* montserrat_medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F070 /* montserrat_medium.ttf */; };
 		A1000000000000000000B071 /* montserrat_bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F071 /* montserrat_bold.ttf */; };
 		A1000000000000000000B072 /* montserrat_semi_bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F072 /* montserrat_semi_bold.ttf */; };
+		A1000000000000000000B073 /* ReaderCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F073 /* ReaderCore.swift */; };
+		A1000000000000000000B074 /* ReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F074 /* ReaderSettings.swift */; };
+		A1000000000000000000B075 /* ReaderPaginate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F075 /* ReaderPaginate.swift */; };
+		A1000000000000000000B076 /* ReaderData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F076 /* ReaderData.swift */; };
+		A1000000000000000000B077 /* ReaderRenderViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F077 /* ReaderRenderViews.swift */; };
+		A1000000000000000000B078 /* ReaderPagedContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F078 /* ReaderPagedContainer.swift */; };
+		A1000000000000000000B079 /* ReaderScrollView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F079 /* ReaderScrollView.swift */; };
+		A1000000000000000000B080 /* ReaderChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F080 /* ReaderChrome.swift */; };
+		A1000000000000000000B081 /* ReaderSettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F081 /* ReaderSettingsPanel.swift */; };
+		A1000000000000000000B082 /* ReaderSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F082 /* ReaderSheets.swift */; };
+		A1000000000000000000B083 /* ReaderExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F083 /* ReaderExport.swift */; };
+		A1000000000000000000B084 /* NovelReaderV3ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F084 /* NovelReaderV3ViewModel.swift */; };
+		A1000000000000000000B085 /* NovelReaderV3View.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F085 /* NovelReaderV3View.swift */; };
 		A1000000000000000000B049 /* MuteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F049 /* MuteStore.swift */; };
 		A1000000000000000000B050 /* MutedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F050 /* MutedView.swift */; };
 		A1000000000000000000B051 /* SeriesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F051 /* SeriesViews.swift */; };
@@ -137,6 +150,19 @@
 		A1000000000000000000F070 /* montserrat_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = montserrat_medium.ttf; sourceTree = "<group>"; };
 		A1000000000000000000F071 /* montserrat_bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = montserrat_bold.ttf; sourceTree = "<group>"; };
 		A1000000000000000000F072 /* montserrat_semi_bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = montserrat_semi_bold.ttf; sourceTree = "<group>"; };
+		A1000000000000000000F073 /* ReaderCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderCore.swift; sourceTree = "<group>"; };
+		A1000000000000000000F074 /* ReaderSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSettings.swift; sourceTree = "<group>"; };
+		A1000000000000000000F075 /* ReaderPaginate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPaginate.swift; sourceTree = "<group>"; };
+		A1000000000000000000F076 /* ReaderData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderData.swift; sourceTree = "<group>"; };
+		A1000000000000000000F077 /* ReaderRenderViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderRenderViews.swift; sourceTree = "<group>"; };
+		A1000000000000000000F078 /* ReaderPagedContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPagedContainer.swift; sourceTree = "<group>"; };
+		A1000000000000000000F079 /* ReaderScrollView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderScrollView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F080 /* ReaderChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderChrome.swift; sourceTree = "<group>"; };
+		A1000000000000000000F081 /* ReaderSettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSettingsPanel.swift; sourceTree = "<group>"; };
+		A1000000000000000000F082 /* ReaderSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderSheets.swift; sourceTree = "<group>"; };
+		A1000000000000000000F083 /* ReaderExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderExport.swift; sourceTree = "<group>"; };
+		A1000000000000000000F084 /* NovelReaderV3ViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelReaderV3ViewModel.swift; sourceTree = "<group>"; };
+		A1000000000000000000F085 /* NovelReaderV3View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelReaderV3View.swift; sourceTree = "<group>"; };
 		A1000000000000000000F049 /* MuteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuteStore.swift; sourceTree = "<group>"; };
 		A1000000000000000000F050 /* MutedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutedView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F051 /* SeriesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesViews.swift; sourceTree = "<group>"; };
@@ -198,6 +224,7 @@
 				A1000000000000000000G017 /* More */,
 				A1000000000000000000G018 /* History */,
 				A1000000000000000000G019 /* Mute */,
+				A1000000000000000000G020 /* NovelReader */,
 				A1000000000000000000F003 /* Assets.xcassets */,
 				A1000000000000000000G004 /* Preview Content */,
 			);
@@ -325,6 +352,26 @@
 				A1000000000000000000F050 /* MutedView.swift */,
 			);
 			path = Mute;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000G020 /* NovelReader */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000F073 /* ReaderCore.swift */,
+				A1000000000000000000F074 /* ReaderSettings.swift */,
+				A1000000000000000000F075 /* ReaderPaginate.swift */,
+				A1000000000000000000F076 /* ReaderData.swift */,
+				A1000000000000000000F077 /* ReaderRenderViews.swift */,
+				A1000000000000000000F078 /* ReaderPagedContainer.swift */,
+				A1000000000000000000F079 /* ReaderScrollView.swift */,
+				A1000000000000000000F080 /* ReaderChrome.swift */,
+				A1000000000000000000F081 /* ReaderSettingsPanel.swift */,
+				A1000000000000000000F082 /* ReaderSheets.swift */,
+				A1000000000000000000F083 /* ReaderExport.swift */,
+				A1000000000000000000F084 /* NovelReaderV3ViewModel.swift */,
+				A1000000000000000000F085 /* NovelReaderV3View.swift */,
+			);
+			path = NovelReader;
 			sourceTree = "<group>";
 		};
 		A1000000000000000000G016 /* WhatsNew */ = {
@@ -468,6 +515,19 @@
 			files = (
 				A1000000000000000000B002 /* ContentView.swift in Sources */,
 				A1000000000000000000B001 /* Shaft_iOSApp.swift in Sources */,
+				A1000000000000000000B073 /* ReaderCore.swift in Sources */,
+				A1000000000000000000B074 /* ReaderSettings.swift in Sources */,
+				A1000000000000000000B075 /* ReaderPaginate.swift in Sources */,
+				A1000000000000000000B076 /* ReaderData.swift in Sources */,
+				A1000000000000000000B077 /* ReaderRenderViews.swift in Sources */,
+				A1000000000000000000B078 /* ReaderPagedContainer.swift in Sources */,
+				A1000000000000000000B079 /* ReaderScrollView.swift in Sources */,
+				A1000000000000000000B080 /* ReaderChrome.swift in Sources */,
+				A1000000000000000000B081 /* ReaderSettingsPanel.swift in Sources */,
+				A1000000000000000000B082 /* ReaderSheets.swift in Sources */,
+				A1000000000000000000B083 /* ReaderExport.swift in Sources */,
+				A1000000000000000000B084 /* NovelReaderV3ViewModel.swift in Sources */,
+				A1000000000000000000B085 /* NovelReaderV3View.swift in Sources */,
 				A1000000000000000000B005 /* KeychainTokenStore.swift in Sources */,
 				A1000000000000000000B006 /* LoginView.swift in Sources */,
 				A1000000000000000000B007 /* PixivOAuthConfig.swift in Sources */,

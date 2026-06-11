@@ -176,4 +176,57 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     // Misc
     case stNotAvailable, stDone, stSure
     case stSectionAccount, stOptFollowSystem, stModelNotReadyFmt
+
+    // Novel reader V3 (1:1 port of Pixiv-Shaft reader/) — themes
+    case nrThemeKraft, nrThemeWhite, nrThemeEye, nrThemeParchment
+    case nrThemeButter, nrThemeNight, nrThemeCharcoal
+    // Fonts
+    case nrFontSystem, nrFontSans, nrFontSansLight, nrFontSansMedium
+    case nrFontSerif, nrFontMonospace
+    // Highlight colors
+    case nrHighlightYellow, nrHighlightGreen, nrHighlightPink, nrHighlightBlue
+    // Bottom bar
+    case nrBtnChapters, nrBtnSeries, nrBtnSettings, nrBtnSearch, nrBtnMore
+    case nrBtnThemeNight, nrBtnThemeDay, nrProgressEmpty
+    // Search overlay
+    case nrSearchHint, nrSearchRegex, nrSearchNoResult
+    // Settings panel
+    case nrSettingsTitle, nrSectionTypography, nrSectionTheme, nrSectionFlip
+    case nrSectionScreen, nrSectionImage
+    case nrFontSize, nrLineSpacing, nrParagraphSpacing, nrHMargin, nrVMargin
+    case nrFirstIndent, nrIndentNone, nrIndentFmt, nrLetterSpacing, nrBold, nrFontWeight
+    case nrFollowDark, nrSystemBrightness, nrCustomBrightness, nrWarmFilter
+    case nrReadingDirection, nrDirectionHorizontal, nrDirectionVertical
+    case nrFlipAnimation, nrFlipSimulation, nrFlipCover, nrFlipSlide, nrFlipNone
+    case nrTapReversed, nrAutoPageInterval
+    case nrImmersive, nrKeepScreenOn, nrTouchLocked, nrEyeBreak
+    case nrImagePlacement, nrImageTop, nrImageCenter, nrImageBottom
+    case nrImageScale, nrImageFit, nrImageFill, nrImageOriginal, nrPreloadImages
+    // Sheets
+    case nrChaptersTitle, nrChaptersCountFmt
+    case nrBookmarksTitle, nrBookmarksCountFmt, nrBookmarksEmpty
+    case nrBookmarkPageFmt, nrBookmarkDeleteConfirm
+    case nrAnnotationsTitle, nrAnnotationsEmpty
+    case nrSearchHitsTitle, nrSearchHitsCountFmt
+    case nrSeriesTitle, nrSeriesCountFmt, nrSeriesLoading, nrSeriesEmpty
+    case nrSeriesLoadFailedFmt, nrSeriesCurrent
+    // Note editor
+    case nrNoteHint, nrNoteAddTitle, nrNoteEditTitle, nrActionSave
+    // Selection actions
+    case nrActionSearchPixiv, nrActionSearchWeb, nrActionHighlight, nrActionNote
+    // More menu
+    case nrMenuCopyText, nrMenuSavePosition, nrMenuExport
+    case nrWatchlistAdd, nrWatchlistRemove
+    // Outline / jump
+    case nrPagedSegmentFmt, nrPreface, nrJumpButtonFmt
+    // Export
+    case nrExportTitle, nrFormatTxt, nrFormatMarkdown, nrFormatEpub, nrFormatPdf
+    case nrExportTxtDesc, nrExportMdDesc, nrExportEpubDesc, nrExportPdfDesc
+    // Toasts
+    case nrMsgCopied, nrMsgTextCopiedFmt, nrMsgBookmarkSaved
+    case nrMsgBookmarked, nrMsgUnbookmarked, nrMsgWatchAdded, nrMsgWatchRemoved
+    case nrMsgOpFailed, nrMsgJumpInvalid, nrMsgNoChapters
+    case nrMsgFirstChapter, nrMsgLastChapter, nrMsgJumpNextFmt, nrMsgJumpPrevFmt
+    case nrMsgNoteSaved, nrMsgHighlighted
+    case nrMsgExportStartFmt, nrMsgExportFailFmt, nrMsgLoadFail
 }
