@@ -163,7 +163,7 @@ struct RecommendedWorksView: View {
                         items: visible,
                         columns: mute.waterfallColumns,
                         spacing: 8,
-                        estimatedRelativeHeight: { $0.waterfallEstimatedCellHeight }
+                        estimatedRelativeHeight: { $0.waterfallImageHeightRatio }
                     ) { illust in
                         NavigationLink(value: illust) {
                             IllustWaterfallCell(illust: illust)
@@ -196,10 +196,12 @@ struct RecommendedWorksView: View {
 struct PopularTagsView: View {
     let vm: RecommendViewModel
 
+    // Upstream uses a bare GridLayoutManager(ctx, 3): no item spacing, no
+    // outer margins — the tag tiles butt up against each other edge to edge.
     private let columns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 0),
+        GridItem(.flexible(), spacing: 0),
+        GridItem(.flexible(), spacing: 0),
     ]
 
     var body: some View {
@@ -208,7 +210,7 @@ struct PopularTagsView: View {
                 ErrorBanner(message: err) { Task { await vm.loadTags() } }
                     .padding()
             }
-            LazyVGrid(columns: columns, spacing: 8) {
+            LazyVGrid(columns: columns, spacing: 0) {
                 ForEach(vm.trendingTags) { tag in
                     NavigationLink(value: AppRoute.tagResults(tag: tag.tag ?? "")) {
                         TagGridCell(tag: tag)
@@ -216,7 +218,6 @@ struct PopularTagsView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(8)
             if vm.isLoadingTags {
                 ProgressView().padding()
             }
@@ -302,31 +303,30 @@ private struct RankingCard: View {
     }
 }
 
+/// 1:1 port of upstream `cell_trending_tag.xml`: square image, uniform
+/// `black_overlay` (#66000000) scrim across the whole tile, and a centered
+/// bottom text block — translated name (13sp) above `#tag` (12sp), no
+/// corner rounding.
 struct TagGridCell: View {
     let tag: TrendingTag
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            PixivAsyncImage(url: imageURL)
-                .aspectRatio(1, contentMode: .fit)
-            LinearGradient(
-                colors: [.black.opacity(0), .black.opacity(0.7)],
-                startPoint: .top, endPoint: .bottom
-            )
-            VStack(alignment: .leading, spacing: 1) {
-                Text("#\(tag.tag ?? "")")
-                    .font(.caption.bold())
-                    .foregroundStyle(.white)
-                if let translated = tag.translatedName, !translated.isEmpty {
-                    Text(translated)
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.85))
-                        .lineLimit(1)
+        PixivAsyncImage(url: imageURL)
+            .aspectRatio(1, contentMode: .fit)
+            .overlay(Color.black.opacity(0.4))
+            .overlay(alignment: .bottom) {
+                VStack(spacing: 0) {
+                    if let translated = tag.translatedName, !translated.isEmpty {
+                        Text(translated)
+                            .font(.system(size: 13))
+                    }
+                    Text("#\(tag.tag ?? "")")
+                        .font(.system(size: 12))
                 }
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .padding(6)
             }
-            .padding(6)
-        }
-        .clipShape(.rect(cornerRadius: 6))
     }
 
     private var imageURL: URL? {

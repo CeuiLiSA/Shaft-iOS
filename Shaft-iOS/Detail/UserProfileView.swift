@@ -76,7 +76,16 @@ final class UserProfileViewModel {
     var isLoadingIllusts = false
     var isLoadingManga = false
     var errorMessage: String?
-    var isFollowBusy = false
+
+    /// Follow state resolved through the app-wide `InteractionStore` so the
+    /// header pill always agrees with the artist card on detail pages (and
+    /// anywhere else the author appears).
+    var isFollowed: Bool {
+        InteractionStore.shared.isFollowed(id: userId, fallback: user?.isFollowed)
+    }
+    var isFollowBusy: Bool {
+        InteractionStore.shared.followBusy.contains(userId)
+    }
 
     @ObservationIgnored private var didLoadIllusts = false
     @ObservationIgnored private var didLoadManga = false
@@ -125,6 +134,8 @@ final class UserProfileViewModel {
             user = r.user
             profile = r.profile
             workspace = r.workspace
+            // Fresh single-item truth — sync the app-wide follow state.
+            InteractionStore.shared.ingest(user: r.user)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -196,30 +207,21 @@ final class UserProfileViewModel {
     }
 
     /// Follow with restrict ("public" tap / "private" long-press, parity with
-    /// the upstream ProgressTextButton long-press behavior).
+    /// the upstream ProgressTextButton long-press behavior). Goes through the
+    /// app-wide store (optimistic, store reverts on failure).
     func follow(restrict: String) async {
-        guard let u = user, u.isFollowed != true, !isFollowBusy else { return }
-        isFollowBusy = true
-        defer { isFollowBusy = false }
+        guard !isFollowed else { return }
         do {
-            _ = try await api.followUser(userId, restrict: restrict)
-            user = PixivUser(id: u.id, name: u.name, account: u.account,
-                             profileImageUrls: u.profileImageUrls, isFollowed: true,
-                             comment: u.comment)
+            try await InteractionStore.shared.setFollowed(true, id: userId, restrict: restrict)
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
     func unfollow() async {
-        guard let u = user, u.isFollowed == true, !isFollowBusy else { return }
-        isFollowBusy = true
-        defer { isFollowBusy = false }
+        guard isFollowed else { return }
         do {
-            _ = try await api.unfollowUser(userId)
-            user = PixivUser(id: u.id, name: u.name, account: u.account,
-                             profileImageUrls: u.profileImageUrls, isFollowed: false,
-                             comment: u.comment)
+            try await InteractionStore.shared.setFollowed(false, id: userId)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -389,7 +391,7 @@ struct UserProfileView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 Text(vm.user?.name ?? "")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.montserratBold(18))
                     .foregroundStyle(Theme.v3Text1)
                     .lineLimit(1)
                     .opacity(Double(collapseTitleAlpha))
@@ -510,7 +512,7 @@ struct UserProfileView: View {
         NavigationLink(value: route) {
             VStack(spacing: 2) {
                 Text(value.formatted())
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.montserratBold(20))
                     .foregroundStyle(color)
                 Text(label.uppercased())
                     .font(.system(size: 9, weight: .bold))
@@ -642,7 +644,7 @@ struct UserProfileView: View {
                 items: visible,
                 columns: mute.waterfallColumns,
                 spacing: 8,
-                estimatedRelativeHeight: { $0.waterfallEstimatedCellHeight }
+                estimatedRelativeHeight: { $0.waterfallImageHeightRatio }
             ) { illust in
                 NavigationLink(value: illust) {
                     IllustWaterfallCell(illust: illust)
@@ -767,7 +769,7 @@ private struct V3ProfileBanner: View {
             // Name + official badge
             HStack(spacing: 8) {
                 Text(vm.user?.name ?? "")
-                    .font(.system(size: 24, weight: .bold))
+                    .font(.montserratBold(24))
                     .foregroundStyle(Theme.v3Text1)
                     .lineLimit(1)
                     .onTapGesture {
@@ -789,7 +791,7 @@ private struct V3ProfileBanner: View {
 
             // Handle
             Text("@\(vm.user?.account ?? "")")
-                .font(.system(size: 13))
+                .font(.montserratMedium(13))
                 .foregroundStyle(Theme.v3Text3)
                 .padding(.top, 2)
 
@@ -838,7 +840,7 @@ private struct V3ProfileBanner: View {
 
     @ViewBuilder
     private var followButtons: some View {
-        let followed = vm.user?.isFollowed == true
+        let followed = vm.isFollowed
         if followed {
             // palette.textSecondary: brand lightened (dark) / darkened (light) @90%
             Text(l10n.t(.profileFollowing))

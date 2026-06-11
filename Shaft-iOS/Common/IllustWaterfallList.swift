@@ -11,12 +11,6 @@ extension Illust {
         return min(max(h / w, 0.6), 2.0)
     }
 
-    /// `waterfallImageHeightRatio` plus the title/author label block under the
-    /// image (~0.18 column-widths) — the value WaterfallGrid's
-    /// `estimatedRelativeHeight` expects.
-    var waterfallEstimatedCellHeight: Double {
-        waterfallImageHeightRatio + 0.18
-    }
 }
 
 /// Reusable two-column waterfall illust list with built-in loading / error /
@@ -68,7 +62,7 @@ struct IllustWaterfallList: View {
                         items: visible,
                         columns: mute.waterfallColumns,
                         spacing: 8,
-                        estimatedRelativeHeight: { $0.waterfallEstimatedCellHeight }
+                        estimatedRelativeHeight: { $0.waterfallImageHeightRatio }
                     ) { illust in
                         NavigationLink(value: illust) {
                             IllustWaterfallCell(illust: illust)
@@ -94,36 +88,28 @@ struct IllustWaterfallList: View {
     }
 }
 
+/// Image-only waterfall cell — upstream `cell_illust_card` parity: no title or
+/// author label, page-count badge top-right, bookmark heart bottom-right.
 struct IllustWaterfallCell: View {
     let illust: Illust
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            PixivAsyncImage(url: imageURL)
-                .aspectRatio(displayAspect, contentMode: .fit)
-                .clipShape(.rect(cornerRadius: 6))
-                .overlay(alignment: .topTrailing) {
-                    if (illust.pageCount ?? 1) > 1 {
-                        Label("\(illust.pageCount ?? 1)", systemImage: "square.on.square")
-                            .font(.caption2.bold())
-                            .padding(.horizontal, 5).padding(.vertical, 2)
-                            .background(.black.opacity(0.55), in: .capsule)
-                            .foregroundStyle(.white)
-                            .padding(6)
-                    }
+        PixivAsyncImage(url: imageURL)
+            .aspectRatio(displayAspect, contentMode: .fit)
+            .clipShape(.rect(cornerRadius: 6))
+            .overlay(alignment: .topTrailing) {
+                if (illust.pageCount ?? 1) > 1 {
+                    Label("\(illust.pageCount ?? 1)", systemImage: "square.on.square")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(.black.opacity(0.55), in: .capsule)
+                        .foregroundStyle(.white)
+                        .padding(6)
                 }
-
-            Text(illust.title ?? "")
-                .font(.caption)
-                .lineLimit(1)
-                .foregroundStyle(.primary)
-            if let user = illust.user {
-                Text(user.name ?? "")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
-        }
+            .overlay(alignment: .bottomTrailing) {
+                WaterfallBookmarkButton(illust: illust)
+            }
     }
 
     private var displayAspect: CGFloat {
@@ -137,6 +123,34 @@ struct IllustWaterfallCell: View {
             ?? illust.imageUrls?.medium
             ?? illust.imageUrls?.squareMedium
         return s.flatMap(URL.init(string:))
+    }
+}
+
+/// Bottom-right heart on every waterfall cell — upstream `cell_illust_card`'s
+/// `ProgressImageButton`: an always-filled heart, white when not bookmarked and
+/// red when bookmarked. Resolves and toggles through `InteractionStore`, so the
+/// state always matches the detail page and every other surface in the app.
+///
+/// Inner `Button` inside the cell's `NavigationLink` label: in a ScrollView the
+/// innermost control wins the tap, so the heart toggles without pushing detail.
+private struct WaterfallBookmarkButton: View {
+    let illust: Illust
+    @State private var store = InteractionStore.shared
+
+    var body: some View {
+        let bookmarked = store.isBookmarked(illust)
+        Button {
+            Task { try? await store.toggleBookmark(illust) }
+        } label: {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(bookmarked ? Theme.v3Bookmarked : .white)
+                .shadow(color: .black.opacity(0.35), radius: 3)
+                .frame(width: 44, height: 44)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(store.bookmarkBusy.contains(illust.id))
     }
 }
 

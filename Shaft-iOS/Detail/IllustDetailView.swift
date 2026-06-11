@@ -16,10 +16,18 @@ final class IllustDetailViewModel {
     var totalComments: Int?
     var isLoading = false
     var errorMessage: String?
-    var isBookmarking = false
-    /// Author follow state, seeded from the embedded `illust.user.is_followed`
-    /// and toggled optimistically by the artist card's follow button.
-    var authorFollowed = false
+
+    /// Bookmark / follow display state resolved through the app-wide
+    /// `InteractionStore` (override layered on the model snapshot), so this
+    /// page always agrees with the waterfall cells and every other surface.
+    var isBookmarked: Bool {
+        interactions.isBookmarked(id: illustId, fallback: illust?.isBookmarked)
+    }
+    var isBookmarking: Bool { interactions.bookmarkBusy.contains(illustId) }
+    var authorFollowed: Bool {
+        guard let user = illust?.user else { return false }
+        return interactions.isFollowed(user)
+    }
 
     // Lazy section state. Comments / author works / related each fire their
     // request only when that section first scrolls into view (parity with V3
@@ -33,6 +41,7 @@ final class IllustDetailViewModel {
     @ObservationIgnored private var authorWorksTriggered = false
 
     @ObservationIgnored private let api: PixivAPI
+    @ObservationIgnored private let interactions = InteractionStore.shared
 
     init(illustId: Int64) {
         self.illustId = illustId
@@ -45,7 +54,6 @@ final class IllustDetailViewModel {
     init(illust: Illust) {
         self.illustId = illust.id
         self.illust = illust
-        self.authorFollowed = illust.user?.isFollowed ?? false
         self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
         // didSet doesn't fire during init.
         self.captionPlain = illust.caption.map { V3Caption.plain($0) } ?? ""
@@ -68,13 +76,14 @@ final class IllustDetailViewModel {
         // are deferred to when their section scrolls into view, so a quick
         // glance-and-back doesn't burn three extra requests.
         await loadDetail()
-        authorFollowed = illust?.user?.isFollowed ?? authorFollowed
     }
 
     private func loadDetail() async {
         do {
             let resp = try await api.illustDetail(illustId)
             illust = resp.illust
+            // Fresh single-item truth — sync the app-wide bookmark/follow state.
+            interactions.ingest(illust: resp.illust)
         } catch {
             // Keep any seeded illust so the page still renders (issue #569 parity).
             if illust == nil { errorMessage = error.localizedDescription }
@@ -111,35 +120,17 @@ final class IllustDetailViewModel {
         authorWorksLoaded = true
     }
 
-    /// Optimistically flip the artist's follow state, then call the API; revert on
-    /// failure. Long-press on the button follows privately.
+    /// Flip the artist's follow state through the app-wide store (optimistic,
+    /// store reverts on failure). Long-press on the button follows privately.
     func toggleFollow(restrict: String = "public") async {
-        guard let uid = illust?.user?.id else { return }
-        let target = !authorFollowed
-        authorFollowed = target
-        do {
-            if target {
-                _ = try await api.followUser(uid, restrict: restrict)
-            } else {
-                _ = try await api.unfollowUser(uid)
-            }
-        } catch {
-            authorFollowed = !target
-        }
+        guard let user = illust?.user else { return }
+        try? await interactions.toggleFollow(user, restrict: restrict)
     }
 
     func toggleBookmark(restrict: String = "public") async {
         guard let cur = illust else { return }
-        isBookmarking = true
-        defer { isBookmarking = false }
         do {
-            if cur.isBookmarked == true {
-                _ = try await api.unbookmarkIllust(illustId)
-                update(isBookmarked: false)
-            } else {
-                _ = try await api.bookmarkIllust(illustId, restrict: restrict)
-                update(isBookmarked: true)
-            }
+            try await interactions.toggleBookmark(cur, restrict: restrict)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -148,7 +139,7 @@ final class IllustDetailViewModel {
     /// Existing bookmark state (registered tags + visibility) for pre-filling
     /// the bookmark sheet. Nil when the work isn't bookmarked yet.
     func bookmarkDetail() async -> (restrict: String, tags: [String])? {
-        guard illust?.isBookmarked == true else { return nil }
+        guard isBookmarked else { return nil }
         guard let d = try? await api.illustBookmarkDetail(illustId).bookmarkDetail else { return nil }
         return (d.restrict ?? "public", d.registeredTags)
     }
@@ -156,28 +147,11 @@ final class IllustDetailViewModel {
     /// Bookmark with explicit restrict + tags. Re-applies if already bookmarked
     /// (Pixiv replaces the bookmark with the new tag/restrict set).
     func bookmark(restrict: String, tags: [String]) async {
-        isBookmarking = true
-        defer { isBookmarking = false }
         do {
-            _ = try await api.bookmarkIllust(illustId, restrict: restrict, tags: tags)
-            update(isBookmarked: true)
+            try await interactions.bookmark(illustId: illustId, restrict: restrict, tags: tags)
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-
-    private func update(isBookmarked: Bool) {
-        guard var i = illust else { return }
-        i = Illust(
-            id: i.id, title: i.title, caption: i.caption, type: i.type,
-            imageUrls: i.imageUrls, user: i.user, tags: i.tags,
-            pageCount: i.pageCount, width: i.width, height: i.height,
-            totalBookmarks: i.totalBookmarks, totalView: i.totalView,
-            isBookmarked: isBookmarked, createDate: i.createDate,
-            metaSinglePage: i.metaSinglePage, metaPages: i.metaPages,
-            series: i.series, xRestrict: i.xRestrict, illustAIType: i.illustAIType
-        )
-        illust = i
     }
 }
 
@@ -194,6 +168,7 @@ struct IllustDetailView: View {
     @State private var viewerIndex = 0
     @State private var showBookmarkSheet = false
     @State private var actionBarVisible = true
+    @State private var toolbarTitleVisible = false
     /// Plain class box, deliberately NOT observable state: the anchor advances
     /// every ~8pt of scroll, and an `@State` write there re-evaluates the whole
     /// page body per scroll tick. Boxed, only the rare `actionBarVisible` flip
@@ -226,6 +201,7 @@ struct IllustDetailView: View {
     /// decreases as the user scrolls down. The anchor only advances past an 8pt
     /// threshold so slow scrolls still accumulate to a direction.
     private func handleScroll(_ offset: CGFloat) {
+        setToolbarTitle(visible: offset < -240)
         if offset > -10 { setActionBar(visible: true); scrollAnchor.lastOffset = offset; return }
         let delta = offset - scrollAnchor.lastOffset
         if delta <= -8 { setActionBar(visible: false); scrollAnchor.lastOffset = offset }
@@ -235,6 +211,13 @@ struct IllustDetailView: View {
     private func setActionBar(visible: Bool) {
         guard actionBarVisible != visible else { return }
         withAnimation(.easeOut(duration: 0.2)) { actionBarVisible = visible }
+    }
+
+    /// Upstream `toolbar_title` (Montserrat Bold 18): invisible while the hero
+    /// is on screen, fades in once the page has scrolled past it.
+    private func setToolbarTitle(visible: Bool) {
+        guard toolbarTitleVisible != visible else { return }
+        withAnimation(.easeOut(duration: 0.2)) { toolbarTitleVisible = visible }
     }
 
     var body: some View {
@@ -272,6 +255,13 @@ struct IllustDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(vm.illust?.title ?? "")
+                    .font(.montserratBold(18))
+                    .foregroundStyle(Theme.v3Text1)
+                    .lineLimit(1)
+                    .opacity(toolbarTitleVisible ? 1 : 0)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     ShareLink(item: pixivURL) {
@@ -674,11 +664,11 @@ private struct V3ArtistCard: View {
                                 .overlay(Circle().strokeBorder(Theme.v3Border, lineWidth: 3))
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(user.name ?? "")
-                                    .font(.system(size: 16, weight: .bold))
+                                    .font(.montserratBold(16))
                                     .foregroundStyle(Theme.v3Text1)
                                     .lineLimit(1)
                                 Text("@\(user.account ?? "")")
-                                    .font(.system(size: 11))
+                                    .font(.montserratMedium(11))
                                     .foregroundStyle(Theme.v3Text3)
                             }
                         }
@@ -1085,7 +1075,7 @@ private struct V3RelatedSection: View {
                         items: visible,
                         columns: mute.waterfallColumns,
                         spacing: 8,
-                        estimatedRelativeHeight: { $0.waterfallEstimatedCellHeight }
+                        estimatedRelativeHeight: { $0.waterfallImageHeightRatio }
                     ) { item in
                         NavigationLink(value: item) {
                             IllustWaterfallCell(illust: item)
@@ -1401,14 +1391,14 @@ private struct BottomActionBar: View {
             // not bookmarked, `has_bookmarked` red when bookmarked.
             Image(systemName: "heart.fill")
                 .font(.title3)
-                .foregroundStyle((vm.illust?.isBookmarked == true) ? Theme.v3Bookmarked : .white)
+                .foregroundStyle(vm.isBookmarked ? Theme.v3Bookmarked : .white)
                 .frame(width: 60, height: 40)
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .disabled(vm.isBookmarking || vm.illust == nil)
         .contextMenu {
-            if vm.illust?.isBookmarked != true {
+            if !vm.isBookmarked {
                 Button {
                     Task { await vm.toggleBookmark(restrict: "public") }
                 } label: {
