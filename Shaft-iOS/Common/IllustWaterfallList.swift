@@ -1,5 +1,24 @@
 import SwiftUI
 
+extension Illust {
+    /// Waterfall cell image height in column-width units — parity with
+    /// upstream `IAdapter` (`MIN_HEIGHT_RATIO = 0.6`, `MAX_HEIGHT_RATIO = 2.0`):
+    /// only extreme tall/flat illusts are clamped (the cell's `.fill` image
+    /// center-crops them); everything else renders its exact aspect ratio.
+    var waterfallImageHeightRatio: Double {
+        let w = max(Double(width ?? 1), 1)
+        let h = max(Double(height ?? 1), 1)
+        return min(max(h / w, 0.6), 2.0)
+    }
+
+    /// `waterfallImageHeightRatio` plus the title/author label block under the
+    /// image (~0.18 column-widths) — the value WaterfallGrid's
+    /// `estimatedRelativeHeight` expects.
+    var waterfallEstimatedCellHeight: Double {
+        waterfallImageHeightRatio + 0.18
+    }
+}
+
 /// Reusable two-column waterfall illust list with built-in loading / error /
 /// pull-to-refresh / load-more wiring. Each cell pushes the full `Illust`
 /// (value-based navigation → instant detail render) onto the nearest navigation
@@ -49,7 +68,7 @@ struct IllustWaterfallList: View {
                         items: visible,
                         columns: mute.waterfallColumns,
                         spacing: 8,
-                        estimatedRelativeHeight: relativeHeight(for:)
+                        estimatedRelativeHeight: { $0.waterfallEstimatedCellHeight }
                     ) { illust in
                         NavigationLink(value: illust) {
                             IllustWaterfallCell(illust: illust)
@@ -72,13 +91,6 @@ struct IllustWaterfallList: View {
             .padding(.vertical, 8)
         }
         .refreshable { await onRefresh() }
-    }
-
-    private func relativeHeight(for illust: Illust) -> Double {
-        let w = max(Double(illust.width ?? 1), 1)
-        let h = max(Double(illust.height ?? 1), 1)
-        let aspect = max(0.5, min(w / h, 2.0))
-        return 1.0 / aspect + 0.18
     }
 }
 
@@ -115,9 +127,7 @@ struct IllustWaterfallCell: View {
     }
 
     private var displayAspect: CGFloat {
-        let w = max(CGFloat(illust.width ?? 1), 1)
-        let h = max(CGFloat(illust.height ?? 1), 1)
-        return min(max(w / h, 0.5), 2.0)
+        1 / CGFloat(illust.waterfallImageHeightRatio)
     }
 
     private var imageURL: URL? {

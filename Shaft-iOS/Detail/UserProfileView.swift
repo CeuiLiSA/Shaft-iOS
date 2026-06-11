@@ -642,11 +642,7 @@ struct UserProfileView: View {
                 items: visible,
                 columns: mute.waterfallColumns,
                 spacing: 8,
-                estimatedRelativeHeight: { illust in
-                    let w = max(Double(illust.width ?? 1), 1)
-                    let h = max(Double(illust.height ?? 1), 1)
-                    return 1.0 / max(0.5, min(w / h, 2.0)) + 0.18
-                }
+                estimatedRelativeHeight: { $0.waterfallEstimatedCellHeight }
             ) { illust in
                 NavigationLink(value: illust) {
                     IllustWaterfallCell(illust: illust)

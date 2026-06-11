@@ -921,23 +921,36 @@ private struct V3CommentsSection: View {
                 .padding(.bottom, 4)
             if !vm.commentsLoaded {
                 ProgressView().frame(maxWidth: .infinity).padding(.vertical, 20)
-            } else if vm.comments.isEmpty {
-                Text(l10n.t(.commentsEmpty))
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.v3Text3)
-                    .padding(.vertical, 16)
             } else {
-                ForEach(Array(vm.comments.prefix(3).enumerated()), id: \.element.id) { idx, comment in
-                    if idx > 0 { Rectangle().fill(Theme.v3Border).frame(height: 1) }
-                    V3CommentRow(comment: comment)
+                if vm.comments.isEmpty {
+                    // Upstream `comments_empty`: centered, paddingVertical
+                    // 48dp with a 160dp floor so the section doesn't collapse.
+                    Text(l10n.t(.commentsEmpty))
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.v3Text3)
+                        .padding(.vertical, 48)
+                        .frame(maxWidth: .infinity, minHeight: 160)
+                } else {
+                    ForEach(Array(vm.comments.prefix(3).enumerated()), id: \.element.id) { idx, comment in
+                        if idx > 0 { Rectangle().fill(Theme.v3Border).frame(height: 1) }
+                        V3CommentRow(comment: comment)
+                    }
                 }
+                // Upstream `comments_more`: full-width centered button with a
+                // hairline `v3_border_2` r=14 outline, shown whenever comments
+                // have loaded — the comments page stays reachable from the
+                // empty state too.
                 NavigationLink(value: AppRoute.comments(target: .illust(illustId))) {
                     Text(l10n.t(.viewAllComments))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.v3Ambient)
-                        .padding(.top, 12)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.v3Text2)
+                        .frame(maxWidth: .infinity)
+                        .padding(12)
+                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.v3Border, lineWidth: 1))
+                        .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
+                .padding(.top, 8)
             }
         }
         .padding(.horizontal, 16)
@@ -1072,11 +1085,7 @@ private struct V3RelatedSection: View {
                         items: visible,
                         columns: mute.waterfallColumns,
                         spacing: 8,
-                        estimatedRelativeHeight: { i in
-                            let w = max(Double(i.width ?? 1), 1)
-                            let h = max(Double(i.height ?? 1), 1)
-                            return 1.0 / max(0.5, min(w / h, 2.0)) + 0.18
-                        }
+                        estimatedRelativeHeight: { $0.waterfallEstimatedCellHeight }
                     ) { item in
                         NavigationLink(value: item) {
                             IllustWaterfallCell(illust: item)
@@ -1306,16 +1315,20 @@ private struct BottomActionBar: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
+        // 1:1 with upstream `fab_bar`: 48dp capsule `#CC1A1A2E` (same in light
+        // mode — the drawable isn't theme-aware), 60×40 buttons, 6dp side
+        // padding, 1×24 divider `#33FFFFFF` with 2dp side margins.
+        HStack(spacing: 0) {
             downloadButton
-            Divider().frame(height: 22)
+            Theme.v3FabDivider
+                .frame(width: 1, height: 24)
+                .padding(.horizontal, 2)
             bookmarkButton
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
-        .background(.regularMaterial, in: .capsule)
-        .overlay(Capsule().strokeBorder(.primary.opacity(0.08)))
-        .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+        .frame(height: 48)
+        .padding(.horizontal, 6)
+        .background(Theme.v3FabBar, in: .capsule)
+        .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
         .padding(.bottom, 10)
     }
 
@@ -1328,21 +1341,22 @@ private struct BottomActionBar: View {
             Group {
                 switch download {
                 case .idle:
-                    Image(systemName: "arrow.down.to.line").font(.title3)
+                    Image(systemName: "arrow.down.to.line").font(.title3).foregroundStyle(.white)
                 case .downloading(let p):
                     ZStack {
-                        ProgressRing(progress: p, tint: Theme.brand, track: .secondary.opacity(0.3))
+                        ProgressRing(progress: p, lineWidth: 3, tint: .white, track: Theme.v3FabDivider)
                         Text("\(Int(p * 100))")
                             .font(.system(size: 9, weight: .bold).monospacedDigit())
+                            .foregroundStyle(.white)
                     }
-                    .frame(width: 22, height: 22)
+                    .frame(width: 24, height: 24)
                 case .done:
                     Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(.green)
                 case .failed:
                     Image(systemName: "exclamationmark.triangle").font(.title3).foregroundStyle(.orange)
                 }
             }
-            .frame(width: 56, height: 44)
+            .frame(width: 60, height: 40)
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
@@ -1383,10 +1397,12 @@ private struct BottomActionBar: View {
         Button {
             Task { await vm.toggleBookmark() }
         } label: {
-            Image(systemName: (vm.illust?.isBookmarked == true) ? "heart.fill" : "heart")
+            // Upstream `ic_favorite`: the heart is ALWAYS filled — white when
+            // not bookmarked, `has_bookmarked` red when bookmarked.
+            Image(systemName: "heart.fill")
                 .font(.title3)
-                .foregroundStyle((vm.illust?.isBookmarked == true) ? .pink : .primary)
-                .frame(width: 56, height: 44)
+                .foregroundStyle((vm.illust?.isBookmarked == true) ? Theme.v3Bookmarked : .white)
+                .frame(width: 60, height: 40)
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)

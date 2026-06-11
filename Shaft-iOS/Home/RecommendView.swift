@@ -163,7 +163,7 @@ struct RecommendedWorksView: View {
                         items: visible,
                         columns: mute.waterfallColumns,
                         spacing: 8,
-                        estimatedRelativeHeight: relativeHeight(for:)
+                        estimatedRelativeHeight: { $0.waterfallEstimatedCellHeight }
                     ) { illust in
                         NavigationLink(value: illust) {
                             IllustWaterfallCell(illust: illust)
@@ -188,16 +188,6 @@ struct RecommendedWorksView: View {
         }
         .refreshable { await vm.loadRecommend() }
         .task { await vm.loadRecommendIfNeeded() }
-    }
-
-    private func relativeHeight(for illust: Illust) -> Double {
-        // Cell layout: image (full width @ aspect = w/h) + ~0.18 column-widths
-        // for the title/author label area below. Clamp the image aspect so a
-        // single tall illust can't dominate the column.
-        let w = max(Double(illust.width ?? 1), 1)
-        let h = max(Double(illust.height ?? 1), 1)
-        let aspect = max(0.5, min(w / h, 2.0))
-        return 1.0 / aspect + 0.18
     }
 }
 

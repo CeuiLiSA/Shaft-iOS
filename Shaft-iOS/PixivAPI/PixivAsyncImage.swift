@@ -327,9 +327,17 @@ struct PixivAsyncImage: View {
         ZStack {
             Rectangle().fill(Color(.secondarySystemBackground))
             if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: contentMode)
+                // Overlay keeps the image layout-neutral: a `.fill` image whose
+                // aspect differs from the proposal reports a size LARGER than
+                // proposed, which would inflate this view past its container
+                // (waterfall cells overflowing their column). The overlay pins
+                // the layout size to the proposal; `.clipped()` crops the rest.
+                Color.clear
+                    .overlay {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: contentMode)
+                    }
                     .transition(.opacity)
             } else if loadFailed {
                 Image(systemName: "photo")

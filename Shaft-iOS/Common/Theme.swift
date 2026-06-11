@@ -56,6 +56,14 @@ enum Theme {
     static let v3Border = Color(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.06, darkAlpha: 0.06)
     static let v3Surface = Color(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.035, darkAlpha: 0.045)
 
+    /// V3 detail floating action bar (`bg_v3_fab_bar`): fixed `#CC1A1A2E`
+    /// capsule in BOTH light and dark (the upstream drawable isn't
+    /// theme-aware), white icons, 20%-white divider (`#33FFFFFF`); the
+    /// bookmark heart lights up `has_bookmarked` red when bookmarked.
+    static let v3FabBar = Color(hex: 0x1A1A2E, alpha: 0.80)
+    static let v3FabDivider = Color.white.opacity(0.20)
+    static let v3Bookmarked = Color(hex: 0xFA3A3A)
+
     static let v3Pink = Color(hex: 0xE0246A)
     static let v3Blue = Color(hex: 0x2B6FCC)
     static let v3Green = Color(hex: 0x1DA88A)
