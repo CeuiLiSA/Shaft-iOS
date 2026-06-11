@@ -4,7 +4,12 @@ import SwiftUI
 @Observable
 final class IllustDetailViewModel {
     let illustId: Int64
-    var illust: Illust?
+    var illust: Illust? {
+        didSet { captionPlain = illust?.caption.map { V3Caption.plain($0) } ?? "" }
+    }
+    /// Plaintext caption derived once per illust change — `V3Caption.plain`
+    /// runs regex + entity replacement and must not run per body evaluation.
+    private(set) var captionPlain: String = ""
     var related: [Illust] = []
     var comments: [CommentItem] = []
     var authorWorks: [Illust] = []
@@ -42,6 +47,8 @@ final class IllustDetailViewModel {
         self.illust = illust
         self.authorFollowed = illust.user?.isFollowed ?? false
         self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
+        // didSet doesn't fire during init.
+        self.captionPlain = illust.caption.map { V3Caption.plain($0) } ?? ""
     }
 
     private var hasLoaded = false
@@ -187,9 +194,16 @@ struct IllustDetailView: View {
     @State private var viewerIndex = 0
     @State private var showBookmarkSheet = false
     @State private var actionBarVisible = true
-    @State private var lastScrollOffset: CGFloat = 0
+    /// Plain class box, deliberately NOT observable state: the anchor advances
+    /// every ~8pt of scroll, and an `@State` write there re-evaluates the whole
+    /// page body per scroll tick. Boxed, only the rare `actionBarVisible` flip
+    /// invalidates the view.
+    @State private var scrollAnchor = ScrollAnchor()
     @State private var pagesExpanded = false
     @State private var detailPanelExpanded = true
+    /// Links each page image to the full-screen viewer for the system zoom
+    /// transition (zoom in on open; interactive pull-down zooms back out).
+    @Namespace private var viewerZoom
     @Environment(OnboardingStore.self) private var l10n
     @Environment(\.openURL) private var openURL
 
@@ -212,10 +226,10 @@ struct IllustDetailView: View {
     /// decreases as the user scrolls down. The anchor only advances past an 8pt
     /// threshold so slow scrolls still accumulate to a direction.
     private func handleScroll(_ offset: CGFloat) {
-        if offset > -10 { setActionBar(visible: true); lastScrollOffset = offset; return }
-        let delta = offset - lastScrollOffset
-        if delta <= -8 { setActionBar(visible: false); lastScrollOffset = offset }
-        else if delta >= 8 { setActionBar(visible: true); lastScrollOffset = offset }
+        if offset > -10 { setActionBar(visible: true); scrollAnchor.lastOffset = offset; return }
+        let delta = offset - scrollAnchor.lastOffset
+        if delta <= -8 { setActionBar(visible: false); scrollAnchor.lastOffset = offset }
+        else if delta >= 8 { setActionBar(visible: true); scrollAnchor.lastOffset = offset }
     }
 
     private func setActionBar(visible: Bool) {
@@ -293,8 +307,12 @@ struct IllustDetailView: View {
             if let i = vm.illust { HistoryStore.shared.record(illust: i) }
         }
         .fullScreenCover(isPresented: $showViewer) {
-            if let urls = vm.illust.map(IllustPagesHero.urls(for:)), !urls.isEmpty {
-                ImageViewerView(urls: urls, index: $viewerIndex)
+            if let pages = vm.illust.map(IllustPages.pages(for:)), !pages.isEmpty {
+                ImageViewerView(pages: pages, index: $viewerIndex)
+                    // sourceID follows the page being viewed, so paging in the
+                    // viewer and then pulling down zooms back to the matching
+                    // inline page (center-zoom fallback when it's collapsed).
+                    .navigationTransition(.zoom(sourceID: viewerIndex, in: viewerZoom))
             }
         }
         .sheet(isPresented: $showBookmarkSheet) {
@@ -309,11 +327,34 @@ struct IllustDetailView: View {
 
     @ViewBuilder
     private func content(for illust: Illust) -> some View {
-        IllustPagesStack(
+        // Pages are emitted as direct LazyVStack children (not wrapped in an
+        // opaque sub-VStack) so an expanded multi-page work materializes its
+        // originals lazily as they scroll into view.
+        let pages = IllustPages.pages(for: illust)
+        let collapsible = pages.count > collapsePagesThreshold
+        let collapsed = collapsible && !pagesExpanded
+
+        IllustFirstPage(
             illust: illust,
-            expanded: $pagesExpanded,
-            onTapPage: { i in viewerIndex = i; showViewer = true }
+            pages: pages,
+            collapsed: collapsed,
+            onTap: { viewerIndex = 0; showViewer = true },
+            onExpand: { withAnimation(.easeInOut(duration: 0.25)) { pagesExpanded = true } }
         )
+        .matchedTransitionSource(id: 0, in: viewerZoom)
+
+        if !collapsed {
+            ForEach(Array(pages.enumerated()).dropFirst(), id: \.offset) { idx, page in
+                StackedPage(urls: page) { viewerIndex = idx; showViewer = true }
+                    .matchedTransitionSource(id: idx, in: viewerZoom)
+            }
+            if collapsible {
+                CollapsePagesPill {
+                    withAnimation(.easeInOut(duration: 0.25)) { pagesExpanded = false }
+                }
+                .padding(.vertical, 12)
+            }
+        }
 
         V3TitleCard(illust: illust)
 
@@ -323,8 +364,8 @@ struct IllustDetailView: View {
 
         V3ArtistCard(vm: vm)
 
-        if let caption = illust.caption, !V3Caption.plain(caption).isEmpty {
-            V3CaptionView(caption: caption)
+        if !vm.captionPlain.isEmpty {
+            V3CaptionView(text: vm.captionPlain)
         }
 
         if let tags = illust.tags, !tags.isEmpty {
@@ -345,17 +386,19 @@ struct IllustDetailView: View {
     }
 }
 
-// MARK: - Pages (vertical stack, collapsible, stretchy first page)
+// MARK: - Pages (collapsible, stretchy first page; rest emitted lazily by content(for:))
 
-private struct IllustPagesStack: View {
+/// Works with more than this many pages collapse to the first page behind an
+/// "expand" pill so tags / comments / related are reachable without a long
+/// scroll (parity with `CollapsibleIllustAdapter`).
+private let collapsePagesThreshold = 3
+
+private struct IllustFirstPage: View {
     let illust: Illust
-    @Binding var expanded: Bool
-    var onTapPage: (Int) -> Void
-
-    /// Works with more than this many pages collapse to the first page behind an
-    /// "expand" pill so tags / comments / related are reachable without a long
-    /// scroll (parity with `CollapsibleIllustAdapter`).
-    private static let collapseThreshold = 3
+    let pages: [IllustPageURLs]
+    let collapsed: Bool
+    var onTap: () -> Void
+    var onExpand: () -> Void
 
     private var firstAspect: CGFloat {
         let w = max(CGFloat(illust.width ?? 1), 1)
@@ -364,24 +407,18 @@ private struct IllustPagesStack: View {
     }
 
     var body: some View {
-        let pages = IllustPagesHero.pages(for: illust)
-        let collapsible = pages.count > Self.collapseThreshold
-        let collapsed = collapsible && !expanded
-
         VStack(spacing: 0) {
             if illust.type == "ugoira" {
                 UgoiraView(
                     illustId: illust.id,
                     fallbackURL: pages.first?.large ?? pages.first?.original,
                     contentMode: .fit,
-                    onTap: { onTapPage(0) }
+                    onTap: onTap
                 )
                 .frame(maxWidth: .infinity)
                 .frame(height: UIScreen.main.bounds.width / max(firstAspect, 0.1))
             } else if let first = pages.first {
-                StretchyFirstPage(urls: first, aspect: firstAspect) {
-                    onTapPage(0)
-                }
+                StretchyFirstPage(urls: first, aspect: firstAspect, onTap: onTap)
                 .overlay(alignment: .topTrailing) {
                     if pages.count > 1 {
                         Label("\(pages.count)", systemImage: "square.on.square")
@@ -394,21 +431,7 @@ private struct IllustPagesStack: View {
                 }
                 .overlay(alignment: .bottom) {
                     if collapsed {
-                        ExpandPagesPill(remaining: pages.count - 1) {
-                            withAnimation(.easeInOut(duration: 0.25)) { expanded = true }
-                        }
-                    }
-                }
-
-                if !collapsed {
-                    ForEach(Array(pages.enumerated()).dropFirst(), id: \.offset) { idx, page in
-                        StackedPage(urls: page) { onTapPage(idx) }
-                    }
-                    if collapsible {
-                        CollapsePagesPill {
-                            withAnimation(.easeInOut(duration: 0.25)) { expanded = false }
-                        }
-                        .padding(.vertical, 12)
+                        ExpandPagesPill(remaining: pages.count - 1, onTap: onExpand)
                     }
                 }
             }
@@ -419,7 +442,7 @@ private struct IllustPagesStack: View {
 /// First page with the classic iOS stretchy-header effect: pulling the scroll
 /// view past its top enlarges the image (filling the revealed gap and zooming).
 private struct StretchyFirstPage: View {
-    let urls: HeroPageURLs
+    let urls: IllustPageURLs
     let aspect: CGFloat
     var onTap: () -> Void
 
@@ -453,11 +476,12 @@ private struct StretchyFirstPage: View {
             .offset(y: -stretch)
             .contentShape(Rectangle())
             .onTapGesture { onTap() }
+            .task(id: urls.original) {
+                await loader.run(large: urls.large, original: urls.original,
+                                 pixelWidth: Int(proxy.size.width * UIScreen.main.scale))
+            }
         }
         .frame(height: baseHeight)
-        .task(id: urls.original) {
-            await loader.run(large: urls.large, original: urls.original)
-        }
     }
 }
 
@@ -465,7 +489,7 @@ private struct StretchyFirstPage: View {
 /// aspect (Pixiv `meta_pages` carry no per-page dimensions, so the height
 /// settles once the image loads).
 private struct StackedPage: View {
-    let urls: HeroPageURLs
+    let urls: IllustPageURLs
     var onTap: () -> Void
 
     @State private var loader = HeroImageLoader()
@@ -490,7 +514,9 @@ private struct StackedPage: View {
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
         .task(id: urls.original) {
-            await loader.run(large: urls.large, original: urls.original)
+            // Stacked pages span the full screen width (no geometry reader here).
+            await loader.run(large: urls.large, original: urls.original,
+                             pixelWidth: Int(UIScreen.main.bounds.width * UIScreen.main.scale))
         }
     }
 }
@@ -706,10 +732,11 @@ private struct FollowButton: View {
 }
 
 private struct V3CaptionView: View {
-    let caption: String
+    /// Already-plaintext caption (HTML stripped by the view model).
+    let text: String
 
     var body: some View {
-        Text(V3Caption.plain(caption))
+        Text(text)
             .font(.system(size: 13))
             .foregroundStyle(Theme.v3Text2)
             .lineSpacing(5)
@@ -1148,54 +1175,33 @@ enum V3Date {
         return iso.date(from: s)
     }
 
-    static func dateTime(_ s: String?) -> String {
-        guard let d = parse(s) else { return s ?? "" }
+    // Formatters are expensive to construct (locale/calendar load) and these
+    // run in list-row bodies — cache them like `iso` above. Calls are
+    // main-thread only (view bodies), matching DateFormatter's thread rules.
+    private static let dateTimeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd HH:mm"
-        return f.string(from: d)
+        return f
+    }()
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
+    static func dateTime(_ s: String?) -> String {
+        guard let d = parse(s) else { return s ?? "" }
+        return dateTimeFormatter.string(from: d)
     }
 
     static func relative(_ s: String?) -> String {
         guard let d = parse(s) else { return "" }
-        let f = RelativeDateTimeFormatter()
-        f.unitsStyle = .abbreviated
-        return f.localizedString(for: d, relativeTo: Date())
+        return relativeFormatter.localizedString(for: d, relativeTo: Date())
     }
 }
 
-// MARK: - Hero page URL helpers + progressive loader
-
-/// Per-page (`large`, `original`) URL pairs for an illust, plus the full-res
-/// URL list for the zoom viewer / downloader.
-enum IllustPagesHero {
-    /// The hero paints `large` first — the same URL the waterfall caches, so it
-    /// appears instantly — then upgrades to `original`. `large` falls back to
-    /// `medium`; `original` falls back to `large`.
-    static func pages(for illust: Illust) -> [HeroPageURLs] {
-        func u(_ s: String?) -> URL? { s.flatMap(URL.init(string:)) }
-        if let metaPages = illust.metaPages, !metaPages.isEmpty {
-            return metaPages.map {
-                HeroPageURLs(
-                    large: u($0.imageUrls?.large ?? $0.imageUrls?.medium),
-                    original: u($0.imageUrls?.original ?? $0.imageUrls?.large)
-                )
-            }
-        }
-        let large = illust.imageUrls?.large ?? illust.imageUrls?.medium
-        let original = illust.metaSinglePage?.originalImageUrl ?? illust.imageUrls?.original ?? large
-        return [HeroPageURLs(large: u(large), original: u(original))]
-    }
-
-    /// Full-resolution page URLs for the zoom viewer (`original`, fallback `large`).
-    static func urls(for illust: Illust) -> [URL] {
-        pages(for: illust).compactMap { $0.original ?? $0.large }
-    }
-}
-
-struct HeroPageURLs: Hashable {
-    let large: URL?
-    let original: URL?
-}
+// MARK: - Progressive hero loader
 
 /// Drives the two-stage hero load (cached `large` → progress-tracked `original`).
 /// `@MainActor` so its observable state is mutated safely; the structured `.task`
@@ -1208,7 +1214,17 @@ private final class HeroImageLoader {
     var isLoadingOriginal = false
     private var showedOriginal = false
 
-    func run(large: URL?, original: URL?) async {
+    /// `pixelWidth` is the rendered width in physical pixels — geometry is the
+    /// view's knowledge, not this loader's.
+    func run(large: URL?, original: URL?, pixelWidth: Int) async {
+        // Memoized display-sized original from a previous visit — skip
+        // the large placeholder and the disk round-trip entirely.
+        if let original, let cached = PixivImageCache.shared.displayImage(for: original) {
+            image = cached
+            showedOriginal = true
+            return
+        }
+
         if let large {
             if let cached = PixivImageCache.shared.image(for: large) {
                 if !showedOriginal { image = cached }
@@ -1218,20 +1234,21 @@ private final class HeroImageLoader {
         }
         if Task.isCancelled { return }
 
-        // Already at full res, or nothing better to fetch — done.
-        guard let original, original != large else { return }
-        if let cached = PixivImageCache.shared.image(for: original) {
-            image = cached
-            showedOriginal = true
-            return
-        }
+        // Already showing the same URL at full res, or nothing better — done.
+        guard let original, !showedOriginal else { return }
+        if original == large, image != nil { return }
 
         isLoadingOriginal = true
-        let img = await PixivImageCache.shared.loadWithProgress(original) { [weak self] p in
+        // Disk-cached bytes shared with the zoom viewer — one download serves
+        // both pages. The hero only ever decodes a display-sized bitmap.
+        let data = await PixivImageCache.shared.loadData(original) { [weak self] p in
             self?.progress = p
         }
         isLoadingOriginal = false
-        guard !Task.isCancelled, let img else { return }
+        guard !Task.isCancelled, let data,
+              let img = await PixivImageCache.decodeForDisplay(data, pixelWidth: pixelWidth)
+        else { return }
+        PixivImageCache.shared.setDisplayImage(img, for: original)
         image = img
         showedOriginal = true
     }
@@ -1244,14 +1261,8 @@ private struct HeroOriginalProgress: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            ZStack {
-                Circle().stroke(.white.opacity(0.3), lineWidth: 2)
-                Circle()
-                    .trim(from: 0, to: max(0.02, progress))
-                    .stroke(.white, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            }
-            .frame(width: 15, height: 15)
+            ProgressRing(progress: progress, track: .white.opacity(0.3))
+                .frame(width: 15, height: 15)
             Text("\(Int(progress * 100))%")
                 .font(.caption2.weight(.semibold).monospacedDigit())
                 .foregroundStyle(.white)
@@ -1261,6 +1272,12 @@ private struct HeroOriginalProgress: View {
         .background(.black.opacity(0.55), in: .capsule)
         .padding(12)
     }
+}
+
+/// Last scroll anchor for direction detection — reference type so per-tick
+/// updates don't invalidate the page (see `IllustDetailView.scrollAnchor`).
+private final class ScrollAnchor {
+    var lastOffset: CGFloat = 0
 }
 
 /// Tracks the detail scroll view's content top so the action pill can hide on
@@ -1311,10 +1328,7 @@ private struct BottomActionBar: View {
                     Image(systemName: "arrow.down.to.line").font(.title3)
                 case .downloading(let p):
                     ZStack {
-                        Circle().stroke(.secondary.opacity(0.3), lineWidth: 2)
-                        Circle().trim(from: 0, to: max(0.02, p))
-                            .stroke(Theme.brand, style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                            .rotationEffect(.degrees(-90))
+                        ProgressRing(progress: p, tint: Theme.brand, track: .secondary.opacity(0.3))
                         Text("\(Int(p * 100))")
                             .font(.system(size: 9, weight: .bold).monospacedDigit())
                     }
@@ -1335,18 +1349,18 @@ private struct BottomActionBar: View {
 
     private func runDownload() async {
         guard let illust = vm.illust else { return }
-        let urls = IllustPagesHero.urls(for: illust)   // originals (fallback large)
+        let urls = IllustPages.urls(for: illust)   // originals (fallback large)
         guard !urls.isEmpty else { return }
         guard await PhotoLibrarySaver.requestAuthorization() else { await flashFailed(); return }
 
         let total = Double(urls.count)
         download = .downloading(0)
         for (i, url) in urls.enumerated() {
-            let img = await PixivImageCache.shared.loadWithProgress(url) { p in
+            let data = await PixivImageCache.shared.loadData(url) { p in
                 download = .downloading((Double(i) + p) / total)
             }
-            guard let img else { await flashFailed(); return }
-            do { try await PhotoLibrarySaver.save(img) } catch { await flashFailed(); return }
+            guard let data else { await flashFailed(); return }
+            do { try await PhotoLibrarySaver.save(data: data) } catch { await flashFailed(); return }
             download = .downloading(Double(i + 1) / total)
         }
         download = .done

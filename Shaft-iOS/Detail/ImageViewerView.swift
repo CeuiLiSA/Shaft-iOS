@@ -1,16 +1,18 @@
 import SwiftUI
 import Photos
+import UIKit
 
 /// Full-screen pannable + pinch-zoomable image viewer with multi-page swipe.
 /// Save button writes the current page to Photos; for multi-page works a
 /// "save all" affordance writes every page in sequence with a count badge.
 /// Mirrors Shaft `FragmentImageDetail`.
 struct ImageViewerView: View {
-    let urls: [URL]
+    let pages: [IllustPageURLs]
     @Binding var index: Int
 
     @Environment(\.dismiss) private var dismiss
     @State private var saveStatus: SaveStatus = .idle
+    @State private var showControls = true
 
     enum SaveStatus: Equatable {
         case idle
@@ -29,19 +31,24 @@ struct ImageViewerView: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
             TabView(selection: $index) {
-                ForEach(Array(urls.enumerated()), id: \.offset) { i, url in
-                    ZoomableAsyncImage(url: url)
-                        .tag(i)
-                        .ignoresSafeArea()
+                ForEach(Array(pages.enumerated()), id: \.offset) { i, page in
+                    ZoomImagePage(large: page.large, original: page.original ?? page.large) {
+                        withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+                    }
+                    .tag(i)
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: urls.count > 1 ? .always : .never))
+            .tabViewStyle(.page(indexDisplayMode: pages.count > 1 && showControls ? .always : .never))
+            // On the TabView itself, not the pages: the TabView lays its pages
+            // out in its own bounds, so a safe-area-constrained TabView gives
+            // every page letterboxed (island + home bar) black bands no matter
+            // what the pages ignore.
+            .ignoresSafeArea()
 
             HStack(spacing: 12) {
-                if urls.count > 1 {
-                    Text("\(index + 1) / \(urls.count)")
+                if pages.count > 1 {
+                    Text("\(index + 1) / \(pages.count)")
                         .font(.footnote.bold())
                         .padding(.horizontal, 10).padding(.vertical, 5)
                         .background(.black.opacity(0.5), in: .capsule)
@@ -49,7 +56,7 @@ struct ImageViewerView: View {
                 }
                 Spacer()
 
-                if urls.count > 1 {
+                if pages.count > 1 {
                     Button {
                         Task { await saveAll() }
                     } label: {
@@ -83,6 +90,8 @@ struct ImageViewerView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
+            .opacity(showControls ? 1 : 0)
+            .allowsHitTesting(showControls)
 
             if case .savingAll(let cur, let total) = saveStatus {
                 Text("\(cur) / \(total)")
@@ -104,6 +113,20 @@ struct ImageViewerView: View {
         }
         .preferredColorScheme(.dark)
         .statusBarHidden(true)
+        // Opaque black backdrop. Known tradeoff: the zoom transition scales
+        // the destination INCLUDING its background (no system cross-fade), so
+        // the letterbox around the image travels as part of the zooming card.
+        // A clear background avoids that but lets the detail page show through
+        // at rest — opaque black was preferred.
+        .presentationBackground(.black)
+        .onAppear {
+            if AppSettingsStore.shared.illustDetailKeepScreenOn {
+                UIApplication.shared.isIdleTimerDisabled = true
+            }
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+        }
     }
 
     private var saveButtonIcon: String {
@@ -123,7 +146,9 @@ struct ImageViewerView: View {
     }
 
     private func save() async {
-        guard let url = urls[safe: index] else { return }
+        // Index straight into `pages` — the same array driving the TabView —
+        // so the saved image always matches the visible page.
+        guard let page = pages[safe: index], let url = page.original ?? page.large else { return }
         saveStatus = .saving
         if await saveOne(url) {
             saveStatus = .saved
@@ -133,14 +158,15 @@ struct ImageViewerView: View {
     }
 
     private func saveAll() async {
-        let total = urls.count
+        let total = pages.count
         guard total > 0 else { return }
         guard await PhotoLibrarySaver.requestAuthorization() else {
             saveStatus = .failed("Photos access denied")
             return
         }
-        for (i, u) in urls.enumerated() {
+        for (i, page) in pages.enumerated() {
             saveStatus = .savingAll(current: i + 1, total: total)
+            guard let u = page.original ?? page.large else { continue }
             if !(await saveOne(u, alreadyAuthorized: true)) { return }
         }
         saveStatus = .saved
@@ -149,8 +175,10 @@ struct ImageViewerView: View {
     }
 
     /// Returns true on success, sets `saveStatus = .failed(...)` on error.
+    /// Writes the original encoded bytes — no re-encode, pixel-identical to
+    /// what pixiv serves (same as Shaft's saveImageToGallery).
     private func saveOne(_ url: URL, alreadyAuthorized: Bool = false) async -> Bool {
-        guard let image = await PixivImageCache.shared.load(url) else {
+        guard let data = await PixivImageCache.shared.loadData(url) else {
             saveStatus = .failed("Couldn't load image")
             return false
         }
@@ -161,7 +189,7 @@ struct ImageViewerView: View {
             }
         }
         do {
-            try await PhotoLibrarySaver.save(image)
+            try await PhotoLibrarySaver.save(data: data)
             return true
         } catch {
             saveStatus = .failed(error.localizedDescription)
@@ -194,66 +222,11 @@ enum PhotoLibrarySaver {
             }
         }
     }
-}
 
-/// One-page pinch + double-tap zoom. Uses ScrollView's built-in zoom for
-/// simplicity (iOS 17+ accepts `.zoomable()` style via gesture composition).
-struct ZoomableAsyncImage: View {
-    let url: URL?
-
-    @State private var scale: CGFloat = 1
-    @State private var lastScale: CGFloat = 1
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
-
-    var body: some View {
-        GeometryReader { geo in
-            PixivAsyncImage(url: url, contentMode: .fit)
-                .frame(width: geo.size.width, height: geo.size.height)
-                .scaleEffect(scale)
-                .offset(offset)
-                .gesture(zoomGesture)
-                .simultaneousGesture(panGesture)
-                .onTapGesture(count: 2) { toggleZoom() }
-        }
-    }
-
-    private var zoomGesture: some Gesture {
-        MagnifyGesture()
-            .onChanged { v in
-                scale = max(1, min(lastScale * v.magnification, 5))
-            }
-            .onEnded { _ in
-                lastScale = scale
-                if scale <= 1.01 {
-                    withAnimation(.spring(response: 0.3)) {
-                        scale = 1; lastScale = 1
-                        offset = .zero; lastOffset = .zero
-                    }
-                }
-            }
-    }
-
-    private var panGesture: some Gesture {
-        DragGesture()
-            .onChanged { v in
-                guard scale > 1 else { return }
-                offset = CGSize(
-                    width: lastOffset.width + v.translation.width,
-                    height: lastOffset.height + v.translation.height
-                )
-            }
-            .onEnded { _ in lastOffset = offset }
-    }
-
-    private func toggleZoom() {
-        withAnimation(.spring(response: 0.3)) {
-            if scale > 1 {
-                scale = 1; lastScale = 1
-                offset = .zero; lastOffset = .zero
-            } else {
-                scale = 2.5; lastScale = 2.5
-            }
+    /// Writes already-encoded image bytes as-is — lossless save.
+    static func save(data: Data) async throws {
+        try await PHPhotoLibrary.shared().performChanges {
+            PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)
         }
     }
 }

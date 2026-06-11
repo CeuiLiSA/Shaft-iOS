@@ -231,8 +231,20 @@ enum PixivLinkParser {
         return []
     }
 
+    /// Compiled once — `shortcuts(for:)` runs in the search List's body on
+    /// every keystroke, and NSRegularExpression compilation isn't free.
+    private static let compiledPatterns: [String: NSRegularExpression] = {
+        let patterns = [
+            "/artworks/(\\d+)", "/i/(\\d+)", "/users/(\\d+)",
+            "/member.php\\?id=(\\d+)", "/novel/show.php\\?id=(\\d+)", "/n/(\\d+)",
+        ]
+        return Dictionary(uniqueKeysWithValues: patterns.compactMap { p in
+            (try? NSRegularExpression(pattern: p)).map { (p, $0) }
+        })
+    }()
+
     private static func match(_ input: String, _ pattern: String) -> Int64? {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        guard let regex = compiledPatterns[pattern] else { return nil }
         let range = NSRange(input.startIndex..., in: input)
         guard let m = regex.firstMatch(in: input, range: range), m.numberOfRanges >= 2 else { return nil }
         guard let r = Range(m.range(at: 1), in: input) else { return nil }

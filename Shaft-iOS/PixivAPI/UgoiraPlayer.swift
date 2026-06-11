@@ -67,13 +67,16 @@ final class UgoiraLoader {
             let order = meta.frames.map {
                 UgoiraFrameRef(file: $0.file ?? "", delayMs: $0.delay ?? 100)
             }
-            let frameDatas = try await Task.detached(priority: .userInitiated) {
-                try await UgoiraLoader.fetchAndUnpack(zipURL: zipURL, order: order)
+            // Decode AND pre-rasterize off the main actor: playback swaps
+            // bitmaps every few frames, and a commit-time JPEG decode on the
+            // main thread would hitch the first loop through the animation.
+            let frames = try await Task.detached(priority: .userInitiated) {
+                let frameDatas = try await UgoiraLoader.fetchAndUnpack(zipURL: zipURL, order: order)
+                return frameDatas.compactMap { fd -> UgoiraAnimation.Frame? in
+                    guard let img = UIImage(data: fd.data) else { return nil }
+                    return .init(image: img.preparingForDisplay() ?? img, duration: fd.duration)
+                }
             }.value
-            let frames = frameDatas.compactMap { fd -> UgoiraAnimation.Frame? in
-                guard let img = UIImage(data: fd.data) else { return nil }
-                return .init(image: img, duration: fd.duration)
-            }
             guard !frames.isEmpty else { state = .failed("No frames"); return }
             state = .ready(UgoiraAnimation(frames: frames))
         } catch {
@@ -84,10 +87,7 @@ final class UgoiraLoader {
     /// Download the zip and unpack the frames named in `order`, off the main
     /// actor. Returns frames in playback order.
     private static func fetchAndUnpack(zipURL: URL, order: [UgoiraFrameRef]) async throws -> [UgoiraFrameData] {
-        var req = URLRequest(url: zipURL)
-        req.setValue("https://app-api.pixiv.net/", forHTTPHeaderField: "Referer")
-        req.setValue("PixivIOSApp/7.13.4", forHTTPHeaderField: "User-Agent")
-        let (data, _) = try await URLSession.shared.data(for: req)
+        let (data, _) = try await URLSession.shared.data(for: .pixivImage(zipURL))
         let files = try ZipReader.unpackAll(data)
         return order.compactMap { ref in
             guard let bytes = files[ref.file] else { return nil }
@@ -197,9 +197,14 @@ struct AnimatedUgoiraView: View {
             .aspectRatio(contentMode: contentMode)
             .task {
                 guard animation.frames.count > 1 else { return }
+                // Absolute deadlines, not sleep-per-frame: per-frame sleep
+                // error would accumulate and slow the loop over time.
+                let clock = ContinuousClock()
+                var deadline = clock.now
                 while !Task.isCancelled {
                     let dur = animation.frames[min(index, animation.frames.count - 1)].duration
-                    try? await Task.sleep(nanoseconds: UInt64(max(dur, 0.01) * 1_000_000_000))
+                    deadline = deadline.advanced(by: .seconds(max(dur, 0.01)))
+                    try? await clock.sleep(until: deadline, tolerance: .milliseconds(2))
                     if Task.isCancelled { break }
                     index = (index + 1) % animation.frames.count
                 }

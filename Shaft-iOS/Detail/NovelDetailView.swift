@@ -4,7 +4,12 @@ import SwiftUI
 @Observable
 final class NovelDetailViewModel {
     let novelId: Int64
-    var novel: Novel?
+    var novel: Novel? {
+        didSet { captionPlain = novel?.caption.map { V3Caption.plain($0) } ?? "" }
+    }
+    /// Plaintext caption derived once per novel change — HTML stripping runs
+    /// regex replacement and must not run per body evaluation.
+    private(set) var captionPlain: String = ""
     var comments: [CommentItem] = []
     var totalComments: Int?
     var isLoading = false
@@ -169,8 +174,8 @@ struct NovelDetailView: View {
                             .padding(.horizontal, 16)
                         }
 
-                        if let caption = novel.caption, !caption.isEmpty {
-                            Text(htmlPlain(caption))
+                        if !vm.captionPlain.isEmpty {
+                            Text(vm.captionPlain)
                                 .font(.callout)
                                 .padding(.horizontal, 16)
                         }
@@ -315,12 +320,6 @@ struct NovelDetailView: View {
     private func formatLen(_ n: Int) -> String {
         if n >= 10_000 { return "\(n / 1_000)k" }
         return "\(n)"
-    }
-
-    private func htmlPlain(_ s: String) -> String {
-        s.replacingOccurrences(of: "<br />", with: "\n")
-            .replacingOccurrences(of: "<br>", with: "\n")
-            .replacingOccurrences(of: "<.+?>", with: "", options: .regularExpression)
     }
 }
 

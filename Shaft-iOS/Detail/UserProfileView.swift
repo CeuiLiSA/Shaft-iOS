@@ -409,7 +409,8 @@ struct UserProfileView: View {
             }
         }
         .fullScreenCover(item: $viewerItem) { item in
-            ImageViewerView(urls: [item.url], index: $viewerIndex)
+            ImageViewerView(pages: [IllustPageURLs(large: nil, original: item.url)],
+                            index: $viewerIndex)
         }
     }
 

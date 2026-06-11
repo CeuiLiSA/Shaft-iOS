@@ -55,6 +55,7 @@
 		A1000000000000000000B046 /* RecommendUsersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F046 /* RecommendUsersView.swift */; };
 		A1000000000000000000B047 /* LatestWorksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F047 /* LatestWorksView.swift */; };
 		A1000000000000000000B048 /* WebArticleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F048 /* WebArticleView.swift */; };
+		A1000000000000000000B067 /* ProgressRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F067 /* ProgressRing.swift */; };
 		A1000000000000000000B049 /* MuteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F049 /* MuteStore.swift */; };
 		A1000000000000000000B050 /* MutedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F050 /* MutedView.swift */; };
 		A1000000000000000000B051 /* SeriesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F051 /* SeriesViews.swift */; };
@@ -72,6 +73,7 @@
 		A1000000000000000000B063 /* tunnel-atlas.webp in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F063 /* tunnel-atlas.webp */; };
 		A1000000000000000000B064 /* tunnel-atlas-lq.webp in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F064 /* tunnel-atlas-lq.webp */; };
 		A1000000000000000000B065 /* AppSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F065 /* AppSettingsStore.swift */; };
+		A1000000000000000000B066 /* ZoomImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F066 /* ZoomImageView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -124,6 +126,7 @@
 		A1000000000000000000F046 /* RecommendUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendUsersView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F047 /* LatestWorksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LatestWorksView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F048 /* WebArticleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebArticleView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F067 /* ProgressRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressRing.swift; sourceTree = "<group>"; };
 		A1000000000000000000F049 /* MuteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuteStore.swift; sourceTree = "<group>"; };
 		A1000000000000000000F050 /* MutedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutedView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F051 /* SeriesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesViews.swift; sourceTree = "<group>"; };
@@ -141,6 +144,7 @@
 		A1000000000000000000F063 /* tunnel-atlas.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "tunnel-atlas.webp"; sourceTree = "<group>"; };
 		A1000000000000000000F064 /* tunnel-atlas-lq.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "tunnel-atlas-lq.webp"; sourceTree = "<group>"; };
 		A1000000000000000000F065 /* AppSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsStore.swift; sourceTree = "<group>"; };
+		A1000000000000000000F066 /* ZoomImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomImageView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -228,6 +232,7 @@
 			children = (
 				A1000000000000000000F027 /* IllustWaterfallList.swift */,
 				A1000000000000000000F048 /* WebArticleView.swift */,
+				A1000000000000000000F067 /* ProgressRing.swift */,
 				A1000000000000000000F058 /* Theme.swift */,
 			);
 			path = Common;
@@ -251,6 +256,7 @@
 				A1000000000000000000F033 /* CommentsView.swift */,
 				A1000000000000000000F034 /* UserListsViews.swift */,
 				A1000000000000000000F042 /* ImageViewerView.swift */,
+				A1000000000000000000F066 /* ZoomImageView.swift */,
 				A1000000000000000000F043 /* NovelReaderView.swift */,
 				A1000000000000000000F046 /* RecommendUsersView.swift */,
 				A1000000000000000000F051 /* SeriesViews.swift */,
@@ -483,12 +489,14 @@
 				A1000000000000000000B065 /* AppSettingsStore.swift in Sources */,
 				A1000000000000000000B041 /* AboutAndPlaceholders.swift in Sources */,
 				A1000000000000000000B042 /* ImageViewerView.swift in Sources */,
+				A1000000000000000000B066 /* ZoomImageView.swift in Sources */,
 				A1000000000000000000B043 /* NovelReaderView.swift in Sources */,
 				A1000000000000000000B044 /* HistoryStore.swift in Sources */,
 				A1000000000000000000B045 /* HistoryView.swift in Sources */,
 				A1000000000000000000B046 /* RecommendUsersView.swift in Sources */,
 				A1000000000000000000B047 /* LatestWorksView.swift in Sources */,
 				A1000000000000000000B048 /* WebArticleView.swift in Sources */,
+				A1000000000000000000B067 /* ProgressRing.swift in Sources */,
 				A1000000000000000000B049 /* MuteStore.swift in Sources */,
 				A1000000000000000000B050 /* MutedView.swift in Sources */,
 				A1000000000000000000B051 /* SeriesViews.swift in Sources */,
@@ -561,7 +569,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -618,7 +626,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -636,6 +644,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Shaft-iOS/Preview Content\"";
+				DEVELOPMENT_TEAM = TW739Z29RC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save illustrations to your photo library.";
@@ -665,6 +674,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Shaft-iOS/Preview Content\"";
+				DEVELOPMENT_TEAM = TW739Z29RC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save illustrations to your photo library.";

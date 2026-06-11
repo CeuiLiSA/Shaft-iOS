@@ -853,3 +853,37 @@ struct SelfProfileResponse: Codable, Sendable {
         }
     }
 }
+
+// MARK: - Per-page image URL pairs
+
+/// Per-page (`large`, `original`) URL pair for an illust — the currency shared
+/// by the detail hero, the zoom viewer, and the downloader.
+struct IllustPageURLs: Hashable {
+    let large: URL?
+    let original: URL?
+}
+
+enum IllustPages {
+    /// The hero paints `large` first — the same URL the waterfall caches, so it
+    /// appears instantly — then upgrades to `original`. `large` falls back to
+    /// `medium`; `original` falls back to `large`.
+    static func pages(for illust: Illust) -> [IllustPageURLs] {
+        func u(_ s: String?) -> URL? { s.flatMap(URL.init(string:)) }
+        if let metaPages = illust.metaPages, !metaPages.isEmpty {
+            return metaPages.map {
+                IllustPageURLs(
+                    large: u($0.imageUrls?.large ?? $0.imageUrls?.medium),
+                    original: u($0.imageUrls?.original ?? $0.imageUrls?.large)
+                )
+            }
+        }
+        let large = illust.imageUrls?.large ?? illust.imageUrls?.medium
+        let original = illust.metaSinglePage?.originalImageUrl ?? illust.imageUrls?.original ?? large
+        return [IllustPageURLs(large: u(large), original: u(original))]
+    }
+
+    /// Full-resolution page URLs (`original`, fallback `large`).
+    static func urls(for illust: Illust) -> [URL] {
+        pages(for: illust).compactMap { $0.original ?? $0.large }
+    }
+}

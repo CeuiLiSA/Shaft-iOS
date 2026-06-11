@@ -92,9 +92,22 @@ final class HistoryStore {
         return decoded
     }
 
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
+
+    /// Coalesced, off-main persistence. `record()` fires exactly when a detail
+    /// page is being pushed — JSON-encoding up to 500 entries on the main
+    /// thread there competes with the navigation transition. The 300ms window
+    /// also collapses bursts (e.g. multi-row swipe deletes) into one write.
     private func save() {
-        if let data = try? JSONEncoder().encode(entries) {
-            defaults.set(data, forKey: key)
+        saveTask?.cancel()
+        let snapshot = entries
+        let key = key
+        saveTask = Task.detached(priority: .utility) {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            if let data = try? JSONEncoder().encode(snapshot) {
+                UserDefaults.standard.set(data, forKey: key)
+            }
         }
     }
 }
