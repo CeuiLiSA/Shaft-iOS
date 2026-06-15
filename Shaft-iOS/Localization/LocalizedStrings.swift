@@ -7,6 +7,8 @@ enum LocalizedStrings {
 
     private static let table: [String: [LocalizedKey: String]] = [
         "en": [
+            .slideshowPlay: "Slideshow",
+            .primeTagsTitle: "Hot tags",
             .dlTitle: "Downloads",
             .dlTabQueue: "Queue", .dlTabActive: "Active", .dlTabDone: "Done",
             .dlPauseAll: "Pause all", .dlResumeAll: "Resume all",
@@ -481,6 +483,8 @@ enum LocalizedStrings {
             .nrMsgLoadFail: "Load failed",
         ],
         "zh-Hans": [
+            .slideshowPlay: "幻灯片播放",
+            .primeTagsTitle: "热度标签",
             .dlTitle: "下载管理",
             .dlTabQueue: "批量队列", .dlTabActive: "正在下载", .dlTabDone: "已完成",
             .dlPauseAll: "全部暂停", .dlResumeAll: "全部继续",
@@ -955,6 +959,8 @@ enum LocalizedStrings {
             .nrMsgLoadFail: "加载失败",
         ],
         "zh-Hant": [
+            .slideshowPlay: "幻燈片播放",
+            .primeTagsTitle: "熱度標籤",
             .dlTitle: "下載管理",
             .dlTabQueue: "批次佇列", .dlTabActive: "正在下載", .dlTabDone: "已完成",
             .dlPauseAll: "全部暫停", .dlResumeAll: "全部繼續",

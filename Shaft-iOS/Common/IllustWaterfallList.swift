@@ -31,6 +31,7 @@ struct IllustWaterfallList: View {
 
     @State private var mute = MuteStore.shared
     @State private var bulkSeed: BulkSelectionSeed?
+    @State private var slideshowSeed: SlideshowSeed?
     @Environment(OnboardingStore.self) private var l10n
 
     init(
@@ -72,6 +73,11 @@ struct IllustWaterfallList: View {
                         .buttonStyle(.plain)
                         .contextMenu {
                             Button {
+                                slideshowSeed = SlideshowBuilder.seed(from: visible, tapped: illust)
+                            } label: {
+                                Label(l10n.t(.slideshowPlay), systemImage: "play.rectangle.on.rectangle")
+                            }
+                            Button {
                                 bulkSeed = BulkSelectionSeed(illusts: visible)
                             } label: {
                                 Label(l10n.t(.dlBulkEntry), systemImage: "checklist")
@@ -95,6 +101,9 @@ struct IllustWaterfallList: View {
         .refreshable { await onRefresh() }
         .fullScreenCover(item: $bulkSeed) { seed in
             BulkSelectView(illusts: seed.illusts)
+        }
+        .fullScreenCover(item: $slideshowSeed) { seed in
+            SlideshowView(seed: seed)
         }
     }
 }

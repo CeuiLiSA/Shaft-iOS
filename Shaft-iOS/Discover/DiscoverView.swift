@@ -55,6 +55,7 @@ struct DiscoverView: View {
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     chip(.spotlight, label: l10n.t(.discoverSpotlight), icon: "doc.richtext")
+                    chip(.primeTags, label: l10n.t(.primeTagsTitle), icon: "flame")
                     chip(.ranking(initialMode: "day"), label: l10n.t(.rankingTitle), icon: "trophy")
                     chip(.latestWorks, label: l10n.t(.latestWorksTitle), icon: "clock.badge")
                     chip(.mangaRecommend, label: l10n.t(.profileManga), icon: "book")

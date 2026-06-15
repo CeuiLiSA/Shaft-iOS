@@ -43,6 +43,7 @@ enum AppRoute: Hashable, Codable, Sendable {
     case infoCategory(categoryId: Int, title: String)
     case watchlist
     case novelMarkers
+    case primeTags
 
     enum CommentTarget: Hashable, Codable, Sendable {
         case illust(Int64)

@@ -108,6 +108,8 @@ struct RouteHost: ViewModifier {
                 WatchlistView()
             case .novelMarkers:
                 NovelMarkersView()
+            case .primeTags:
+                PrimeTagsView()
         }
     }
 }

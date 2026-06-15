@@ -262,4 +262,10 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case dlBulkEntry, dlBulkTitle, dlBulkSelectAll, dlBulkDeselectAll
     case dlBulkSummaryFmt, dlBulkDownloadSelected, dlBulkExportLinks
     case dlEnqueuedFmt, dlLinksCopiedFmt
+
+    // Slideshow (1:1 port of pixiv/ui/slideshow/)
+    case slideshowPlay
+
+    // Prime / featured tags (1:1 port of pixiv/ui/prime/)
+    case primeTagsTitle
 }
