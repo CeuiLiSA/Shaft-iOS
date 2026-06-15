@@ -87,7 +87,7 @@ struct RouteHost: ViewModifier {
             case .history:
                 HistoryView()
             case .downloads:
-                DownloadsView()
+                DownloadManagerView()
             case .mute:
                 MutedView()
             case .settings:

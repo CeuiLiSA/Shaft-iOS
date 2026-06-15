@@ -82,6 +82,10 @@
 		A1000000000000000000B091 /* ComicReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F091 /* ComicReaderView.swift */; };
 		A1000000000000000000B092 /* ComicReaderSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F092 /* ComicReaderSettingsSheet.swift */; };
 		A1000000000000000000B093 /* ComicReaderSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F093 /* ComicReaderSheets.swift */; };
+		A1000000000000000000B094 /* DownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F094 /* DownloadManager.swift */; };
+		A1000000000000000000B095 /* UgoiraGIF.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F095 /* UgoiraGIF.swift */; };
+		A1000000000000000000B096 /* DownloadManagerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F096 /* DownloadManagerView.swift */; };
+		A1000000000000000000B097 /* BulkSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F097 /* BulkSelectView.swift */; };
 		A1000000000000000000B049 /* MuteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F049 /* MuteStore.swift */; };
 		A1000000000000000000B050 /* MutedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F050 /* MutedView.swift */; };
 		A1000000000000000000B051 /* SeriesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F051 /* SeriesViews.swift */; };
@@ -179,6 +183,10 @@
 		A1000000000000000000F091 /* ComicReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComicReaderView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F092 /* ComicReaderSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComicReaderSettingsSheet.swift; sourceTree = "<group>"; };
 		A1000000000000000000F093 /* ComicReaderSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComicReaderSheets.swift; sourceTree = "<group>"; };
+		A1000000000000000000F094 /* DownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManager.swift; sourceTree = "<group>"; };
+		A1000000000000000000F095 /* UgoiraGIF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UgoiraGIF.swift; sourceTree = "<group>"; };
+		A1000000000000000000F096 /* DownloadManagerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloadManagerView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F097 /* BulkSelectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkSelectView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F049 /* MuteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuteStore.swift; sourceTree = "<group>"; };
 		A1000000000000000000F050 /* MutedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutedView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F051 /* SeriesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesViews.swift; sourceTree = "<group>"; };
@@ -242,6 +250,7 @@
 				A1000000000000000000G019 /* Mute */,
 				A1000000000000000000G020 /* NovelReader */,
 				A1000000000000000000G021 /* ComicReader */,
+				A1000000000000000000G022 /* Download */,
 				A1000000000000000000F003 /* Assets.xcassets */,
 				A1000000000000000000G004 /* Preview Content */,
 			);
@@ -406,6 +415,17 @@
 			path = ComicReader;
 			sourceTree = "<group>";
 		};
+		A1000000000000000000G022 /* Download */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000F094 /* DownloadManager.swift */,
+				A1000000000000000000F095 /* UgoiraGIF.swift */,
+				A1000000000000000000F096 /* DownloadManagerView.swift */,
+				A1000000000000000000F097 /* BulkSelectView.swift */,
+			);
+			path = Download;
+			sourceTree = "<group>";
+		};
 		A1000000000000000000G016 /* WhatsNew */ = {
 			isa = PBXGroup;
 			children = (
@@ -568,6 +588,10 @@
 				A1000000000000000000B091 /* ComicReaderView.swift in Sources */,
 				A1000000000000000000B092 /* ComicReaderSettingsSheet.swift in Sources */,
 				A1000000000000000000B093 /* ComicReaderSheets.swift in Sources */,
+				A1000000000000000000B094 /* DownloadManager.swift in Sources */,
+				A1000000000000000000B095 /* UgoiraGIF.swift in Sources */,
+				A1000000000000000000B096 /* DownloadManagerView.swift in Sources */,
+				A1000000000000000000B097 /* BulkSelectView.swift in Sources */,
 				A1000000000000000000B005 /* KeychainTokenStore.swift in Sources */,
 				A1000000000000000000B006 /* LoginView.swift in Sources */,
 				A1000000000000000000B007 /* PixivOAuthConfig.swift in Sources */,

@@ -1396,6 +1396,7 @@ private struct BottomActionBar: View {
             download = .downloading(Double(i + 1) / total)
         }
         download = .done
+        DownloadManager.shared.recordCompleted(illust)   // surface in Downloads → Done
         try? await Task.sleep(nanoseconds: 1_500_000_000)
         if download == .done { download = .idle }
     }

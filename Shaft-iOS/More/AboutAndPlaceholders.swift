@@ -32,14 +32,4 @@ struct AboutView: View {
     }
 }
 
-struct DownloadsView: View {
-    @Environment(OnboardingStore.self) private var l10n
-    var body: some View {
-        PlaceholderView(title: l10n.t(.downloadsTitle),
-                        systemImage: "arrow.down.circle",
-                        subtitle: l10n.t(.nothingHere))
-            .navigationTitle(l10n.t(.downloadsTitle))
-            .navigationBarTitleDisplayMode(.inline)
-    }
-}
 

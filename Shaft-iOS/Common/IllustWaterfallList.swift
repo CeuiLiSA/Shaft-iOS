@@ -30,6 +30,8 @@ struct IllustWaterfallList: View {
     let prefiltered: Bool
 
     @State private var mute = MuteStore.shared
+    @State private var bulkSeed: BulkSelectionSeed?
+    @Environment(OnboardingStore.self) private var l10n
 
     init(
         illusts: [Illust],
@@ -69,6 +71,12 @@ struct IllustWaterfallList: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
+                            Button {
+                                bulkSeed = BulkSelectionSeed(illusts: visible)
+                            } label: {
+                                Label(l10n.t(.dlBulkEntry), systemImage: "checklist")
+                            }
+                            Divider()
                             IllustCellContextMenuItems(illust: illust)
                         }
                     }
@@ -85,6 +93,9 @@ struct IllustWaterfallList: View {
             .padding(.vertical, 8)
         }
         .refreshable { await onRefresh() }
+        .fullScreenCover(item: $bulkSeed) { seed in
+            BulkSelectView(illusts: seed.illusts)
+        }
     }
 }
 

@@ -245,4 +245,21 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case crNoSeries, crSeriesFirst, crSeriesLast, crSeriesLoading
     case crSeriesTitle, crSeriesCountFmt, crSeriesEmpty, crSeriesLoadFailedFmt, crSeriesCurrent
     case crMsgSaved, crMsgOpFailed
+
+    // Download manager (1:1 port of Pixiv-Shaft download/ + bulk/) — Photos sink
+    case dlTitle, dlTabQueue, dlTabActive, dlTabDone
+    case dlPauseAll, dlResumeAll
+    case dlQueuePause, dlQueueResume, dlQueueRetryFailed, dlQueueClearAll
+    case dlQueueEmptyTitle, dlQueueEmptyHint
+    case dlClearQueueTitle, dlClearQueueMessage
+    case dlStatusPending, dlStatusDownloading, dlStatusSuccess, dlStatusFailed
+    case dlRetryFmt
+    case dlActiveEmptyTitle, dlActiveEmptyHint, dlActivePaused, dlActivePageFmt
+    case dlUgoiraQueued, dlUgoiraMeta, dlUgoiraFrames, dlUgoiraEncode
+    case dlDoneEmptyTitle, dlDoneEmptyHint
+    case dlDoneLayoutList, dlDoneLayoutGrid, dlDoneLayoutCompact
+    case dlDoneClearHistory, dlDoneClearTitle, dlDoneClearMessage, dlDoneSearchHint
+    case dlBulkEntry, dlBulkTitle, dlBulkSelectAll, dlBulkDeselectAll
+    case dlBulkSummaryFmt, dlBulkDownloadSelected, dlBulkExportLinks
+    case dlEnqueuedFmt, dlLinksCopiedFmt
 }
