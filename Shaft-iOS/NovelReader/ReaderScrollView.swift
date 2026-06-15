@@ -34,6 +34,7 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
     var topInset: CGFloat = 0
 
     private static let smoothScrollMaxItems = 40
+    private var pendingHeightRecalc = false
 
     var touchLocked = false
     var menuStrings = ReaderMenuStrings()
@@ -138,6 +139,22 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
         tableView.setContentOffset(CGPoint(x: 0, y: y), animated: false)
     }
 
+    /// Coalesce per-image height invalidations into a single relayout per runloop
+    /// turn — a burst of images decoding together would otherwise trigger one
+    /// begin/endUpdates pass each, thrashing the table and jumping the offset.
+    private func setNeedsHeightRecalc() {
+        guard !pendingHeightRecalc else { return }
+        pendingHeightRecalc = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.pendingHeightRecalc = false
+            UIView.performWithoutAnimation {
+                self.tableView.beginUpdates()
+                self.tableView.endUpdates()
+            }
+        }
+    }
+
     // MARK: Table
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { rows.count }
@@ -164,15 +181,12 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
             return cell
         case .divider:
             let cell = dequeue(ScrollDividerCell.self, "d")
-            cell.configure(style: style, hMargin: horizontalMargin)
+            cell.configure(style: style, hMargin: horizontalMargin, containerWidth: bounds.width)
             return cell
         case .image(let element, _):
             let cell = dequeue(ScrollImageCell.self, "i")
             cell.configure(element: element, style: style, hMargin: horizontalMargin)
-            cell.onHeightChange = { [weak tableView] in
-                tableView?.beginUpdates()
-                tableView?.endUpdates()
-            }
+            cell.onHeightChange = { [weak self] in self?.setNeedsHeightRecalc() }
             cell.onTap = { [weak self] in self?.onImageTap?(element) }
             return cell
         case .jump(let target, _):
@@ -349,10 +363,13 @@ final class ScrollDividerCell: UITableViewCell {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(style: ReaderTypeStyle, hMargin: CGFloat) {
+    func configure(style: ReaderTypeStyle, hMargin: CGFloat, containerWidth: CGFloat) {
         line.backgroundColor = style.theme.dividerColor
         // Upstream: 25% content-width side insets, 0.8 × chapterTopGap above/below.
-        let contentWidth = UIScreen.main.bounds.width - hMargin * 2
+        // Use the table's own width (not UIScreen.main, which is wrong under
+        // iPad split-view / Stage Manager).
+        let width = containerWidth > 0 ? containerWidth : UIScreen.main.bounds.width
+        let contentWidth = width - hMargin * 2
         leading.constant = hMargin + contentWidth * 0.25
         trailing.constant = -(hMargin + contentWidth * 0.25)
         top.constant = style.chapterTopGap * 0.8

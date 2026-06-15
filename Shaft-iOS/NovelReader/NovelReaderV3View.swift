@@ -9,17 +9,32 @@ import UIKit
 
 struct NovelReaderV3View: View {
     @State private var currentNovelId: Int64
+    // Owned here, not in the per-novel screen: series navigation rebuilds the
+    // screen via `.id`, so a screen-local baseline would re-capture the
+    // already-dimmed value and never restore. Living here, it survives the swap.
+    @State private var savedBrightness: CGFloat?
 
     init(novelId: Int64) {
         _currentNovelId = State(initialValue: novelId)
     }
 
     var body: some View {
-        // Series navigation swaps the whole reader for the target novel.
-        NovelReaderV3Screen(novelId: currentNovelId) { nextId in
-            currentNovelId = nextId
+        // The ZStack keeps a stable identity across `currentNovelId` changes, so
+        // its onDisappear fires only when the whole reader is dismissed.
+        ZStack {
+            // Series navigation swaps the whole reader for the target novel.
+            NovelReaderV3Screen(novelId: currentNovelId, savedBrightness: $savedBrightness) { nextId in
+                currentNovelId = nextId
+            }
+            .id(currentNovelId)
         }
-        .id(currentNovelId)
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
+            if let saved = savedBrightness {
+                UIScreen.main.brightness = saved
+                savedBrightness = nil
+            }
+        }
     }
 }
 
@@ -58,6 +73,7 @@ private enum ReaderSheet: Identifiable {
 
 private struct NovelReaderV3Screen: View {
     let novelId: Int64
+    @Binding var savedBrightness: CGFloat?
     let openNovel: (Int64) -> Void
 
     @State private var vm: NovelReaderV3ViewModel
@@ -65,13 +81,13 @@ private struct NovelReaderV3Screen: View {
     @State private var chromeVisible = false
     @State private var activeSheet: ReaderSheet?
     @State private var showMoreMenu = false
-    @State private var savedBrightness: CGFloat?
     @Environment(OnboardingStore.self) private var l10n
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
-    init(novelId: Int64, openNovel: @escaping (Int64) -> Void) {
+    init(novelId: Int64, savedBrightness: Binding<CGFloat?>, openNovel: @escaping (Int64) -> Void) {
         self.novelId = novelId
+        self._savedBrightness = savedBrightness
         self.openNovel = openNovel
         _vm = State(wrappedValue: NovelReaderV3ViewModel(novelId: novelId))
     }
@@ -141,7 +157,7 @@ private struct NovelReaderV3Screen: View {
             await vm.loadIfNeeded()
         }
         .onAppear { applyScreenEffects() }
-        .onDisappear { restoreScreenEffects() }
+        .onDisappear { vm.flushPendingProgress() }
         .onChange(of: settings.keepScreenOn) { applyScreenEffects() }
         .onChange(of: settings.useSystemBrightness) { applyScreenEffects() }
         .onChange(of: settings.customBrightness) { applyScreenEffects() }
@@ -223,6 +239,7 @@ private struct NovelReaderV3Screen: View {
                     query: Bindable(vm).searchQuery,
                     currentIndex: vm.searchIndex,
                     total: vm.searchHits.count,
+                    searching: vm.searching,
                     regexEnabled: Bindable(vm).searchRegex,
                     onSubmit: { vm.performSearch() },
                     onPrev: { vm.prevSearchHit() },
@@ -463,14 +480,6 @@ private struct NovelReaderV3Screen: View {
                 savedBrightness = UIScreen.main.brightness
             }
             UIScreen.main.brightness = CGFloat(settings.customBrightness)
-        }
-    }
-
-    private func restoreScreenEffects() {
-        UIApplication.shared.isIdleTimerDisabled = false
-        if let saved = savedBrightness {
-            UIScreen.main.brightness = saved
-            savedBrightness = nil
         }
     }
 }

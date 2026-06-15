@@ -54,9 +54,11 @@ final class NovelReaderV3ViewModel {
 
     var searchQuery = ""
     var searchRegex = false
-    var searchHits: [ReaderSearchHit] = []
-    var searchIndex = 0
-    var searchActive = false
+    var searching = false
+    var searchHits: [ReaderSearchHit] = [] { didSet { rebuildOverlays() } }
+    var searchIndex = 0 { didSet { rebuildOverlays() } }
+    var searchActive = false { didSet { rebuildOverlays() } }
+    @ObservationIgnored private var searchTask: Task<Void, Never>?
 
     // MARK: Series
 
@@ -89,6 +91,7 @@ final class NovelReaderV3ViewModel {
     /// Set by the host — series navigation replaces the whole reader.
     @ObservationIgnored var onOpenNovel: ((Int64) -> Void)?
 
+    @ObservationIgnored private var detailTask: Task<Void, Never>?
     @ObservationIgnored private let api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
     @ObservationIgnored private let store = NovelReaderLocalStore.shared
     @ObservationIgnored private var l10n: (LocalizedKey) -> String = { $0.rawValue }
@@ -110,7 +113,8 @@ final class NovelReaderV3ViewModel {
     func load() async {
         loadState = .loading
         // Novel metadata (bookmark state, series, author) — independent fetch.
-        Task { [weak self] in
+        // Stored so interactions (e.g. bookmark) can await the real state.
+        detailTask = Task { [weak self] in
             guard let self else { return }
             if let resp = try? await self.api.novelDetail(self.novelId) {
                 self.novel = resp.novel
@@ -150,6 +154,8 @@ final class NovelReaderV3ViewModel {
             prefaceLabel: l10n(.nrPreface)
         )
         desiredCharIndex = ReaderProgressStore.loadCharIndex(novelId: novelId)
+        refreshAnnotationsCache()
+        rebuildOverlays()
         loadState = .loaded
     }
 
@@ -211,12 +217,33 @@ final class NovelReaderV3ViewModel {
     @ObservationIgnored private var lastScrollSavedChar = -1
     var scrollFraction: Double = 0
 
+    @ObservationIgnored private var progressSaveTask: Task<Void, Never>?
+
     func onScrollPositionChanged(fraction: Double, charIndex: Int) {
         scrollFraction = fraction
         guard charIndex != lastScrollSavedChar else { return }
         lastScrollSavedChar = charIndex
         desiredCharIndex = charIndex
-        ReaderProgressStore.saveProgress(novelId: novelId, charIndex: charIndex, pageIndex: 0, totalPages: 0)
+        scheduleProgressSave(charIndex: charIndex)
+    }
+
+    /// Debounce progress persistence — the top-visible char changes many times a
+    /// second during a fling, so coalesce to a single UserDefaults write.
+    private func scheduleProgressSave(charIndex: Int) {
+        progressSaveTask?.cancel()
+        progressSaveTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled, let self else { return }
+            ReaderProgressStore.saveProgress(novelId: self.novelId, charIndex: charIndex, pageIndex: 0, totalPages: 0)
+        }
+    }
+
+    /// Flush any pending scroll-progress write immediately (on leave / series nav).
+    func flushPendingProgress() {
+        progressSaveTask?.cancel()
+        progressSaveTask = nil
+        guard NovelReaderSettings.shared.readingDirection == .vertical, lastScrollSavedChar >= 0 else { return }
+        ReaderProgressStore.saveProgress(novelId: novelId, charIndex: lastScrollSavedChar, pageIndex: 0, totalPages: 0)
     }
 
     var currentCharIndex: Int {
@@ -258,7 +285,18 @@ final class NovelReaderV3ViewModel {
     /// Bottom-bar prev/next chapter; falls through to series neighbors when
     /// the outline is exhausted (upstream tryJumpSeriesNeighbor).
     func goToChapter(forward: Bool) {
+        // No chapter outline: paged mode turns a single page (upstream
+        // flipForward/Backward); fall through to a series neighbour only at the
+        // first/last page. Scroll mode has no page unit, so go to series.
         guard !outline.isEmpty else {
+            if NovelReaderSettings.shared.readingDirection == .horizontal,
+               let pages = pagination?.pages, !pages.isEmpty {
+                let target = min(max(currentPageIndex + (forward ? 1 : -1), 0), pages.count - 1)
+                if target != currentPageIndex {
+                    send(.goToPage(target, animated: true))
+                    return
+                }
+            }
             Task { await jumpSeriesNeighbor(forward: forward) }
             return
         }
@@ -270,11 +308,11 @@ final class NovelReaderV3ViewModel {
                 Task { await jumpSeriesNeighbor(forward: true) }
             }
         } else {
-            let preceding = outline.filter { $0.sourceStart < current }
-            if preceding.count >= 2 {
-                jumpToCharIndex(preceding[preceding.count - 2].sourceStart)
-            } else if let first = outline.first, first.sourceStart < current {
-                jumpToCharIndex(first.sourceStart)
+            // "Previous chapter" returns to the start of the current chapter when
+            // reading mid-chapter, and steps to the prior chapter only when already
+            // at a boundary — matches upstream `lastOrNull { start < current }`.
+            if let prev = outline.last(where: { $0.sourceStart < current }) {
+                jumpToCharIndex(prev.sourceStart)
             } else {
                 Task { await jumpSeriesNeighbor(forward: false) }
             }
@@ -352,6 +390,9 @@ final class NovelReaderV3ViewModel {
         guard !bookmarkBusy else { return }
         bookmarkBusy = true
         defer { bookmarkBusy = false }
+        // Toggle against the real bookmark state, not the optimistic default:
+        // wait for the metadata fetch if the user tapped before it landed.
+        await detailTask?.value
         let target = !isBookmarked
         isBookmarked = target
         do {
@@ -371,18 +412,31 @@ final class NovelReaderV3ViewModel {
     // MARK: Search
 
     func performSearch() {
-        guard !searchQuery.isEmpty else {
+        let query = searchQuery
+        guard !query.isEmpty else {
             clearSearch()
             return
         }
-        var hits = ReaderSearchEngine.search(sourceText: sourceText, query: searchQuery, regex: searchRegex)
-        if let pages = pagination?.pages {
-            hits = ReaderSearchEngine.annotatePageIndices(hits: hits, pages: pages)
-        }
-        searchHits = hits
-        searchIndex = 0
-        if let first = hits.first {
-            jumpToCharIndex(first.absoluteStart)
+        let regex = searchRegex
+        let text = sourceText
+        let pages = pagination?.pages
+        searchTask?.cancel()
+        searching = true
+        searchTask = Task { [weak self] in
+            // Full-text regex scan can be heavy on long novels — run it off the
+            // main thread so the search bar stays responsive.
+            let hits = await Task.detached(priority: .userInitiated) { () -> [ReaderSearchHit] in
+                var h = ReaderSearchEngine.search(sourceText: text, query: query, regex: regex)
+                if let pages { h = ReaderSearchEngine.annotatePageIndices(hits: h, pages: pages) }
+                return h
+            }.value
+            guard !Task.isCancelled, let self else { return }
+            self.searching = false
+            self.searchHits = hits
+            self.searchIndex = 0
+            if let first = hits.first {
+                self.jumpToCharIndex(first.absoluteStart)
+            }
         }
     }
 
@@ -405,15 +459,27 @@ final class NovelReaderV3ViewModel {
     }
 
     func clearSearch() {
+        searchTask?.cancel()
+        searching = false
         searchHits = []
         searchIndex = 0
     }
 
     // MARK: Overlays (search highlights + annotations)
 
-    var overlays: [HighlightRange] {
+    /// Overlay highlights are cached and rebuilt only when annotations or search
+    /// state change — they're read on every `updateUIView`, so recomputing the
+    /// annotation filter+sort each time would burn cycles during scrolling.
+    private(set) var overlays: [HighlightRange] = []
+    @ObservationIgnored private var cachedNovelAnnotations: [NovelAnnotation] = []
+
+    private func refreshAnnotationsCache() {
+        cachedNovelAnnotations = store.annotations(for: novelId)
+    }
+
+    private func rebuildOverlays() {
         var result: [HighlightRange] = []
-        for a in store.annotations(for: novelId) {
+        for a in cachedNovelAnnotations {
             result.append(HighlightRange(
                 absoluteStart: a.charStart, absoluteEnd: a.charEnd,
                 color: UIColor(argb: a.colorARGB)
@@ -428,7 +494,7 @@ final class NovelReaderV3ViewModel {
                 ))
             }
         }
-        return result
+        overlays = result
     }
 
     var annotations: [NovelAnnotation] { store.annotations(for: novelId) }
@@ -441,6 +507,8 @@ final class NovelReaderV3ViewModel {
             novelId: novelId, charStart: selection.absoluteStart, charEnd: selection.absoluteEnd,
             excerpt: selection.text, colorARGB: color.argb
         )
+        refreshAnnotationsCache()
+        rebuildOverlays()
         showToast(l10n(.nrMsgHighlighted))
     }
 
@@ -450,11 +518,15 @@ final class NovelReaderV3ViewModel {
             charStart: charStart, charEnd: charEnd,
             excerpt: excerpt, noteText: noteText, colorARGB: colorARGB
         )
+        refreshAnnotationsCache()
+        rebuildOverlays()
         showToast(l10n(.nrMsgNoteSaved))
     }
 
     func deleteAnnotation(_ id: Int64) {
         store.deleteAnnotation(id: id)
+        refreshAnnotationsCache()
+        rebuildOverlays()
     }
 
     /// 「保存位置」— bookmark the current reading position.

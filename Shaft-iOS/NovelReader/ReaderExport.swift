@@ -96,10 +96,10 @@ enum ReaderExporter {
                 out += "\n"
             case .pageBreak:
                 out += "\n- - - - - - - - - -\n\n"
-            case .pixivImage(_, _, let id, let page):
-                out += page > 0 ? "[图片: pixiv \(id)-\(page)]\n" : "[图片: pixiv \(id)]\n"
+            case .pixivImage(_, _, let id, _):
+                out += "[图片: pixiv \(id)]\n"
             case .uploadedImage(_, _, let id):
-                out += "[图片: \(id)]\n"
+                out += "[图片: uploaded \(id)]\n"
             case .jump(_, _, let target):
                 out += "[跳转→第 \(target) 段]\n"
             }
@@ -275,7 +275,12 @@ enum ReaderExporter {
 
         // Build the single XHTML document with chapter anchors.
         var bodyHtml = "<h1>\(xmlEscape(input.title))</h1>\n"
-        bodyHtml += "<p class=\"meta\">\(xmlEscape(input.author))</p>\n"
+        if !input.author.isEmpty {
+            bodyHtml += "<p class=\"meta\">\(xmlEscape(input.author))</p>\n"
+        }
+        if !input.caption.isEmpty {
+            bodyHtml += "<p class=\"caption\">\(xmlEscape(input.caption).replacingOccurrences(of: "\n", with: "<br/>"))</p>\n"
+        }
         var chapterAnchors: [(id: String, title: String)] = []
         for (i, token) in input.tokens.enumerated() {
             switch token {
@@ -306,6 +311,7 @@ enum ReaderExporter {
         h2 { border-bottom: 1px solid #ccc; margin-top: 2em; }
         p { text-indent: 2em; margin: 0.5em 0; }
         p.meta { text-align: center; font-size: 0.9em; text-indent: 0; }
+        p.caption { font-size: 0.9em; color: #666; text-indent: 0; margin: 1em 0; }
         p.blank { text-indent: 0; }
         p.image { text-align: center; text-indent: 0; }
         img { max-width: 100%; }
@@ -336,7 +342,7 @@ enum ReaderExporter {
         <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
         <dc:title>\(xmlEscape(input.title))</dc:title>
         <dc:creator>\(xmlEscape(input.author))</dc:creator>
-        <dc:language>zh</dc:language>
+        <dc:language>zh-CN</dc:language>
         <dc:identifier id="bookid">\(bookId)</dc:identifier>
         </metadata>
         <manifest>\(manifestItems)</manifest>

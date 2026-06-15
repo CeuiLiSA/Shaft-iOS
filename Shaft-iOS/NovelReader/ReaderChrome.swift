@@ -166,6 +166,7 @@ struct ReaderSearchOverlayBar: View {
     @Binding var query: String
     let currentIndex: Int
     let total: Int
+    let searching: Bool
     @Binding var regexEnabled: Bool
     var onSubmit: () -> Void
     var onPrev: () -> Void
@@ -238,6 +239,7 @@ struct ReaderSearchOverlayBar: View {
     }
 
     private var countLabel: String {
+        if searching { return "…" }
         if query.isEmpty { return "" }
         if total == 0 { return l10n.t(.nrSearchNoResult) }
         return "\(currentIndex + 1) / \(total)"

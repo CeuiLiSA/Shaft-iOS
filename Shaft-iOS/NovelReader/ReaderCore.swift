@@ -267,7 +267,10 @@ enum ReaderSearchEngine {
                     break
                 }
             }
-            h.pageIndex = found
+            // A hit falling in the gap between two pages' char ranges attaches to
+            // the following page (clamped to the last) — matches upstream's
+            // forward-cursor assignment rather than leaving it un-jumpable (-1).
+            h.pageIndex = found >= 0 ? found : min(lo, pages.count - 1)
             return h
         }
     }

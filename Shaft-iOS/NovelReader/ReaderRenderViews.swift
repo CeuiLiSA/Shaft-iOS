@@ -51,6 +51,11 @@ final class ReaderTextBlockView: UITextView, UITextViewDelegate {
 
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
+        // Pin to TextKit 1: the paginator measures line breaks with NSLayoutManager
+        // (TextKit 1), so touching `.layoutManager` forces this text view off the
+        // iOS 16+ TextKit 2 path and renders identical wrapping to the measured
+        // slices (otherwise characters can drift across page boundaries).
+        _ = layoutManager
         isEditable = false
         isSelectable = true
         isScrollEnabled = false
