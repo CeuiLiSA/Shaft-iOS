@@ -166,6 +166,7 @@ struct IllustDetailView: View {
     @State private var vm: IllustDetailViewModel
     @State private var showViewer = false
     @State private var viewerIndex = 0
+    @State private var showComicReader = false
     @State private var showBookmarkSheet = false
     @State private var actionBarVisible = true
     @State private var toolbarTitleVisible = false
@@ -308,6 +309,11 @@ struct IllustDetailView: View {
                             index: $viewerIndex)
                 .navigationTransition(.zoom(sourceID: viewerIndex, in: viewerZoom))
         }
+        .fullScreenCover(isPresented: $showComicReader) {
+            if let illust = vm.illust {
+                ComicReaderView(illust: illust)
+            }
+        }
         .sheet(isPresented: $showBookmarkSheet) {
             BookmarkTagsSheet(
                 existingTags: (vm.illust?.tags ?? []).compactMap { $0.name },
@@ -347,6 +353,25 @@ struct IllustDetailView: View {
                 }
                 .padding(.vertical, 12)
             }
+        }
+
+        // Multi-page works can open the dedicated manga reader (the existing
+        // zoom-pager on tap is kept; this is an explicit, non-destructive entry).
+        if pages.count > 1 {
+            Button {
+                showComicReader = true
+            } label: {
+                Label(l10n.t(.crEnter), systemImage: "book.pages")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Theme.brandGradient, in: .rect(cornerRadius: 14))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
+            .padding(.bottom, 2)
         }
 
         V3TitleCard(illust: illust)

@@ -74,6 +74,14 @@
 		A1000000000000000000B083 /* ReaderExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F083 /* ReaderExport.swift */; };
 		A1000000000000000000B084 /* NovelReaderV3ViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F084 /* NovelReaderV3ViewModel.swift */; };
 		A1000000000000000000B085 /* NovelReaderV3View.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F085 /* NovelReaderV3View.swift */; };
+		A1000000000000000000B086 /* ComicReaderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F086 /* ComicReaderSettings.swift */; };
+		A1000000000000000000B087 /* ComicReaderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F087 /* ComicReaderStore.swift */; };
+		A1000000000000000000B088 /* ComicReaderViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F088 /* ComicReaderViewModel.swift */; };
+		A1000000000000000000B089 /* ComicPagedContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F089 /* ComicPagedContainer.swift */; };
+		A1000000000000000000B090 /* ComicWebtoonContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F090 /* ComicWebtoonContainer.swift */; };
+		A1000000000000000000B091 /* ComicReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F091 /* ComicReaderView.swift */; };
+		A1000000000000000000B092 /* ComicReaderSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F092 /* ComicReaderSettingsSheet.swift */; };
+		A1000000000000000000B093 /* ComicReaderSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F093 /* ComicReaderSheets.swift */; };
 		A1000000000000000000B049 /* MuteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F049 /* MuteStore.swift */; };
 		A1000000000000000000B050 /* MutedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F050 /* MutedView.swift */; };
 		A1000000000000000000B051 /* SeriesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F051 /* SeriesViews.swift */; };
@@ -163,6 +171,14 @@
 		A1000000000000000000F083 /* ReaderExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderExport.swift; sourceTree = "<group>"; };
 		A1000000000000000000F084 /* NovelReaderV3ViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelReaderV3ViewModel.swift; sourceTree = "<group>"; };
 		A1000000000000000000F085 /* NovelReaderV3View.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelReaderV3View.swift; sourceTree = "<group>"; };
+		A1000000000000000000F086 /* ComicReaderSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComicReaderSettings.swift; sourceTree = "<group>"; };
+		A1000000000000000000F087 /* ComicReaderStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComicReaderStore.swift; sourceTree = "<group>"; };
+		A1000000000000000000F088 /* ComicReaderViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComicReaderViewModel.swift; sourceTree = "<group>"; };
+		A1000000000000000000F089 /* ComicPagedContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComicPagedContainer.swift; sourceTree = "<group>"; };
+		A1000000000000000000F090 /* ComicWebtoonContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComicWebtoonContainer.swift; sourceTree = "<group>"; };
+		A1000000000000000000F091 /* ComicReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComicReaderView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F092 /* ComicReaderSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComicReaderSettingsSheet.swift; sourceTree = "<group>"; };
+		A1000000000000000000F093 /* ComicReaderSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComicReaderSheets.swift; sourceTree = "<group>"; };
 		A1000000000000000000F049 /* MuteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuteStore.swift; sourceTree = "<group>"; };
 		A1000000000000000000F050 /* MutedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutedView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F051 /* SeriesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesViews.swift; sourceTree = "<group>"; };
@@ -225,6 +241,7 @@
 				A1000000000000000000G018 /* History */,
 				A1000000000000000000G019 /* Mute */,
 				A1000000000000000000G020 /* NovelReader */,
+				A1000000000000000000G021 /* ComicReader */,
 				A1000000000000000000F003 /* Assets.xcassets */,
 				A1000000000000000000G004 /* Preview Content */,
 			);
@@ -372,6 +389,21 @@
 				A1000000000000000000F085 /* NovelReaderV3View.swift */,
 			);
 			path = NovelReader;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000G021 /* ComicReader */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000F086 /* ComicReaderSettings.swift */,
+				A1000000000000000000F087 /* ComicReaderStore.swift */,
+				A1000000000000000000F088 /* ComicReaderViewModel.swift */,
+				A1000000000000000000F089 /* ComicPagedContainer.swift */,
+				A1000000000000000000F090 /* ComicWebtoonContainer.swift */,
+				A1000000000000000000F091 /* ComicReaderView.swift */,
+				A1000000000000000000F092 /* ComicReaderSettingsSheet.swift */,
+				A1000000000000000000F093 /* ComicReaderSheets.swift */,
+			);
+			path = ComicReader;
 			sourceTree = "<group>";
 		};
 		A1000000000000000000G016 /* WhatsNew */ = {
@@ -528,6 +560,14 @@
 				A1000000000000000000B083 /* ReaderExport.swift in Sources */,
 				A1000000000000000000B084 /* NovelReaderV3ViewModel.swift in Sources */,
 				A1000000000000000000B085 /* NovelReaderV3View.swift in Sources */,
+				A1000000000000000000B086 /* ComicReaderSettings.swift in Sources */,
+				A1000000000000000000B087 /* ComicReaderStore.swift in Sources */,
+				A1000000000000000000B088 /* ComicReaderViewModel.swift in Sources */,
+				A1000000000000000000B089 /* ComicPagedContainer.swift in Sources */,
+				A1000000000000000000B090 /* ComicWebtoonContainer.swift in Sources */,
+				A1000000000000000000B091 /* ComicReaderView.swift in Sources */,
+				A1000000000000000000B092 /* ComicReaderSettingsSheet.swift in Sources */,
+				A1000000000000000000B093 /* ComicReaderSheets.swift in Sources */,
 				A1000000000000000000B005 /* KeychainTokenStore.swift in Sources */,
 				A1000000000000000000B006 /* LoginView.swift in Sources */,
 				A1000000000000000000B007 /* PixivOAuthConfig.swift in Sources */,

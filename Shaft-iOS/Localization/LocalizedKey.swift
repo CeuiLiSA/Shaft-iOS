@@ -229,4 +229,20 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case nrMsgFirstChapter, nrMsgLastChapter, nrMsgJumpNextFmt, nrMsgJumpPrevFmt
     case nrMsgNoteSaved, nrMsgHighlighted
     case nrMsgExportStartFmt, nrMsgExportFailFmt, nrMsgLoadFail
+
+    // V3 comic (manga) reader
+    case crEnter, crSettings
+    case crModeLabel, crModePaged, crModeWebtoon
+    case crDirectionLabel, crDirLtr, crDirRtl
+    case crFitLabel, crFitWidth, crFitScreen, crFitOriginal
+    case crAnimLabel, crAnimSlide, crAnimCover, crAnimDepth, crAnimFlipbook
+    case crBrightnessSystem, crBrightnessLabel, crWarmLabel, crPreloadLabel
+    case crKeepScreenOn, crImmersive, crShowPageNumber, crLoadOriginal, crTapReversed
+    case crLoadFailed, crNoPages
+    case crBookmarksTitle, crBookmarksButton, crBookmarksAddHere, crBookmarksEmpty, crBookmarksAdded
+    case crThumbsTitle
+    case crLongPressSave, crLongPressShare, crLongPressBookmark
+    case crNoSeries, crSeriesFirst, crSeriesLast, crSeriesLoading
+    case crSeriesTitle, crSeriesCountFmt, crSeriesEmpty, crSeriesLoadFailedFmt, crSeriesCurrent
+    case crMsgSaved, crMsgOpFailed
 }
