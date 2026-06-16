@@ -168,6 +168,7 @@ struct IllustDetailView: View {
     @State private var viewerIndex = 0
     @State private var showComicReader = false
     @State private var showBookmarkSheet = false
+    @State private var showReport = false
     @State private var actionBarVisible = true
     @State private var toolbarTitleVisible = false
     /// Plain class box, deliberately NOT observable state: the anchor advances
@@ -288,6 +289,12 @@ struct IllustDetailView: View {
                                   systemImage: "speaker.slash")
                         }
                     }
+                    Divider()
+                    Button(role: .destructive) {
+                        showReport = true
+                    } label: {
+                        Label(l10n.t(.actionReport), systemImage: "flag")
+                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -321,6 +328,9 @@ struct IllustDetailView: View {
             ) { restrict, tags in
                 await vm.bookmark(restrict: restrict, tags: tags)
             }
+        }
+        .sheet(isPresented: $showReport) {
+            ReportIllustView(illustId: illustId)
         }
     }
 

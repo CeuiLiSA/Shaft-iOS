@@ -510,6 +510,18 @@ actor PixivAPI {
         try await post(path: "/v1/user/follow/delete", form: ["user_id": "\(userId)"])
     }
 
+    /// Report an illustration. 1:1 with upstream `postFlagIllust` —
+    /// `type_of_problem` is one of the four `FlagReason` keys, `message` the
+    /// user's free-text description.
+    @discardableResult
+    func reportIllust(_ illustId: Int64, typeOfProblem: String, message: String) async throws -> EmptyResponse {
+        try await post(path: "/v1/illust/report", form: [
+            "illust_id": "\(illustId)",
+            "type_of_problem": typeOfProblem,
+            "message": message,
+        ])
+    }
+
     // MARK: Internals
 
     private func get<T: Decodable>(path: String, query: [String: String] = [:]) async throws -> T {

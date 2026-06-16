@@ -268,4 +268,10 @@ enum LocalizedKey: String, CaseIterable, Sendable {
 
     // Prime / featured tags (1:1 port of pixiv/ui/prime/)
     case primeTagsTitle
+
+    // Report / flag illust (1:1 port of loxia/flag/)
+    case actionReport
+    case reportReasonTitle, reportDescTitle
+    case reportReasonSexual, reportReasonGrotesque, reportReasonCopyright, reportReasonOther
+    case reportHint, reportSubmit, reportSuccess
 }

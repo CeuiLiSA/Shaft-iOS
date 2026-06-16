@@ -37,6 +37,7 @@
 		A1000000000000000000B028 /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F028 /* AppRoute.swift */; };
 		A1000000000000000000B029 /* RouteHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F029 /* RouteHost.swift */; };
 		A1000000000000000000B030 /* IllustDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F030 /* IllustDetailView.swift */; };
+		A1000000000000000000B101 /* ReportIllustView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F101 /* ReportIllustView.swift */; };
 		A1000000000000000000B031 /* NovelDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F031 /* NovelDetailView.swift */; };
 		A1000000000000000000B032 /* UserProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F032 /* UserProfileView.swift */; };
 		A1000000000000000000B033 /* CommentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F033 /* CommentsView.swift */; };
@@ -141,6 +142,7 @@
 		A1000000000000000000F028 /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
 		A1000000000000000000F029 /* RouteHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteHost.swift; sourceTree = "<group>"; };
 		A1000000000000000000F030 /* IllustDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IllustDetailView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F101 /* ReportIllustView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportIllustView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F031 /* NovelDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelDetailView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F032 /* UserProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F033 /* CommentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentsView.swift; sourceTree = "<group>"; };
@@ -327,6 +329,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000F030 /* IllustDetailView.swift */,
+				A1000000000000000000F101 /* ReportIllustView.swift */,
 				A1000000000000000000F031 /* NovelDetailView.swift */,
 				A1000000000000000000F032 /* UserProfileView.swift */,
 				A1000000000000000000F033 /* CommentsView.swift */,
@@ -646,6 +649,7 @@
 				A1000000000000000000B028 /* AppRoute.swift in Sources */,
 				A1000000000000000000B029 /* RouteHost.swift in Sources */,
 				A1000000000000000000B030 /* IllustDetailView.swift in Sources */,
+				A1000000000000000000B101 /* ReportIllustView.swift in Sources */,
 				A1000000000000000000B031 /* NovelDetailView.swift in Sources */,
 				A1000000000000000000B032 /* UserProfileView.swift in Sources */,
 				A1000000000000000000B033 /* CommentsView.swift in Sources */,
