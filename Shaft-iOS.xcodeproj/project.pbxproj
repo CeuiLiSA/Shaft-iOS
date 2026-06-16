@@ -88,7 +88,7 @@
 		A1000000000000000000B097 /* BulkSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F097 /* BulkSelectView.swift */; };
 		A1000000000000000000B098 /* SlideshowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F098 /* SlideshowView.swift */; };
 		A1000000000000000000B099 /* PrimeTagsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F099 /* PrimeTagsView.swift */; };
-		A1000000000000000000B100 /* prime_index.json in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F100 /* prime_index.json */; };
+		A1000000000000000000B100 /* pixiv_prime in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F100 /* pixiv_prime */; };
 		A1000000000000000000B049 /* MuteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F049 /* MuteStore.swift */; };
 		A1000000000000000000B050 /* MutedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F050 /* MutedView.swift */; };
 		A1000000000000000000B051 /* SeriesViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F051 /* SeriesViews.swift */; };
@@ -192,7 +192,7 @@
 		A1000000000000000000F097 /* BulkSelectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BulkSelectView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F098 /* SlideshowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlideshowView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F099 /* PrimeTagsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrimeTagsView.swift; sourceTree = "<group>"; };
-		A1000000000000000000F100 /* prime_index.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = prime_index.json; sourceTree = "<group>"; };
+		A1000000000000000000F100 /* pixiv_prime */ = {isa = PBXFileReference; lastKnownFileType = folder; path = pixiv_prime; sourceTree = "<group>"; };
 		A1000000000000000000F049 /* MuteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MuteStore.swift; sourceTree = "<group>"; };
 		A1000000000000000000F050 /* MutedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MutedView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F051 /* SeriesViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesViews.swift; sourceTree = "<group>"; };
@@ -446,7 +446,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000F099 /* PrimeTagsView.swift */,
-				A1000000000000000000F100 /* prime_index.json */,
+				A1000000000000000000F100 /* pixiv_prime */,
 			);
 			path = Prime;
 			sourceTree = "<group>";
@@ -579,7 +579,7 @@
 				A1000000000000000000B071 /* montserrat_bold.ttf in Resources */,
 				A1000000000000000000B072 /* montserrat_semi_bold.ttf in Resources */,
 				A1000000000000000000B063 /* tunnel-atlas.webp in Resources */,
-				A1000000000000000000B100 /* prime_index.json in Resources */,
+				A1000000000000000000B100 /* pixiv_prime in Resources */,
 				A1000000000000000000B064 /* tunnel-atlas-lq.webp in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -110,6 +110,8 @@ struct RouteHost: ViewModifier {
                 NovelMarkersView()
             case .primeTags:
                 PrimeTagsView()
+            case .primeTagDetail(let file, let title):
+                PrimeTagDetailView(file: file, title: title)
         }
     }
 }
