@@ -43,7 +43,8 @@ enum UgoiraGIF {
             ($0.file ?? "", $0.delay ?? 100)
         }
         onPhase(.frames)
-        let (data, _) = try await URLSession.shared.data(for: .pixivImage(zipURL))
+        let (data, _) = try await DirectConnection.data(
+            for: .pixivImage(zipURL), using: DirectConnection.shared, directConnect: DirectConnection.isEnabledAtLaunch)
         let files = try ZipReader.unpackAll(data)
         let frames = order.compactMap { ref -> Frame? in
             guard let bytes = files[ref.file] else { return nil }

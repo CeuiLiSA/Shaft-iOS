@@ -20,6 +20,9 @@ final class PixivImageCache {
 
     private let cache = NSCache<NSString, UIImage>()
     private let session: URLSession
+    /// Snapshotted with the session: when set, CDN requests are rewritten
+    /// host→IP for direct connection (see `DirectConnection`).
+    private let directConnect: Bool
 
     init() {
         cache.countLimit = 200
@@ -34,7 +37,9 @@ final class PixivImageCache {
         // Pixiv CDN image URLs are immutable (content changes get new paths) —
         // serve straight from disk without revalidation round-trips.
         cfg.requestCachePolicy = .returnCacheDataElseLoad
-        self.session = URLSession(configuration: cfg)
+        self.directConnect = DirectConnection.isEnabled
+        self.session = directConnect ? DirectConnection.makeSession(cfg)
+                                     : URLSession(configuration: cfg)
     }
 
     func image(for url: URL) -> UIImage? {
@@ -69,8 +74,10 @@ final class PixivImageCache {
         if let inflight = inflightLoads[url] {
             return await inflight.value
         }
-        let task = Task { [session] () -> UIImage? in
-            guard let (data, _) = try? await session.data(for: .pixivImage(url)) else { return nil }
+        let task = Task { [session, directConnect] () -> UIImage? in
+            guard let (data, _) = try? await DirectConnection.data(
+                for: .pixivImage(url), using: session, directConnect: directConnect
+            ) else { return nil }
             return await Self.decodeThumbnail(data)
         }
         inflightLoads[url] = task
@@ -256,12 +263,25 @@ private final class ProgressImageDownloader: NSObject, URLSessionDownloadDelegat
     private let onProgress: @Sendable (Double) -> Void
     private var continuation: CheckedContinuation<Data?, Never>?
     private var finished = false
+    /// This downloader owns its session delegate (`self`), so it can't share
+    /// `DirectConnection`'s — it rewrites the request and runs the same trust
+    /// decision in `didReceive challenge` below.
+    private let directConnect = DirectConnection.isEnabled
 
     init(onProgress: @escaping @Sendable (Double) -> Void) {
         self.onProgress = onProgress
     }
 
     func run(_ request: URLRequest) async -> Data? {
+        // Direct connect routes over HTTP/3, which has no incremental byte
+        // progress — fetch whole, then report 100%.
+        if directConnect {
+            let data = try? await DirectConnection.data(
+                for: request, using: URLSession.shared, directConnect: true
+            ).0
+            if data != nil { onProgress(1.0) }
+            return data
+        }
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 30
         cfg.urlCache = nil  // originals persist in our own disk cache
@@ -309,6 +329,15 @@ private final class ProgressImageDownloader: NSObject, URLSessionDownloadDelegat
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         if error != nil { finish(nil, session) }
+    }
+
+    /// Re-anchors cert validation to the real host for direct-connect (IP
+    /// literal) downloads; a no-op otherwise. See `DirectConnection.handle`.
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    didReceive challenge: URLAuthenticationChallenge,
+                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        let (disposition, credential) = DirectConnection.handle(challenge, task: task)
+        completionHandler(disposition, credential)
     }
 }
 

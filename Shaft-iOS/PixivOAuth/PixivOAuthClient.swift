@@ -21,6 +21,10 @@ final class PixivOAuthClient {
     private let session: URLSession
     private let verifierStore: VerifierStore
     private let addDefaultHeaders: Bool
+    /// Direct-connect for the token endpoint (refresh + code exchange). The
+    /// interactive login web page loads in ASWebAuthenticationSession (system
+    /// Safari) and can't be routed through this — see `DirectConnection`.
+    private let directConnect: Bool
 
     init(
         config: PixivOAuthConfig,
@@ -31,13 +35,15 @@ final class PixivOAuthClient {
         self.config = config
         self.addDefaultHeaders = addDefaultHeaders
         self.verifierStore = verifierStore
+        self.directConnect = (session == nil) && DirectConnection.isEnabled
         if let session {
             self.session = session
         } else {
             let cfg = URLSessionConfiguration.default
             cfg.timeoutIntervalForRequest = 15
             cfg.timeoutIntervalForResource = 30
-            self.session = URLSession(configuration: cfg)
+            self.session = directConnect ? DirectConnection.makeSession(cfg)
+                                         : URLSession(configuration: cfg)
         }
     }
 
@@ -133,7 +139,7 @@ final class PixivOAuthClient {
 
         let issuedAt = Date()
         do {
-            let (data, response) = try await session.data(for: req)
+            let (data, response) = try await DirectConnection.data(for: req, using: session, directConnect: directConnect)
             guard let http = response as? HTTPURLResponse else {
                 return .failure(.networkError(message: "Non-HTTP response", underlying: nil))
             }

@@ -87,7 +87,8 @@ final class UgoiraLoader {
     /// Download the zip and unpack the frames named in `order`, off the main
     /// actor. Returns frames in playback order.
     private static func fetchAndUnpack(zipURL: URL, order: [UgoiraFrameRef]) async throws -> [UgoiraFrameData] {
-        let (data, _) = try await URLSession.shared.data(for: .pixivImage(zipURL))
+        let (data, _) = try await DirectConnection.data(
+            for: .pixivImage(zipURL), using: DirectConnection.shared, directConnect: DirectConnection.isEnabledAtLaunch)
         let files = try ZipReader.unpackAll(data)
         return order.compactMap { ref in
             guard let bytes = files[ref.file] else { return nil }

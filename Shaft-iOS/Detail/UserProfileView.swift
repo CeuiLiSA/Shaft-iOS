@@ -29,7 +29,8 @@ private enum WebUserDetailAPI {
             forHTTPHeaderField: "User-Agent"
         )
         req.setValue("https://www.pixiv.net/users/\(userId)", forHTTPHeaderField: "Referer")
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+        guard let (data, resp) = try? await DirectConnection.data(
+                  for: req, using: DirectConnection.shared, directConnect: DirectConnection.isEnabledAtLaunch),
               (resp as? HTTPURLResponse)?.statusCode == 200,
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               (root["error"] as? Bool) != true,

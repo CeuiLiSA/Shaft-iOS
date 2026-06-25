@@ -30,6 +30,9 @@
 		A1000000000000000000B021 /* AuthTokenProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F021 /* AuthTokenProvider.swift */; };
 		A1000000000000000000B022 /* PixivAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F022 /* PixivAsyncImage.swift */; };
 		A1000000000000000000B102 /* PixivClientIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F102 /* PixivClientIdentity.swift */; };
+		A1000000000000000000B105 /* DirectConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F105 /* DirectConnection.swift */; };
+		A1000000000000000000B106 /* QPACK.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F106 /* QPACK.swift */; };
+		A1000000000000000000B107 /* Http3Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F107 /* Http3Client.swift */; };
 		A1000000000000000000B023 /* PlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F023 /* PlaceholderView.swift */; };
 		A1000000000000000000B024 /* LocalizedKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F024 /* LocalizedKey.swift */; };
 		A1000000000000000000B025 /* LocalizedStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F025 /* LocalizedStrings.swift */; };
@@ -138,6 +141,9 @@
 		A1000000000000000000F021 /* AuthTokenProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthTokenProvider.swift; sourceTree = "<group>"; };
 		A1000000000000000000F022 /* PixivAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixivAsyncImage.swift; sourceTree = "<group>"; };
 		A1000000000000000000F102 /* PixivClientIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixivClientIdentity.swift; sourceTree = "<group>"; };
+		A1000000000000000000F105 /* DirectConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectConnection.swift; sourceTree = "<group>"; };
+		A1000000000000000000F106 /* QPACK.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QPACK.swift; sourceTree = "<group>"; };
+		A1000000000000000000F107 /* Http3Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Http3Client.swift; sourceTree = "<group>"; };
 		A1000000000000000000F023 /* PlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F024 /* LocalizedKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedKey.swift; sourceTree = "<group>"; };
 		A1000000000000000000F025 /* LocalizedStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedStrings.swift; sourceTree = "<group>"; };
@@ -281,6 +287,9 @@
 				A1000000000000000000F021 /* AuthTokenProvider.swift */,
 				A1000000000000000000F022 /* PixivAsyncImage.swift */,
 				A1000000000000000000F102 /* PixivClientIdentity.swift */,
+				A1000000000000000000F105 /* DirectConnection.swift */,
+				A1000000000000000000F106 /* QPACK.swift */,
+				A1000000000000000000F107 /* Http3Client.swift */,
 				A1000000000000000000F054 /* UgoiraPlayer.swift */,
 			);
 			path = PixivAPI;
@@ -651,6 +660,9 @@
 				A1000000000000000000B021 /* AuthTokenProvider.swift in Sources */,
 				A1000000000000000000B022 /* PixivAsyncImage.swift in Sources */,
 				A1000000000000000000B102 /* PixivClientIdentity.swift in Sources */,
+				A1000000000000000000B105 /* DirectConnection.swift in Sources */,
+				A1000000000000000000B106 /* QPACK.swift in Sources */,
+				A1000000000000000000B107 /* Http3Client.swift in Sources */,
 				A1000000000000000000B023 /* PlaceholderView.swift in Sources */,
 				A1000000000000000000B024 /* LocalizedKey.swift in Sources */,
 				A1000000000000000000B025 /* LocalizedStrings.swift in Sources */,

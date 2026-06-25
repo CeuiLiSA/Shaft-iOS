@@ -21,20 +21,32 @@ actor PixivAPI {
 
     private let session: URLSession
     private let tokenProvider: any PixivTokenProvider
+    /// Snapshotted with the session: when set, outgoing requests are rewritten
+    /// host→IP and the session validates the resulting cert against the real
+    /// host (see `DirectConnection`). Never on for an injected (test) session.
+    private let directConnect: Bool
 
     init(
         tokenProvider: any PixivTokenProvider,
         session: URLSession? = nil
     ) {
         self.tokenProvider = tokenProvider
+        self.directConnect = (session == nil) && DirectConnection.isEnabled
         if let session {
             self.session = session
         } else {
             let cfg = URLSessionConfiguration.default
             cfg.timeoutIntervalForRequest = 10
             cfg.timeoutIntervalForResource = 30
-            self.session = URLSession(configuration: cfg)
+            self.session = directConnect ? DirectConnection.makeSession(cfg)
+                                         : URLSession(configuration: cfg)
         }
+    }
+
+    /// Direct-connect-aware send: HTTP/3 for Cloudflare-fronted API hosts,
+    /// host→IP-rewritten URLSession otherwise — a no-op when not in that mode.
+    private func fetch(_ req: URLRequest) async throws -> (Data, URLResponse) {
+        try await DirectConnection.data(for: req, using: session, directConnect: directConnect)
     }
 
     static func make(tokenProvider: any PixivTokenProvider) -> PixivAPI {
@@ -308,7 +320,7 @@ actor PixivAPI {
         guard let token = await tokenProvider.currentAccessToken() else { throw APIError.noToken }
         applyHeaders(&req, accessToken: token)
         Self.logRequest(req)
-        let (data, resp) = try await session.data(for: req)
+        let (data, resp) = try await fetch(req)
         guard let http = resp as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw APIError.http(code: (resp as? HTTPURLResponse)?.statusCode ?? 0,
                                 body: String(data: data, encoding: .utf8) ?? "")
@@ -549,13 +561,13 @@ actor PixivAPI {
         applyHeaders(&req, accessToken: token)
 
         Self.logRequest(req)
-        var (data, response) = try await session.data(for: req)
+        var (data, response) = try await fetch(req)
         if let http = response as? HTTPURLResponse,
            http.statusCode == 400, isTokenError(data: data) {
             if let newToken = await tokenProvider.refreshAccessToken() {
                 var retried = original
                 applyHeaders(&retried, accessToken: newToken)
-                (data, response) = try await session.data(for: retried)
+                (data, response) = try await fetch(retried)
             }
         }
 
