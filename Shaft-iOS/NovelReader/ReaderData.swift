@@ -27,6 +27,31 @@ struct WebNovel: Decodable {
     let images: [String: WebNovelImage]?
     let seriesNavigation: WebSeriesNavigation?
 
+    enum CodingKeys: String, CodingKey {
+        case id, title, caption, coverUrl, text, aiType, isOriginal
+        case seriesId, seriesTitle, seriesIsWatched, tags, userId
+        case illusts, images, seriesNavigation
+    }
+
+    /// Decode each field independently with `try?` so one quirky field can't
+    /// abort the whole novel. pixiv serializes an empty `illusts`/`images` map
+    /// as `[]` (a JS empty-map artifact) rather than `{}`, which a strict
+    /// `[String: …]` decode rejects with a typeMismatch — that single field then
+    /// failed the entire parse and the reader showed "load failed". Per-field
+    /// decoding turns that (and any future shape drift) into a nil field instead.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        func v<T: Decodable>(_ key: CodingKeys) -> T? { try? c.decodeIfPresent(T.self, forKey: key) }
+        id = v(.id);                    title = v(.title)
+        caption = v(.caption);          coverUrl = v(.coverUrl)
+        text = v(.text);                aiType = v(.aiType)
+        isOriginal = v(.isOriginal);    seriesId = v(.seriesId)
+        seriesTitle = v(.seriesTitle);  seriesIsWatched = v(.seriesIsWatched)
+        tags = v(.tags);                userId = v(.userId)
+        illusts = v(.illusts);          images = v(.images)
+        seriesNavigation = v(.seriesNavigation)
+    }
+
     struct WebIllustHolder: Decodable {
         let illust: WebIllust?
     }
@@ -77,34 +102,110 @@ struct WebNovel: Decodable {
 }
 
 enum WebNovelParser {
+    private struct Root: Decodable { let novel: WebNovel? }
+
     /// Extract the `Object.defineProperty(window, 'pixiv', { value: {…} })`
-    /// blob from the webview HTML and decode `novel`. Same slicing as
-    /// upstream: from after `value: {` (inclusive brace) to the closing
-    /// `});`, with trailing commas stripped for the strict JSON decoder.
+    /// blob from the webview HTML and decode `novel`.
+    ///
+    /// The blob is a **JavaScript object literal**, not JSON: keys are unquoted
+    /// (`sessionUserId: 1`), strings may be single-quoted, objects carry trailing
+    /// commas, and values can be `undefined`. Upstream gets away with feeding it
+    /// straight to Gson (lenient by default); `JSONDecoder` is strict and
+    /// `.json5Allowed` still chokes on the 197 KB payload. So we run a
+    /// string-aware scanner that brace-matches the `value:` object (robust where
+    /// the old `});`-terminator truncated on any `});` inside the novel text) and
+    /// rewrites it into strict JSON before decoding.
     static func parse(html: String) -> WebNovel? {
         guard let markerRange = html.range(of: "Object.defineProperty(window, 'pixiv'") else { return nil }
-        let tail = html[markerRange.upperBound...]
-        guard let valueRange = tail.range(of: "value: {") else { return nil }
-        // Keep the opening `{` (upstream indexOf("value: {") + 7).
-        let jsonStart = tail.index(valueRange.lowerBound, offsetBy: 7)
-        guard let endRange = tail.range(of: "});", range: jsonStart..<tail.endIndex) else { return nil }
-        var json = String(tail[jsonStart..<endRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-        // Strip trailing commas before } or ] — Gson is lenient, JSONDecoder is not.
-        if let re = try? NSRegularExpression(pattern: #",(?=\s*[}\]])"#) {
-            json = re.stringByReplacingMatches(in: json, range: NSRange(location: 0, length: (json as NSString).length), withTemplate: "")
+        let afterMarker = html[markerRange.upperBound...]
+        guard let valueRange = afterMarker.range(of: "value:") else { return nil }
+        let afterValue = afterMarker[valueRange.upperBound...]
+        guard let braceIndex = afterValue.firstIndex(of: "{") else { return nil }
+
+        guard let json = normalizeJSObject(Array(afterValue[braceIndex...])),
+              let data = json.data(using: .utf8),
+              let root = try? JSONDecoder().decode(Root.self, from: data) else {
+            return nil
         }
-        guard let data = json.data(using: .utf8) else { return nil }
-        struct Root: Decodable { let novel: WebNovel? }
-        if let root = try? JSONDecoder().decode(Root.self, from: data) {
-            return root.novel
+        return root.novel
+    }
+
+    /// Scan a JS object literal starting at its opening `{` and emit strict JSON
+    /// for exactly that object (stops when the matching `}` closes depth 0).
+    /// String-aware: never rewrites content inside string literals.
+    private static func normalizeJSObject(_ chars: [Character]) -> String? {
+        var out = ""
+        out.reserveCapacity(chars.count)
+        var depth = 0
+        var i = 0
+        let n = chars.count
+
+        func isIdentStart(_ c: Character) -> Bool { c.isLetter || c == "_" || c == "$" }
+        func isIdentPart(_ c: Character) -> Bool { c.isLetter || c.isNumber || c == "_" || c == "$" }
+        func isWS(_ c: Character) -> Bool { c == " " || c == "\t" || c == "\n" || c == "\r" }
+
+        while i < n {
+            let c = chars[i]
+
+            // String literal — copy verbatim, converting ' → " and escaping
+            // bare double quotes / literal control chars JSON forbids.
+            if c == "\"" || c == "'" {
+                let quote = c
+                out.append("\"")
+                i += 1
+                while i < n {
+                    let d = chars[i]
+                    if d == "\\" {                       // keep escape pairs intact
+                        out.append(d)
+                        if i + 1 < n { out.append(chars[i + 1]); i += 2 } else { i += 1 }
+                        continue
+                    }
+                    if d == quote { out.append("\""); i += 1; break }
+                    switch d {
+                    case "\"": out.append("\\\"")        // bare " inside a '…' string
+                    case "\n": out.append("\\n")
+                    case "\r": out.append("\\r")
+                    case "\t": out.append("\\t")
+                    default: out.append(d)
+                    }
+                    i += 1
+                }
+                continue
+            }
+
+            if c == "{" || c == "[" { depth += 1; out.append(c); i += 1; continue }
+            if c == "}" || c == "]" {
+                depth -= 1; out.append(c); i += 1
+                if depth == 0 { return out }
+                continue
+            }
+
+            // Identifier: a key (followed by `:`) gets quoted; otherwise it's a
+            // bare literal (`true`/`false`/`null`, or `undefined` → `null`).
+            if isIdentStart(c) {
+                var ident = ""
+                while i < n, isIdentPart(chars[i]) { ident.append(chars[i]); i += 1 }
+                var k = i
+                while k < n, isWS(chars[k]) { k += 1 }
+                if k < n, chars[k] == ":" {
+                    out.append("\""); out.append(ident); out.append("\"")
+                } else {
+                    out.append(ident == "undefined" ? "null" : ident)
+                }
+                continue
+            }
+
+            // Trailing comma before `}`/`]` → drop it.
+            if c == "," {
+                var k = i + 1
+                while k < n, isWS(chars[k]) { k += 1 }
+                if k < n, chars[k] == "}" || chars[k] == "]" { i += 1; continue }
+                out.append(c); i += 1; continue
+            }
+
+            out.append(c); i += 1
         }
-        // Fallback: JSON5-tolerant parse (unquoted keys / stray commas).
-        if let obj = try? JSONSerialization.jsonObject(with: data, options: [.json5Allowed]),
-           let normalized = try? JSONSerialization.data(withJSONObject: obj),
-           let root = try? JSONDecoder().decode(Root.self, from: normalized) {
-            return root.novel
-        }
-        return nil
+        return nil   // unbalanced braces
     }
 }
 
