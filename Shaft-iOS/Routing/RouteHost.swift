@@ -13,6 +13,9 @@ struct RouteHost: ViewModifier {
             .navigationDestination(for: AppRoute.self) { route in
                 destination(for: route)
                     .toolbar(.hidden, for: .tabBar)
+                    // Pages that hide the nav bar (detail/profile) lose UIKit's
+                    // edge-swipe-back; this re-enables it. Inert elsewhere.
+                    .background(SwipeBackEnabler())
             }
             // Value-based navigation: pushing a full `Illust` (from a waterfall /
             // ranking cell) seeds the detail view so it paints instantly. ID-only
@@ -20,6 +23,7 @@ struct RouteHost: ViewModifier {
             .navigationDestination(for: Illust.self) { illust in
                 IllustDetailView(illust: illust)
                     .toolbar(.hidden, for: .tabBar)
+                    .background(SwipeBackEnabler())
             }
     }
 
@@ -112,6 +116,8 @@ struct RouteHost: ViewModifier {
                 PrimeTagsView()
             case .primeTagDetail(let file, let title):
                 PrimeTagDetailView(file: file, title: title)
+            case .pinnedTags:
+                PinnedTagsView()
         }
     }
 }

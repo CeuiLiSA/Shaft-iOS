@@ -116,24 +116,31 @@ struct RecommendView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        // NOTE: a paged `TabView(.page)` here was the bug. UIPageViewController
+        // (what `.tabViewStyle(.page)` wraps) mismanages its child vertical
+        // ScrollView's top content inset under the navigation bar: the nav bar
+        // injects a top inset at launch, then drops it on the first real
+        // scroll/pull-to-refresh, snapping "今日排行榜" up under the bar. (A repro
+        // confirmed it tucks even with the nav bar hidden — the page controller
+        // is the culprit, not the bar.) Switching the sub-tabs by condition —
+        // i.e. a plain ScrollView, no page controller — gives a stable inset.
+        // The strip is a top safe-area inset (not a VStack sibling) so the
+        // ScrollView accounts for it; PagerTabBar is opaque so scrolled content
+        // stays hidden under it.
+        Group {
+            switch subTab {
+            case .recommended: RecommendedWorksView(vm: vm)
+            case .hotTag:      PopularTagsView(vm: vm)
+            }
+        }
+        // Let the waterfall scroll to the screen's bottom edge (under the
+        // floating tab bar) instead of stopping above it.
+        .ignoresSafeArea(.container, edges: .bottom)
+        .safeAreaInset(edge: .top, spacing: 0) {
             PagerTabBar(
                 titles: SubTab.allCases.map { ($0, title($0)) },
                 selection: $subTab
             )
-            TabView(selection: $subTab) {
-                RecommendedWorksView(vm: vm)
-                    .tag(SubTab.recommended)
-                PopularTagsView(vm: vm)
-                    .tag(SubTab.hotTag)
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            // The paged TabView would otherwise honor the floating tab bar's
-            // bottom safe-area inset and stop the inner ScrollViews above the
-            // bar, leaving a dead gap. Let it reach the screen's bottom edge so
-            // the waterfall scrolls under the glass bar (iOS re-adds the scroll
-            // content inset automatically so the last row still clears the bar).
-            .ignoresSafeArea(.container, edges: .bottom)
         }
     }
 }

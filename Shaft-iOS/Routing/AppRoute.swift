@@ -45,6 +45,7 @@ enum AppRoute: Hashable, Codable, Sendable {
     case novelMarkers
     case primeTags
     case primeTagDetail(file: String, title: String)
+    case pinnedTags
 
     enum CommentTarget: Hashable, Codable, Sendable {
         case illust(Int64)

@@ -177,8 +177,7 @@ final class PixivOAuthClient {
         let hash = md5Hex(clientTime + hashSecret)
 
         if req.value(forHTTPHeaderField: "User-Agent") == nil {
-            req.setValue("PixivIOSApp/7.13.3 (iOS \(UIDeviceOSVersionString); iPhone)",
-                         forHTTPHeaderField: "User-Agent")
+            req.setValue(PixivClientIdentity.userAgent, forHTTPHeaderField: "User-Agent")
         }
         if req.value(forHTTPHeaderField: "App-OS") == nil {
             req.setValue("ios", forHTTPHeaderField: "App-OS")

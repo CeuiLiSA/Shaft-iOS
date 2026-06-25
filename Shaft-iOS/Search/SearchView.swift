@@ -6,6 +6,7 @@ struct SearchView: View {
     @State private var trending: [TrendingTag] = []
     @State private var loadingTrending = false
     @State private var history = SearchHistoryStore.shared
+    @State private var pinned = PinnedTagsStore.shared
     @Environment(OnboardingStore.self) private var l10n
 
     @ObservationIgnored private let api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
@@ -126,6 +127,9 @@ struct SearchView: View {
                         .simultaneousGesture(TapGesture().onEnded {
                             if let t = tag.tag { history.record(t) }
                         })
+                        .contextMenu { pinButton(name: tag.tag,
+                                                 translatedName: tag.translatedName,
+                                                 previewURL: tag.illust?.imageUrls?.squareMedium) }
                     }
                 }
             }
@@ -166,11 +170,27 @@ struct SearchView: View {
                         .simultaneousGesture(TapGesture().onEnded {
                             if let n = tag.name { history.record(n) }
                         })
+                        .contextMenu { pinButton(name: tag.name,
+                                                 translatedName: tag.translatedName,
+                                                 previewURL: nil) }
                     }
                 }
             }
         }
         .listStyle(.plain)
+    }
+
+    /// Pin / unpin a tag from any search-surface long-press (1:1 with the
+    /// FragmentSearch pin path). Re-reads `pinned.isPinned` so the label flips.
+    @ViewBuilder
+    private func pinButton(name: String?, translatedName: String?, previewURL: String?) -> some View {
+        let isPinned = pinned.isPinned(name)
+        Button {
+            pinned.toggle(name: name, translatedName: translatedName, previewURL: previewURL)
+        } label: {
+            Label(isPinned ? l10n.t(.actionUnpinTag) : l10n.t(.actionPinTag),
+                  systemImage: isPinned ? "pin.slash" : "pin")
+        }
     }
 
     // MARK: Loading

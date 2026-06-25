@@ -49,6 +49,9 @@ struct MoreView: View {
                 NavigationLink(value: AppRoute.novelMarkers) {
                     Label(l10n.t(.novelMarkersTitle), systemImage: "bookmark")
                 }
+                NavigationLink(value: AppRoute.pinnedTags) {
+                    Label(l10n.t(.pinnedTagsTitle), systemImage: "pin")
+                }
             }
 
             Section {

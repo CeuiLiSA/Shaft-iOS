@@ -1,6 +1,5 @@
 import Foundation
 import CryptoKit
-import UIKit
 import os
 
 /// App-wide API request logger. Every Pixiv API call funnels through
@@ -19,22 +18,15 @@ protocol PixivTokenProvider: Sendable {
 actor PixivAPI {
     static let baseURL = URL(string: "https://app-api.pixiv.net")!
     private static let hashSecret = "28c1fdd170a5204386cb1313c7077b34f83e4aaf4aa829ce78c231e05b0bae2c"
-    private static let appVersion = "7.13.4"
 
     private let session: URLSession
     private let tokenProvider: any PixivTokenProvider
-    private let osVersion: String
-    private let deviceModel: String
 
     init(
         tokenProvider: any PixivTokenProvider,
-        osVersion: String,
-        deviceModel: String,
         session: URLSession? = nil
     ) {
         self.tokenProvider = tokenProvider
-        self.osVersion = osVersion
-        self.deviceModel = deviceModel
         if let session {
             self.session = session
         } else {
@@ -45,13 +37,8 @@ actor PixivAPI {
         }
     }
 
-    @MainActor
     static func make(tokenProvider: any PixivTokenProvider) -> PixivAPI {
-        PixivAPI(
-            tokenProvider: tokenProvider,
-            osVersion: UIDevice.current.systemVersion,
-            deviceModel: UIDevice.current.model
-        )
+        PixivAPI(tokenProvider: tokenProvider)
     }
 
     enum APIError: Error, LocalizedError {
@@ -607,25 +594,18 @@ actor PixivAPI {
 
         req.setValue("Bearer \(accessToken)", forHTTPHeaderField: "authorization")
         req.setValue("ios", forHTTPHeaderField: "app-os")
-        req.setValue(osVersion, forHTTPHeaderField: "app-os-version")
-        req.setValue(Self.appVersion, forHTTPHeaderField: "app-version")
+        req.setValue(PixivClientIdentity.osVersion, forHTTPHeaderField: "app-os-version")
+        req.setValue(PixivClientIdentity.appVersion, forHTTPHeaderField: "app-version")
         req.setValue(clientTime, forHTTPHeaderField: "x-client-time")
         req.setValue(hash, forHTTPHeaderField: "x-client-hash")
-        req.setValue("PixivIOSApp/\(Self.appVersion) (iOS \(osVersion); \(deviceModel))",
-                     forHTTPHeaderField: "user-agent")
-        req.setValue(Self.acceptLanguage(), forHTTPHeaderField: "accept-language")
+        req.setValue(PixivClientIdentity.userAgent, forHTTPHeaderField: "user-agent")
+        req.setValue(PixivClientIdentity.acceptLanguage(), forHTTPHeaderField: "accept-language")
+        req.setValue(PixivClientIdentity.appAcceptLanguage(), forHTTPHeaderField: "app-accept-language")
     }
 
     private func isTokenError(data: Data) -> Bool {
         guard let s = String(data: data, encoding: .utf8) else { return false }
         return s.contains("Error occurred at the OAuth process")
             || s.contains("Invalid refresh token")
-    }
-
-    private static func acceptLanguage() -> String {
-        let pref = Locale.preferredLanguages.first ?? "en"
-        let lang = Locale(identifier: pref).language.languageCode?.identifier ?? "en"
-        let region = Locale(identifier: pref).region?.identifier ?? "US"
-        return "\(lang)-\(region.lowercased()),\(lang);q=0.9,en-us;q=0.8,en;q=0.7"
     }
 }

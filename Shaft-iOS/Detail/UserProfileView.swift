@@ -254,6 +254,7 @@ struct UserProfileView: View {
     let userId: Int64
     @State private var vm: UserProfileViewModel
     @State private var tab: ProfileTab = .illusts
+    @State private var illustTagsExpanded = false
     @State private var scrollOffset: CGFloat = 0
     @State private var tabBarGlobalY: CGFloat = .greatestFiniteMagnitude
     @State private var viewerItem: ViewerItem?
@@ -261,6 +262,7 @@ struct UserProfileView: View {
     @State private var mute = MuteStore.shared
     @Environment(OnboardingStore.self) private var l10n
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
 
     enum ProfileTab: Hashable { case illusts, manga, info }
 
@@ -312,11 +314,17 @@ struct UserProfileView: View {
             // The safe-area top already includes the inline navigation bar,
             // so the strip pins (and the scrim ends) at the bar's bottom edge.
             let topInset = outer.safeAreaInsets.top
-            let pinY = topInset
+            // The system nav bar is hidden (its iOS 26 Liquid Glass scroll-edge
+            // material can't be cleared), so `profileTopBar` — a floating button
+            // row — stands in for it. `barInset` = status bar + that row, i.e.
+            // exactly what the safe-area top used to be with the inline nav bar,
+            // so every collapse threshold below is unchanged.
+            let barInset = topInset + Self.navBarHeight
+            let pinY = barInset
             let tabPinned = tabBarGlobalY <= pinY + 0.5
             // Pinned strip implies fully collapsed — floor the progress so the
             // bar can never sit transparent over scrolled content.
-            let progress = tabPinned ? 1 : collapseProgress(topInset: topInset)
+            let progress = tabPinned ? 1 : collapseProgress(topInset: barInset)
 
             ZStack(alignment: .top) {
                 ScrollView {
@@ -366,10 +374,9 @@ struct UserProfileView: View {
                 .refreshable { await vm.refreshDetail() }
                 .ignoresSafeArea(.container, edges: .top)
 
-                // Toolbar scrim — the contentScrim stand-in: a frosted bar
-                // fades in behind the (transparent) navigation bar as the
-                // header leaves, so scrolled content blurs under it instead of
-                // showing through.
+                // Toolbar scrim — the contentScrim stand-in: a frosted bar fades
+                // in behind the floating controls as the header leaves, so
+                // scrolled content blurs under them instead of showing through.
                 Rectangle()
                     .fill(.bar)
                     .frame(height: pinY)
@@ -378,28 +385,21 @@ struct UserProfileView: View {
                     .allowsHitTesting(false)
 
                 // Pinned copy of the tab strip once the inline one reaches the
-                // toolbar (TabLayout pinned below the collapsing header). Same
-                // frosted surface as the bar above it.
+                // floating bar (TabLayout pinned below the collapsing header).
+                // Dropped by the floating row's height so it sits below it.
                 if tabPinned {
                     tabBar(frosted: true)
+                        .offset(y: Self.navBarHeight)
                 }
+
+                // Floating nav controls replacing the hidden bar.
+                profileTopBar
             }
         }
         .background(Theme.v3Bg)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(vm.user?.name ?? "")
-                    .font(.montserratBold(18))
-                    .foregroundStyle(Theme.v3Text1)
-                    .lineLimit(1)
-                    .opacity(Double(collapseTitleAlpha))
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                moreMenu
-            }
-        }
+        // iOS 26 Liquid Glass paints an unclearable scroll-edge material on the
+        // nav bar; it's hidden and replaced by profileTopBar (see body).
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             await vm.loadIfNeeded()
             if let u = vm.user { HistoryStore.shared.record(user: u) }
@@ -455,8 +455,33 @@ struct UserProfileView: View {
                 }
             }
         } label: {
-            Image(systemName: "ellipsis.circle")
+            DetailGlassCircle(system: "ellipsis")
         }
+    }
+
+    /// Floating top bar that replaces the hidden navigation bar (see body): back
+    /// and overflow controls as glass capsules over the edge-to-edge banner, with
+    /// the user name fading in (centered) as the banner collapses.
+    private var profileTopBar: some View {
+        ZStack {
+            Text(vm.user?.name ?? "")
+                .font(.montserratBold(18))
+                .foregroundStyle(Theme.v3Text1)
+                .lineLimit(1)
+                .padding(.horizontal, 56)
+                .opacity(Double(collapseTitleAlpha))
+            HStack {
+                Button { dismiss() } label: {
+                    DetailGlassCircle(system: "chevron.backward")
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                moreMenu
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: Self.navBarHeight)
+        .padding(.horizontal, 12)
     }
 
     // MARK: Stats + quick navigation (between banner and tab strip)
@@ -474,10 +499,32 @@ struct UserProfileView: View {
             }
 
             if !vm.illustTagChips.isEmpty {
-                V3SectionHeading(text: l10n.t(.v3LabelIllustTags))
-                    .padding(.top, 20)
-                illustTagFlow
-                    .padding(.top, 12)
+                Button {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.86)) {
+                        illustTagsExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        V3SectionHeading(text: l10n.t(.v3LabelIllustTags))
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Theme.v3Text3)
+                            .rotationEffect(.degrees(illustTagsExpanded ? 180 : 0))
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 20)
+
+                if illustTagsExpanded {
+                    illustTagFlow
+                        .padding(.top, 12)
+                        // Spring height-growth unfolds the section; the chips fade
+                        // in over it. No .move — that would overlap the heading on
+                        // insert.
+                        .transition(.opacity)
+                }
             }
         }
         .padding(.horizontal, 20)

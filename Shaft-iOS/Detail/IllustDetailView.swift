@@ -183,6 +183,7 @@ struct IllustDetailView: View {
     @Namespace private var viewerZoom
     @Environment(OnboardingStore.self) private var l10n
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
 
     init(illustId: Int64) {
         self.illustId = illustId
@@ -222,6 +223,64 @@ struct IllustDetailView: View {
         withAnimation(.easeOut(duration: 0.2)) { toolbarTitleVisible = visible }
     }
 
+    @ViewBuilder private var menuItems: some View {
+        ShareLink(item: pixivURL) {
+            Label(l10n.t(.actionShare), systemImage: "square.and.arrow.up")
+        }
+        Button {
+            UIPasteboard.general.string = pixivURL.absoluteString
+        } label: {
+            Label(l10n.t(.actionCopyLink), systemImage: "doc.on.doc")
+        }
+        Button {
+            openURL(pixivURL)
+        } label: {
+            Label(l10n.t(.actionOpenInBrowser), systemImage: "safari")
+        }
+        if let user = vm.illust?.user {
+            Divider()
+            Button(role: .destructive) {
+                MuteStore.shared.toggleUser(user.id)
+            } label: {
+                let muted = MuteStore.shared.isUserMuted(user.id)
+                Label(muted ? l10n.t(.actionUnmuteUser) : l10n.t(.actionMuteArtist),
+                      systemImage: "speaker.slash")
+            }
+        }
+        Divider()
+        Button(role: .destructive) {
+            showReport = true
+        } label: {
+            Label(l10n.t(.actionReport), systemImage: "flag")
+        }
+    }
+
+    /// Floating top bar that replaces the hidden navigation bar (see body): back
+    /// and overflow controls as glass capsules over the edge-to-edge hero, with
+    /// the title fading in (centered) once the hero scrolls away.
+    private var detailTopBar: some View {
+        ZStack {
+            Text(vm.illust?.title ?? "")
+                .font(.montserratBold(18))
+                .foregroundStyle(Theme.v3Text1)
+                .lineLimit(1)
+                .padding(.horizontal, 56)
+                .opacity(toolbarTitleVisible ? 1 : 0)
+            HStack {
+                Button { dismiss() } label: {
+                    DetailGlassCircle(system: "chevron.backward")
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                Menu { menuItems } label: {
+                    DetailGlassCircle(system: "ellipsis")
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
@@ -254,52 +313,12 @@ struct IllustDetailView: View {
                 .offset(y: actionBarVisible ? 0 : 180)
                 .opacity(actionBarVisible ? 1 : 0)
         }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Text(vm.illust?.title ?? "")
-                    .font(.montserratBold(18))
-                    .foregroundStyle(Theme.v3Text1)
-                    .lineLimit(1)
-                    .opacity(toolbarTitleVisible ? 1 : 0)
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    ShareLink(item: pixivURL) {
-                        Label(l10n.t(.actionShare), systemImage: "square.and.arrow.up")
-                    }
-                    Button {
-                        UIPasteboard.general.string = pixivURL.absoluteString
-                    } label: {
-                        Label(l10n.t(.actionCopyLink), systemImage: "doc.on.doc")
-                    }
-                    Button {
-                        openURL(pixivURL)
-                    } label: {
-                        Label(l10n.t(.actionOpenInBrowser), systemImage: "safari")
-                    }
-                    if let user = vm.illust?.user {
-                        Divider()
-                        Button(role: .destructive) {
-                            MuteStore.shared.toggleUser(user.id)
-                        } label: {
-                            let muted = MuteStore.shared.isUserMuted(user.id)
-                            Label(muted ? l10n.t(.actionUnmuteUser) : l10n.t(.actionMuteArtist),
-                                  systemImage: "speaker.slash")
-                        }
-                    }
-                    Divider()
-                    Button(role: .destructive) {
-                        showReport = true
-                    } label: {
-                        Label(l10n.t(.actionReport), systemImage: "flag")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-            }
-        }
+        // iOS 26 Liquid Glass paints a scroll-edge material on the navigation bar
+        // that no toolbar-background modifier can clear, leaving a dark band over
+        // the edge-to-edge hero. The bar is hidden entirely and its controls are
+        // re-drawn as floating glass capsules (see detailTopBar) instead.
+        .toolbar(.hidden, for: .navigationBar)
+        .overlay(alignment: .top) { detailTopBar }
         .task {
             await vm.loadIfNeeded()
             if let i = vm.illust { HistoryStore.shared.record(illust: i) }
@@ -397,7 +416,7 @@ struct IllustDetailView: View {
         }
 
         if let tags = illust.tags, !tags.isEmpty {
-            V3TagsSection(tags: tags)
+            V3TagsSection(tags: tags, previewURL: illust.imageUrls?.squareMedium)
         }
 
         V3StatsCard(illust: illust)
@@ -689,39 +708,46 @@ private struct V3ArtistCard: View {
 
     var body: some View {
         if let user = vm.illust?.user {
-            VStack(alignment: .leading, spacing: 14) {
+            // The whole glass card opens the artist page (1:1 with upstream's
+            // `b.artistCard.setOnClickListener(openUser)`) — not just the name.
+            // The follow pill is lifted into an overlay so it keeps its own tap
+            // (and long-press → private) instead of triggering the navigation; a
+            // hidden copy inside the link reserves its exact footprint so the
+            // name truncates rather than running under it.
+            NavigationLink(value: AppRoute.userProfile(user.id)) {
                 HStack(spacing: 12) {
-                    NavigationLink(value: AppRoute.userProfile(user.id)) {
-                        HStack(spacing: 12) {
-                            PixivAsyncImage(url: avatarURL(for: user), showsProgress: false)
-                                .frame(width: 58, height: 58)
-                                .clipShape(.circle)
-                                .overlay(Circle().strokeBorder(Theme.v3Border, lineWidth: 3))
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(user.name ?? "")
-                                    .font(.montserratBold(16))
-                                    .foregroundStyle(Theme.v3Text1)
-                                    .lineLimit(1)
-                                Text("@\(user.account ?? "")")
-                                    .font(.montserratMedium(11))
-                                    .foregroundStyle(Theme.v3Text3)
-                            }
-                        }
+                    PixivAsyncImage(url: avatarURL(for: user), showsProgress: false)
+                        .frame(width: 58, height: 58)
+                        .clipShape(.circle)
+                        .overlay(Circle().strokeBorder(Theme.v3Border, lineWidth: 3))
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(user.name ?? "")
+                            .font(.montserratBold(16))
+                            .foregroundStyle(Theme.v3Text1)
+                            .lineLimit(1)
+                        Text("@\(user.account ?? "")")
+                            .font(.montserratMedium(11))
+                            .foregroundStyle(Theme.v3Text3)
                     }
-                    .buttonStyle(.plain)
-
                     Spacer(minLength: 8)
-
-                    FollowButton(followed: vm.authorFollowed) {
-                        Task { await vm.toggleFollow() }
-                    } onLongPress: {
-                        Task { await vm.toggleFollow(restrict: "private") }
-                    }
+                    FollowButton(followed: vm.authorFollowed, onTap: {}, onLongPress: {})
+                        .hidden()
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .v3Glass(corner: 28)
+                .contentShape(.rect(cornerRadius: 28))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 18)
-            .v3Glass(corner: 28)
+            .buttonStyle(PressableCardStyle())
+            .overlay(alignment: .trailing) {
+                FollowButton(followed: vm.authorFollowed) {
+                    Task { await vm.toggleFollow() }
+                } onLongPress: {
+                    Task { await vm.toggleFollow(restrict: "private") }
+                }
+                .padding(.trailing, 12)
+            }
             .padding(.horizontal, 12)
             .padding(.bottom, 18)
         }
@@ -759,6 +785,17 @@ private struct FollowButton: View {
     }
 }
 
+/// Press feedback for whole-card tap targets (e.g. the artist card) — mirrors
+/// upstream's `applyTouchScale`: a subtle scale + dim while held.
+private struct PressableCardStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
 private struct V3CaptionView: View {
     /// Already-plaintext caption (HTML stripped by the view model).
     let text: String
@@ -777,6 +814,10 @@ private struct V3CaptionView: View {
 
 private struct V3TagsSection: View {
     let tags: [Tag]
+    /// Square thumb of the host work, stored as the pin preview (mirrors
+    /// upstream `buildPinnedTagPreviewJson`) when a tag is pinned via long-press.
+    var previewURL: String?
+    @State private var pinned = PinnedTagsStore.shared
     @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
@@ -800,6 +841,17 @@ private struct V3TagsSection: View {
                         .overlay(Capsule().strokeBorder(Theme.v3Border, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        let isPinned = pinned.isPinned(tag.name)
+                        Button {
+                            pinned.toggle(name: tag.name,
+                                          translatedName: tag.translatedName,
+                                          previewURL: previewURL)
+                        } label: {
+                            Label(isPinned ? l10n.t(.actionUnpinTag) : l10n.t(.actionPinTag),
+                                  systemImage: isPinned ? "pin.slash" : "pin")
+                        }
+                    }
                 }
             }
         }
@@ -1507,5 +1559,23 @@ struct FlowLayout: Layout {
             x += size.width + spacing
             rowH = max(rowH, size.height)
         }
+    }
+}
+
+// MARK: - Floating detail-page nav control
+
+/// Circular translucent capsule for the floating back / overflow buttons the V3
+/// detail pages draw in place of the hidden navigation bar (hidden because iOS 26
+/// Liquid Glass paints an unclearable scroll-edge material on it). Mirrors the
+/// look of the system bar buttons it replaces.
+struct DetailGlassCircle: View {
+    let system: String
+    var body: some View {
+        Image(systemName: system)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(.primary)
+            .frame(width: 36, height: 36)
+            .background(.regularMaterial, in: .circle)
+            .overlay(Circle().stroke(.white.opacity(0.12)))
     }
 }

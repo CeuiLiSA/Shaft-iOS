@@ -274,4 +274,11 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case reportReasonTitle, reportDescTitle
     case reportReasonSexual, reportReasonGrotesque, reportReasonCopyright, reportReasonOther
     case reportHint, reportSubmit, reportSuccess
+
+    // Pinned tags (1:1 port of pixiv/ui/pinned/)
+    case pinnedTagsTitle, actionPinTag, actionUnpinTag, pinnedClearMessage
+
+    // View-history backup — local JSON export/import (pixiv/ui/history/BrowseHistoryBackup)
+    case actionExport, actionImport
+    case historyExportEmpty, historyImportedFmt, historyImportFailed
 }

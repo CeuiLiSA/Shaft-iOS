@@ -9,7 +9,7 @@ extension URLRequest {
     static func pixivImage(_ url: URL) -> URLRequest {
         var req = URLRequest(url: url)
         req.setValue("https://app-api.pixiv.net/", forHTTPHeaderField: "Referer")
-        req.setValue("PixivIOSApp/7.13.4", forHTTPHeaderField: "User-Agent")
+        req.setValue(PixivClientIdentity.userAgent, forHTTPHeaderField: "User-Agent")
         return req
     }
 }

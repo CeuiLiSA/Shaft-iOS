@@ -1,10 +1,15 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Local view-history list with All/Illusts/Novels/Users tabs, mirroring
 /// FragmentHistoryV3 from Pixiv-Shaft.
 struct HistoryView: View {
     @State private var store = HistoryStore.shared
     @State private var section: Section = .all
+    @State private var showExporter = false
+    @State private var showImporter = false
+    @State private var exportDoc: HistoryBackupDocument?
+    @State private var alertMessage: String?
     @Environment(OnboardingStore.self) private var l10n
 
     enum Section: Hashable, CaseIterable {
@@ -36,13 +41,63 @@ struct HistoryView: View {
         .navigationTitle(l10n.t(.historyTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if !store.entries.isEmpty {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(role: .destructive) { store.clear() } label: {
-                        Image(systemName: "trash")
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        if store.entries.isEmpty {
+                            alertMessage = l10n.t(.historyExportEmpty)
+                        } else if let data = store.exportJSON() {
+                            exportDoc = HistoryBackupDocument(data: data)
+                            showExporter = true
+                        }
+                    } label: {
+                        Label(l10n.t(.actionExport), systemImage: "square.and.arrow.up")
                     }
+                    Button {
+                        showImporter = true
+                    } label: {
+                        Label(l10n.t(.actionImport), systemImage: "square.and.arrow.down")
+                    }
+                    if !store.entries.isEmpty {
+                        Divider()
+                        Button(role: .destructive) { store.clear() } label: {
+                            Label(l10n.t(.actionClear), systemImage: "trash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                 }
             }
+        }
+        // Save the snapshot to Files / share, and restore one back (1:1 with
+        // BrowseHistoryBackup's export/import — local only).
+        .fileExporter(isPresented: $showExporter, document: exportDoc,
+                      contentType: .json, defaultFilename: "shaft-history") { _ in }
+        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
+            handleImport(result)
+        }
+        .alert(alertMessage ?? "", isPresented: Binding(
+            get: { alertMessage != nil },
+            set: { if !$0 { alertMessage = nil } }
+        )) {
+            Button(l10n.t(.actionDone), role: .cancel) {}
+        }
+    }
+
+    private func handleImport(_ result: Result<URL, Error>) {
+        guard case .success(let url) = result else {
+            alertMessage = l10n.t(.historyImportFailed)
+            return
+        }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let data = try Data(contentsOf: url)
+            let imported = try HistoryStore.decodeBackup(data)
+            let added = store.merge(imported)
+            alertMessage = String(format: l10n.t(.historyImportedFmt), "\(added)")
+        } catch {
+            alertMessage = l10n.t(.historyImportFailed)
         }
     }
 
@@ -111,5 +166,23 @@ private struct HistoryRow: View {
             Spacer()
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// Thin `FileDocument` wrapper so `.fileExporter` can write the history-backup
+/// JSON to Files / a share sheet, and the importer can read one back.
+struct HistoryBackupDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.json] }
+
+    var data: Data
+
+    init(data: Data) { self.data = data }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
     }
 }

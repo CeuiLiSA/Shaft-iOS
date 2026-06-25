@@ -29,6 +29,7 @@
 		A1000000000000000000B020 /* PixivAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F020 /* PixivAPI.swift */; };
 		A1000000000000000000B021 /* AuthTokenProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F021 /* AuthTokenProvider.swift */; };
 		A1000000000000000000B022 /* PixivAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F022 /* PixivAsyncImage.swift */; };
+		A1000000000000000000B102 /* PixivClientIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F102 /* PixivClientIdentity.swift */; };
 		A1000000000000000000B023 /* PlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F023 /* PlaceholderView.swift */; };
 		A1000000000000000000B024 /* LocalizedKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F024 /* LocalizedKey.swift */; };
 		A1000000000000000000B025 /* LocalizedStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F025 /* LocalizedStrings.swift */; };
@@ -43,6 +44,7 @@
 		A1000000000000000000B033 /* CommentsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F033 /* CommentsView.swift */; };
 		A1000000000000000000B034 /* UserListsViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F034 /* UserListsViews.swift */; };
 		A1000000000000000000B035 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F035 /* SearchView.swift */; };
+		A1000000000000000000B103 /* PinnedTagsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F103 /* PinnedTagsView.swift */; };
 		A1000000000000000000B036 /* RankingDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F036 /* RankingDetailView.swift */; };
 		A1000000000000000000B037 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F037 /* DiscoverView.swift */; };
 		A1000000000000000000B038 /* WhatsNewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F038 /* WhatsNewView.swift */; };
@@ -100,6 +102,7 @@
 		A1000000000000000000B056 /* SearchFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F056 /* SearchFilter.swift */; };
 		A1000000000000000000B057 /* SearchFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F057 /* SearchFilterSheet.swift */; };
 		A1000000000000000000B058 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F058 /* Theme.swift */; };
+		A1000000000000000000B104 /* SwipeBackEnabler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F104 /* SwipeBackEnabler.swift */; };
 		A1000000000000000000B059 /* NotificationsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F059 /* NotificationsView.swift */; };
 		A1000000000000000000B060 /* WatchlistView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F060 /* WatchlistView.swift */; };
 		A1000000000000000000B061 /* NovelMarkersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F061 /* NovelMarkersView.swift */; };
@@ -134,6 +137,7 @@
 		A1000000000000000000F020 /* PixivAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixivAPI.swift; sourceTree = "<group>"; };
 		A1000000000000000000F021 /* AuthTokenProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthTokenProvider.swift; sourceTree = "<group>"; };
 		A1000000000000000000F022 /* PixivAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixivAsyncImage.swift; sourceTree = "<group>"; };
+		A1000000000000000000F102 /* PixivClientIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PixivClientIdentity.swift; sourceTree = "<group>"; };
 		A1000000000000000000F023 /* PlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F024 /* LocalizedKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedKey.swift; sourceTree = "<group>"; };
 		A1000000000000000000F025 /* LocalizedStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedStrings.swift; sourceTree = "<group>"; };
@@ -148,6 +152,7 @@
 		A1000000000000000000F033 /* CommentsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentsView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F034 /* UserListsViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserListsViews.swift; sourceTree = "<group>"; };
 		A1000000000000000000F035 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F103 /* PinnedTagsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedTagsView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F036 /* RankingDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingDetailView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F037 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F038 /* WhatsNewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewView.swift; sourceTree = "<group>"; };
@@ -205,6 +210,7 @@
 		A1000000000000000000F056 /* SearchFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchFilter.swift; sourceTree = "<group>"; };
 		A1000000000000000000F057 /* SearchFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchFilterSheet.swift; sourceTree = "<group>"; };
 		A1000000000000000000F058 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		A1000000000000000000F104 /* SwipeBackEnabler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeBackEnabler.swift; sourceTree = "<group>"; };
 		A1000000000000000000F059 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F060 /* WatchlistView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchlistView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F061 /* NovelMarkersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelMarkersView.swift; sourceTree = "<group>"; };
@@ -274,6 +280,7 @@
 				A1000000000000000000F020 /* PixivAPI.swift */,
 				A1000000000000000000F021 /* AuthTokenProvider.swift */,
 				A1000000000000000000F022 /* PixivAsyncImage.swift */,
+				A1000000000000000000F102 /* PixivClientIdentity.swift */,
 				A1000000000000000000F054 /* UgoiraPlayer.swift */,
 			);
 			path = PixivAPI;
@@ -312,6 +319,7 @@
 				A1000000000000000000F071 /* montserrat_bold.ttf */,
 				A1000000000000000000F072 /* montserrat_semi_bold.ttf */,
 				A1000000000000000000F058 /* Theme.swift */,
+				A1000000000000000000F104 /* SwipeBackEnabler.swift */,
 			);
 			path = Common;
 			sourceTree = "<group>";
@@ -349,6 +357,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000F035 /* SearchView.swift */,
+				A1000000000000000000F103 /* PinnedTagsView.swift */,
 				A1000000000000000000F053 /* SearchHistoryStore.swift */,
 				A1000000000000000000F056 /* SearchFilter.swift */,
 				A1000000000000000000F057 /* SearchFilterSheet.swift */,
@@ -641,6 +650,7 @@
 				A1000000000000000000B020 /* PixivAPI.swift in Sources */,
 				A1000000000000000000B021 /* AuthTokenProvider.swift in Sources */,
 				A1000000000000000000B022 /* PixivAsyncImage.swift in Sources */,
+				A1000000000000000000B102 /* PixivClientIdentity.swift in Sources */,
 				A1000000000000000000B023 /* PlaceholderView.swift in Sources */,
 				A1000000000000000000B024 /* LocalizedKey.swift in Sources */,
 				A1000000000000000000B025 /* LocalizedStrings.swift in Sources */,
@@ -655,6 +665,7 @@
 				A1000000000000000000B033 /* CommentsView.swift in Sources */,
 				A1000000000000000000B034 /* UserListsViews.swift in Sources */,
 				A1000000000000000000B035 /* SearchView.swift in Sources */,
+				A1000000000000000000B103 /* PinnedTagsView.swift in Sources */,
 				A1000000000000000000B036 /* RankingDetailView.swift in Sources */,
 				A1000000000000000000B037 /* DiscoverView.swift in Sources */,
 				A1000000000000000000B038 /* WhatsNewView.swift in Sources */,
@@ -683,6 +694,7 @@
 				A1000000000000000000B056 /* SearchFilter.swift in Sources */,
 				A1000000000000000000B057 /* SearchFilterSheet.swift in Sources */,
 				A1000000000000000000B058 /* Theme.swift in Sources */,
+				A1000000000000000000B104 /* SwipeBackEnabler.swift in Sources */,
 				A1000000000000000000B059 /* NotificationsView.swift in Sources */,
 				A1000000000000000000B060 /* WatchlistView.swift in Sources */,
 				A1000000000000000000B061 /* NovelMarkersView.swift in Sources */,

@@ -73,6 +73,45 @@ final class HistoryStore {
         save()
     }
 
+    // MARK: Backup (local JSON export / import)
+
+    /// JSON snapshot of every entry — the backup file the export flow writes.
+    /// 1:1 in spirit with upstream `BrowseHistoryBackup.exportToJson`; ours is
+    /// purely local (iOS history has no cloud-sync tier to push to).
+    func exportJSON() -> Data? {
+        try? JSONEncoder().encode(entries)
+    }
+
+    /// Merge a previously-exported snapshot into the store: dedupe by
+    /// `compositeID`, keep whichever copy was viewed more recently, re-sort by
+    /// recency, and apply the same cap. Returns the count of brand-new entries
+    /// (mirrors `importFromJson`'s imported tally). Restores cleanly even when
+    /// the current store is empty.
+    @discardableResult
+    func merge(_ imported: [Entry]) -> Int {
+        var byID: [String: Entry] = [:]
+        for e in entries { byID[e.compositeID] = e }
+        var added = 0
+        for e in imported {
+            if let existing = byID[e.compositeID] {
+                if e.viewedAt > existing.viewedAt { byID[e.compositeID] = e }
+            } else {
+                byID[e.compositeID] = e
+                added += 1
+            }
+        }
+        entries = byID.values.sorted { $0.viewedAt > $1.viewedAt }
+        if entries.count > cap { entries.removeLast(entries.count - cap) }
+        save()
+        return added
+    }
+
+    /// Decode a backup file's bytes into entries. Throws on malformed JSON so
+    /// the caller can surface the "couldn't read that file" message.
+    static func decodeBackup(_ data: Data) throws -> [Entry] {
+        try JSONDecoder().decode([Entry].self, from: data)
+    }
+
     /// Persist the current entries array. Useful after callers mutate
     /// `entries` directly (e.g. row deletion in HistoryView).
     func persist() { save() }
