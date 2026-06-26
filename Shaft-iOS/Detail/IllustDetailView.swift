@@ -199,6 +199,17 @@ struct IllustDetailView: View {
         URL(string: "https://www.pixiv.net/artworks/\(illustId)")!
     }
 
+    /// Stable id of the scroll-content top anchor — the floating "收起" pill
+    /// snaps here on collapse (see `body`).
+    private static let pagesTopID = "pagesTop"
+
+    /// Whether the current work has enough pages to collapse — gates the floating
+    /// "收起" pill, mirroring `content(for:)`'s `collapsible`.
+    private var pagesAreCollapsible: Bool {
+        guard let illust = vm.illust else { return false }
+        return IllustPages.pages(for: illust).count > collapsePagesThreshold
+    }
+
     /// Hide the action pill on scroll-down, reveal on scroll-up (Shaft V3
     /// behavior). `offset` is the content's top relative to the scroll view — it
     /// decreases as the user scrolls down. The anchor only advances past an 8pt
@@ -279,46 +290,87 @@ struct IllustDetailView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+        // Scroll-edge bar background, matching the iOS Settings nav bar exactly:
+        // absent on entry while the hero is immersive, then a uniform bar-material
+        // band with a hairline separator fades in together with the title once the
+        // page scrolls past the hero. No gradient — a crisp, system-style edge.
+        .background(alignment: .top) {
+            Rectangle()
+                .fill(.bar)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(Color(uiColor: .separator))
+                        .frame(height: 1 / UIScreen.main.scale)
+                }
+                .ignoresSafeArea(edges: .top)
+                .opacity(toolbarTitleVisible ? 1 : 0)
+                .animation(.easeOut(duration: 0.2), value: toolbarTitleVisible)
+                .allowsHitTesting(false)
+        }
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    if let illust = vm.illust {
-                        content(for: illust)
-                    } else if vm.isLoading {
-                        ProgressView().frame(maxWidth: .infinity).padding(.top, 120)
-                    } else if let err = vm.errorMessage {
-                        InlineError(message: err) { Task { await vm.load() } }
-                            .padding()
+        ScrollViewReader { scrollProxy in
+            ZStack(alignment: .bottom) {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        // Top anchor — the floating "收起" pill snaps here on
+                        // collapse (parity with `scrollToPositionWithOffset(0, 0)`)
+                        // so the user isn't stranded in the space the removed
+                        // pages leave behind.
+                        Color.clear.frame(height: 0).id(Self.pagesTopID)
+                        if let illust = vm.illust {
+                            content(for: illust)
+                        } else if vm.isLoading {
+                            ProgressView().frame(maxWidth: .infinity).padding(.top, 120)
+                        } else if let err = vm.errorMessage {
+                            InlineError(message: err) { Task { await vm.load() } }
+                                .padding()
+                        }
+                    }
+                    .background(GeometryReader { proxy in
+                        // .global, not a named scroll space: named-space frames
+                        // come back stuck at 0 on iOS 26. Content top == screen
+                        // top (top safe area ignored), so global minY is the
+                        // scroll offset.
+                        Color.clear.preference(
+                            key: ScrollOffsetPreferenceKey.self,
+                            value: proxy.frame(in: .global).minY
+                        )
+                    })
+                }
+                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
+                    handleScroll(offset)
+                }
+                .ignoresSafeArea(.container, edges: .top)
+                BottomActionBar(vm: vm, onShowBookmarkSheet: { showBookmarkSheet = true })
+                    .offset(y: actionBarVisible ? 0 : 180)
+                    .opacity(actionBarVisible ? 1 : 0)
+            }
+            // iOS 26 Liquid Glass paints a scroll-edge material on the navigation bar
+            // that no toolbar-background modifier can clear, leaving a dark band over
+            // the edge-to-edge hero. The bar is hidden entirely and its controls are
+            // re-drawn as floating glass capsules (see detailTopBar) instead.
+            .toolbar(.hidden, for: .navigationBar)
+            // The toolbar row, plus the floating "收起" pill hanging below its
+            // trailing edge while a collapsible multi-page work is expanded
+            // (parity with `fragment_artwork_v3.xml` collapse_pill, gravity top|end).
+            .overlay(alignment: .top) {
+                VStack(alignment: .trailing, spacing: 8) {
+                    detailTopBar
+                    if pagesAreCollapsible && pagesExpanded {
+                        FloatingCollapsePill {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                scrollProxy.scrollTo(Self.pagesTopID, anchor: .top)
+                                pagesExpanded = false
+                            }
+                        }
+                        .padding(.trailing, 12)
+                        .transition(.opacity)
                     }
                 }
-                .background(GeometryReader { proxy in
-                    // .global, not a named scroll space: named-space frames
-                    // come back stuck at 0 on iOS 26. Content top == screen
-                    // top (top safe area ignored), so global minY is the
-                    // scroll offset.
-                    Color.clear.preference(
-                        key: ScrollOffsetPreferenceKey.self,
-                        value: proxy.frame(in: .global).minY
-                    )
-                })
             }
-            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
-                handleScroll(offset)
-            }
-            .ignoresSafeArea(.container, edges: .top)
-            BottomActionBar(vm: vm, onShowBookmarkSheet: { showBookmarkSheet = true })
-                .offset(y: actionBarVisible ? 0 : 180)
-                .opacity(actionBarVisible ? 1 : 0)
         }
-        // iOS 26 Liquid Glass paints a scroll-edge material on the navigation bar
-        // that no toolbar-background modifier can clear, leaving a dark band over
-        // the edge-to-edge hero. The bar is hidden entirely and its controls are
-        // re-drawn as floating glass capsules (see detailTopBar) instead.
-        .toolbar(.hidden, for: .navigationBar)
-        .overlay(alignment: .top) { detailTopBar }
         .task {
             await vm.loadIfNeeded()
             if let i = vm.illust { HistoryStore.shared.record(illust: i) }
@@ -376,12 +428,8 @@ struct IllustDetailView: View {
                 StackedPage(urls: page) { viewerIndex = idx; showViewer = true }
                     .matchedTransitionSource(id: idx, in: viewerZoom)
             }
-            if collapsible {
-                CollapsePagesPill {
-                    withAnimation(.easeInOut(duration: 0.25)) { pagesExpanded = false }
-                }
-                .padding(.vertical, 12)
-            }
+            // Collapse is driven by the floating "收起" pill pinned below the
+            // toolbar (see `body`), not an in-list button — 1:1 with V3.
         }
 
         // Multi-page works can open the dedicated manga reader (the existing
@@ -437,8 +485,8 @@ struct IllustDetailView: View {
 
 /// Works with more than this many pages collapse to the first page behind an
 /// "expand" pill so tags / comments / related are reachable without a long
-/// scroll (parity with `CollapsibleIllustAdapter`).
-private let collapsePagesThreshold = 3
+/// scroll. `> 2` (i.e. 3+ pages) matches `CollapsibleIllustAdapter.shouldCollapse`.
+private let collapsePagesThreshold = 2
 
 private struct IllustFirstPage: View {
     let illust: Illust
@@ -466,16 +514,6 @@ private struct IllustFirstPage: View {
                 .frame(height: UIScreen.main.bounds.width / max(firstAspect, 0.1))
             } else if let first = pages.first {
                 StretchyFirstPage(urls: first, aspect: firstAspect, onTap: onTap)
-                .overlay(alignment: .topTrailing) {
-                    if pages.count > 1 {
-                        Label("\(pages.count)", systemImage: "square.on.square")
-                            .font(.caption2.bold())
-                            .padding(.horizontal, 7).padding(.vertical, 3)
-                            .background(.black.opacity(0.55), in: .capsule)
-                            .foregroundStyle(.white)
-                            .padding(12)
-                    }
-                }
                 .overlay(alignment: .bottom) {
                     if collapsed {
                         ExpandPagesPill(remaining: pages.count - 1, onTap: onExpand)
@@ -595,7 +633,11 @@ private struct ExpandPagesPill: View {
     }
 }
 
-private struct CollapsePagesPill: View {
+/// Floating "收起" pill — Shaft V3 `collapse_pill` (`fragment_artwork_v3.xml`):
+/// a glass capsule pinned below the toolbar's trailing edge, shown only while a
+/// collapsible multi-page work is expanded. `#B3111116` fill, `#33FFFFFF`
+/// hairline, up-chevron + 收起 in white 12sp bold; 12/14/7 padding (start/end/y).
+private struct FloatingCollapsePill: View {
     var onTap: () -> Void
     @Environment(OnboardingStore.self) private var l10n
 
@@ -603,14 +645,20 @@ private struct CollapsePagesPill: View {
         Button(action: onTap) {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.up")
-                Text(l10n.t(.detailCollapsePages)).font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .bold))
+                Text(l10n.t(.detailCollapsePages))
+                    .font(.system(size: 12, weight: .bold))
+                    .tracking(0.24)   // letterSpacing 0.02 × 12sp
             }
-            .foregroundStyle(Theme.v3Text2)
-            .padding(.horizontal, 16).padding(.vertical, 8)
-            .v3Glass(corner: 18)
+            .foregroundStyle(.white)
+            .padding(.leading, 12)
+            .padding(.trailing, 14)
+            .padding(.vertical, 7)
+            .background(Color(red: 17 / 255, green: 17 / 255, blue: 22 / 255).opacity(0.70), in: .capsule)
+            .overlay(Capsule().strokeBorder(.white.opacity(0.2), lineWidth: 1))
+            .shadow(color: .black.opacity(0.2), radius: 6, y: 2)   // elevation 8dp
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
     }
 }
 
@@ -1147,8 +1195,7 @@ private struct V3RelatedSection: View {
             .padding(.horizontal, 12)
 
             if !vm.relatedLoaded {
-                ProgressView()
-                    .frame(maxWidth: .infinity, minHeight: 280)
+                WaterfallSkeleton(columns: mute.waterfallColumns, rowsPerColumn: 2)
             } else {
                 let visible = mute.filter(vm.related)
                 if visible.isEmpty {

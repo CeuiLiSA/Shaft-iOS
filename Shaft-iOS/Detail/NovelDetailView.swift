@@ -108,8 +108,10 @@ struct NovelDetailView: View {
     @State private var vm: NovelDetailViewModel
     @State private var showReader = false
     @State private var showBookmarkSheet = false
+    @State private var toolbarTitleVisible = false
     @Environment(OnboardingStore.self) private var l10n
     @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
 
     init(novelId: Int64) {
         self.novelId = novelId
@@ -121,11 +123,12 @@ struct NovelDetailView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        GeometryReader { geo in
+            let topInset = geo.safeAreaInsets.top
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     if let novel = vm.novel {
-                        NovelHero(novel: novel)
+                        NovelHero(novel: novel, topInset: topInset)
                         VStack(alignment: .leading, spacing: 6) {
                             Text(novel.title ?? "")
                                 .font(.title3.bold())
@@ -207,94 +210,39 @@ struct NovelDetailView: View {
                             .padding(.horizontal, 16)
                         }
 
-                        Color.clear.frame(height: 88)
                     } else if vm.isLoading {
-                        ProgressView().frame(maxWidth: .infinity).padding(.top, 80)
+                        ProgressView().frame(maxWidth: .infinity).padding(.top, topInset + 120)
                     } else if let err = vm.errorMessage {
-                        InlineError(message: err) { Task { await vm.load() } }.padding()
+                        InlineError(message: err) { Task { await vm.load() } }
+                            .padding().padding(.top, topInset)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.bottom, 12)
+                .background(GeometryReader { proxy in
+                    // .global, not a named scroll space (named-space frames come
+                    // back stuck at 0 on iOS 26). Content top == screen top (top
+                    // safe area ignored), so global minY is the scroll offset.
+                    Color.clear.preference(
+                        key: NovelScrollOffsetKey.self,
+                        value: proxy.frame(in: .global).minY
+                    )
+                })
             }
-
-            HStack(spacing: 16) {
-                Spacer()
-                Button {
-                    Task { await vm.toggleBookmark() }
-                } label: {
-                    Image(systemName: (vm.novel?.isBookmarked == true) ? "heart.fill" : "heart")
-                        .font(.title3)
-                        .foregroundStyle((vm.novel?.isBookmarked == true) ? .pink : .primary)
-                        .frame(width: 44, height: 44)
-                }
-                .disabled(vm.isBookmarking || vm.novel == nil)
-                .contextMenu {
-                    if vm.novel?.isBookmarked != true {
-                        Button {
-                            Task { await vm.toggleBookmark(restrict: "public") }
-                        } label: {
-                            Label(l10n.t(.bookmarkPublic), systemImage: "heart")
-                        }
-                        Button {
-                            Task { await vm.toggleBookmark(restrict: "private") }
-                        } label: {
-                            Label(l10n.t(.bookmarkPrivate), systemImage: "lock")
-                        }
-                    }
-                    Button {
-                        showBookmarkSheet = true
-                    } label: {
-                        Label(l10n.t(.bookmarkWithTags), systemImage: "tag")
-                    }
-                }
-
-                Button {
-                    showReader = true
-                } label: {
-                    Text(l10n.t(.novelRead))
-                        .font(.subheadline.bold())
-                        .padding(.horizontal, 24).padding(.vertical, 10)
-                        .background(.tint, in: .capsule)
-                        .foregroundStyle(.white)
-                }
-                .disabled(vm.novel == nil)
-                Spacer()
+            .onPreferenceChange(NovelScrollOffsetKey.self) { offset in
+                setToolbarTitle(visible: offset < -220)
             }
-            .padding(.vertical, 8)
-            .background(.thinMaterial)
+            // Hero bleeds edge-to-edge under the status bar (Apple Books style).
+            .ignoresSafeArea(.container, edges: .top)
+            // Native bottom action bar that auto-insets the scroll content and
+            // clears the home indicator (no manual spacer).
+            .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         }
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    ShareLink(item: pixivURL) {
-                        Label(l10n.t(.actionShare), systemImage: "square.and.arrow.up")
-                    }
-                    Button {
-                        UIPasteboard.general.string = pixivURL.absoluteString
-                    } label: {
-                        Label(l10n.t(.actionCopyLink), systemImage: "doc.on.doc")
-                    }
-                    Button {
-                        openURL(pixivURL)
-                    } label: {
-                        Label(l10n.t(.actionOpenInBrowser), systemImage: "safari")
-                    }
-                    if let user = vm.novel?.user {
-                        Divider()
-                        Button(role: .destructive) {
-                            MuteStore.shared.toggleUser(user.id)
-                        } label: {
-                            let muted = MuteStore.shared.isUserMuted(user.id)
-                            Label(muted ? l10n.t(.actionUnmuteUser) : l10n.t(.actionMuteArtist),
-                                  systemImage: "speaker.slash")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-            }
-        }
+        // iOS 26 Liquid Glass paints a scroll-edge material on the navigation bar
+        // that no toolbar-background modifier can clear, leaving a dark band over
+        // the edge-to-edge hero. The bar is hidden entirely and its controls are
+        // re-drawn as floating glass capsules (see detailTopBar) instead.
+        .toolbar(.hidden, for: .navigationBar)
+        .overlay(alignment: .top) { detailTopBar }
         .task {
             await vm.loadIfNeeded()
             if let n = vm.novel { HistoryStore.shared.record(novel: n) }
@@ -312,6 +260,126 @@ struct NovelDetailView: View {
         }
     }
 
+    /// Floating top bar that replaces the hidden navigation bar: back and
+    /// overflow controls as glass capsules over the edge-to-edge hero, with the
+    /// title fading in (centered) once the hero scrolls away.
+    private var detailTopBar: some View {
+        ZStack {
+            Text(vm.novel?.title ?? "")
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .padding(.horizontal, 56)
+                .opacity(toolbarTitleVisible ? 1 : 0)
+            HStack {
+                Button { dismiss() } label: {
+                    DetailGlassCircle(system: "chevron.backward")
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                Menu { moreMenu } label: {
+                    DetailGlassCircle(system: "ellipsis")
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder
+    private var moreMenu: some View {
+        ShareLink(item: pixivURL) {
+            Label(l10n.t(.actionShare), systemImage: "square.and.arrow.up")
+        }
+        Button {
+            UIPasteboard.general.string = pixivURL.absoluteString
+        } label: {
+            Label(l10n.t(.actionCopyLink), systemImage: "doc.on.doc")
+        }
+        Button {
+            openURL(pixivURL)
+        } label: {
+            Label(l10n.t(.actionOpenInBrowser), systemImage: "safari")
+        }
+        if let user = vm.novel?.user {
+            Divider()
+            Button(role: .destructive) {
+                MuteStore.shared.toggleUser(user.id)
+            } label: {
+                let muted = MuteStore.shared.isUserMuted(user.id)
+                Label(muted ? l10n.t(.actionUnmuteUser) : l10n.t(.actionMuteArtist),
+                      systemImage: "speaker.slash")
+            }
+        }
+    }
+
+    /// Native bottom action bar (App Store / Apple Books pattern): a secondary
+    /// bookmark glyph beside the prominent full-width "Read" call to action, on a
+    /// `.bar` material with a hairline top separator.
+    private var bottomBar: some View {
+        HStack(spacing: 14) {
+            Button {
+                Task { await vm.toggleBookmark() }
+            } label: {
+                Image(systemName: (vm.novel?.isBookmarked == true) ? "heart.fill" : "heart")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle((vm.novel?.isBookmarked == true) ? Theme.v3Bookmarked : .secondary)
+                    .frame(width: 50, height: 50)
+                    .background(Color(.tertiarySystemFill), in: .circle)
+            }
+            .buttonStyle(.plain)
+            .disabled(vm.isBookmarking || vm.novel == nil)
+            .contextMenu { bookmarkMenu }
+
+            Button {
+                showReader = true
+            } label: {
+                Label(l10n.t(.novelRead), systemImage: "book.fill")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 50)
+                    .background(Theme.brandGradient, in: .capsule)
+                    .shadow(color: Theme.brandShadow, radius: 10, y: 4)
+            }
+            .buttonStyle(.plain)
+            .disabled(vm.novel == nil)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .background(.bar)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Color(.separator).opacity(0.6)).frame(height: 0.5)
+        }
+    }
+
+    @ViewBuilder
+    private var bookmarkMenu: some View {
+        if vm.novel?.isBookmarked != true {
+            Button {
+                Task { await vm.toggleBookmark(restrict: "public") }
+            } label: {
+                Label(l10n.t(.bookmarkPublic), systemImage: "heart")
+            }
+            Button {
+                Task { await vm.toggleBookmark(restrict: "private") }
+            } label: {
+                Label(l10n.t(.bookmarkPrivate), systemImage: "lock")
+            }
+        }
+        Button {
+            showBookmarkSheet = true
+        } label: {
+            Label(l10n.t(.bookmarkWithTags), systemImage: "tag")
+        }
+    }
+
+    /// Title fades in once the hero has scrolled past, mirroring the illust page.
+    private func setToolbarTitle(visible: Bool) {
+        guard toolbarTitleVisible != visible else { return }
+        withAnimation(.easeOut(duration: 0.2)) { toolbarTitleVisible = visible }
+    }
+
     private func avatar(for user: PixivUser) -> URL? {
         (user.profileImageUrls?.medium ?? user.profileImageUrls?.px170x170)
             .flatMap(URL.init(string:))
@@ -323,29 +391,48 @@ struct NovelDetailView: View {
     }
 }
 
+/// Immersive cover hero (Apple Books style): the cover blurred to fill the
+/// width and bleed up into the top safe area, with the crisp cover floated on
+/// top. A top scrim keeps the glass nav controls legible; the bottom fades into
+/// the page background so the metadata block reads as one surface.
 private struct NovelHero: View {
     let novel: Novel
+    let topInset: CGFloat
 
     var body: some View {
         ZStack {
-            // tinted backdrop
-            LinearGradient(
-                colors: [
-                    Color(.tertiarySystemBackground),
-                    Color(.secondarySystemBackground),
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
-            HStack {
-                Spacer()
-                PixivAsyncImage(url: coverURL)
-                    .frame(width: 160, height: 220)
-                    .clipShape(.rect(cornerRadius: 8))
-                    .shadow(radius: 8, y: 4)
-                Spacer()
-            }
-            .padding(.vertical, 24)
+            // Blurred cover backdrop — extended past the edges so the blur and
+            // the gentle zoom never reveal the placeholder rectangle.
+            PixivAsyncImage(url: coverURL, showsProgress: false)
+                .scaleEffect(1.3)
+                .blur(radius: 36, opaque: true)
+                .overlay(Color(.systemBackground).opacity(0.12))
+                .overlay(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black.opacity(0.35), location: 0),
+                            .init(color: .clear, location: 0.35),
+                            .init(color: .clear, location: 0.6),
+                            .init(color: Color(.systemBackground), location: 1),
+                        ],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+
+            // Crisp cover, pushed below the floating glass controls.
+            PixivAsyncImage(url: coverURL)
+                .frame(width: 150, height: 212)
+                .clipShape(.rect(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(.white.opacity(0.15), lineWidth: 0.5)
+                )
+                .shadow(color: .black.opacity(0.4), radius: 18, y: 10)
+                .padding(.top, topInset + 56)
+                .padding(.bottom, 28)
         }
+        .frame(maxWidth: .infinity)
+        .clipped()
     }
 
     private var coverURL: URL? {
@@ -354,6 +441,11 @@ private struct NovelHero: View {
             ?? novel.imageUrls?.squareMedium
         return s.flatMap(URL.init(string:))
     }
+}
+
+private struct NovelScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {}
 }
 
 private struct CommentRowMin: View {

@@ -59,6 +59,10 @@ struct IllustWaterfallList: View {
                 if illusts.isEmpty, let err = errorMessage {
                     InlineError(message: err) { Task { await onRefresh() } }
                         .padding(.horizontal, 12)
+                } else if visible.isEmpty, isLoading {
+                    // Initial load — masonry skeleton (普通列表 vs 瀑布流: this is
+                    // the waterfall variant). Load-more keeps the spinner below.
+                    WaterfallSkeleton(columns: mute.waterfallColumns)
                 }
                 if !visible.isEmpty {
                     WaterfallGrid(
@@ -88,7 +92,7 @@ struct IllustWaterfallList: View {
                     }
                     .padding(.horizontal, 8)
                 }
-                if isLoading {
+                if isLoading, !illusts.isEmpty {
                     ProgressView().frame(maxWidth: .infinity).padding()
                 } else if hasMore, !illusts.isEmpty {
                     Color.clear

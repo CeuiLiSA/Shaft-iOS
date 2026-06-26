@@ -163,7 +163,7 @@ private struct NotificationListPage: View {
         NotificationList(vm: vm)
             .overlay {
                 if vm.isLoading && vm.items.isEmpty {
-                    ProgressView()
+                    RowSkeletonList(count: 8) { AvatarRowSkeleton() }
                 } else if vm.items.isEmpty, let err = vm.errorMessage {
                     InlineError(message: err) { Task { await vm.load() } }.padding()
                 } else if vm.items.isEmpty && !vm.isLoading {
@@ -190,7 +190,7 @@ struct NotificationViewMoreView: View {
         NotificationList(vm: vm)
             .overlay {
                 if vm.isLoading && vm.items.isEmpty {
-                    ProgressView()
+                    RowSkeletonList(count: 8) { AvatarRowSkeleton() }
                 } else if vm.items.isEmpty, let err = vm.errorMessage {
                     InlineError(message: err) { Task { await vm.load() } }.padding()
                 }
@@ -369,7 +369,7 @@ private struct InfoLatestPage: View {
         .listStyle(.insetGrouped)
         .overlay {
             if vm.isLoading && vm.categories.isEmpty {
-                ProgressView()
+                RowSkeletonList(count: 10) { InfoRowSkeleton() }
             } else if vm.categories.isEmpty, let err = vm.errorMessage {
                 InlineError(message: err) { Task { await vm.load() } }.padding()
             } else if vm.categories.isEmpty && !vm.isLoading {
@@ -409,7 +409,7 @@ struct InfoCategoryView: View {
         .listStyle(.plain)
         .overlay {
             if vm.isLoading && vm.items.isEmpty {
-                ProgressView()
+                RowSkeletonList(count: 10) { InfoRowSkeleton() }
             } else if vm.items.isEmpty, let err = vm.errorMessage {
                 InlineError(message: err) { Task { await vm.load() } }.padding()
             }

@@ -172,6 +172,7 @@ struct UserNovelsView: View {
     var body: some View {
         NovelList(
             novels: vm.novels,
+            isLoading: vm.isLoading,
             onLoadMore: { await vm.loadMore() },
             hasMore: vm.nextUrl != nil
         )
@@ -179,9 +180,7 @@ struct UserNovelsView: View {
         .task { await vm.loadIfNeeded() }
         .refreshable { await vm.load() }
         .overlay {
-            if vm.isLoading && vm.novels.isEmpty {
-                ProgressView()
-            } else if vm.novels.isEmpty, let err = vm.errorMessage {
+            if vm.novels.isEmpty, !vm.isLoading, let err = vm.errorMessage {
                 InlineError(message: err) { Task { await vm.load() } }.padding()
             }
         }
@@ -245,6 +244,7 @@ struct UserFollowingView: View {
     var body: some View {
         UserPreviewList(
             items: vm.items,
+            isLoading: vm.isLoading,
             onLoadMore: { await vm.loadMore() },
             hasMore: vm.nextUrl != nil
         )
@@ -264,6 +264,7 @@ struct UserFollowerView: View {
     var body: some View {
         UserPreviewList(
             items: vm.items,
+            isLoading: vm.isLoading,
             onLoadMore: { await vm.loadMore() },
             hasMore: vm.nextUrl != nil
         )
@@ -283,6 +284,7 @@ struct UserMyPixivView: View {
     var body: some View {
         UserPreviewList(
             items: vm.items,
+            isLoading: vm.isLoading,
             onLoadMore: { await vm.loadMore() },
             hasMore: vm.nextUrl != nil
         )
@@ -302,6 +304,7 @@ struct UserRelatedView: View {
     var body: some View {
         UserPreviewList(
             items: vm.items,
+            isLoading: vm.isLoading,
             onLoadMore: { await vm.loadMore() },
             hasMore: vm.nextUrl != nil
         )
@@ -443,6 +446,18 @@ struct SpotlightView: View {
             }
         }
         .listStyle(.plain)
+        .overlay {
+            if vm.isLoading, vm.articles.isEmpty {
+                RowSkeletonList(count: 5, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        SkeletonShape(corner: 8).frame(height: 160)
+                        SkeletonBlock(height: 16)
+                        SkeletonBlock(width: 120, height: 10)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
         .navigationTitle(l10n.t(.discoverSpotlight))
         .navigationBarTitleDisplayMode(.inline)
         .task { await vm.loadIfNeeded() }
@@ -602,13 +617,13 @@ struct NovelRecommendView: View {
     var body: some View {
         NovelList(
             novels: vm.novels,
+            isLoading: vm.isLoading,
             onLoadMore: { await vm.loadMore() },
             hasMore: vm.nextUrl != nil
         )
         .refreshable { await vm.load() }
         .overlay {
-            if vm.novels.isEmpty && vm.isLoading { ProgressView() }
-            else if vm.novels.isEmpty, let err = vm.errorMessage {
+            if vm.novels.isEmpty, !vm.isLoading, let err = vm.errorMessage {
                 InlineError(message: err) { Task { await vm.load() } }.padding()
             }
         }
@@ -670,13 +685,13 @@ struct UserNovelBookmarksView: View {
     var body: some View {
         NovelList(
             novels: vm.novels,
+            isLoading: vm.isLoading,
             onLoadMore: { await vm.loadMore() },
             hasMore: vm.nextUrl != nil
         )
         .refreshable { await vm.load() }
         .overlay {
-            if vm.novels.isEmpty && vm.isLoading { ProgressView() }
-            else if vm.novels.isEmpty, let err = vm.errorMessage {
+            if vm.novels.isEmpty, !vm.isLoading, let err = vm.errorMessage {
                 InlineError(message: err) { Task { await vm.load() } }.padding()
             }
         }

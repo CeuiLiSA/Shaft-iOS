@@ -162,6 +162,10 @@ struct RecommendedWorksView: View {
                 } else if let err = vm.rankingError {
                     ErrorBanner(message: err) { Task { await vm.loadRanking() } }
                         .padding(.horizontal, 12)
+                } else if vm.isLoadingRanking {
+                    SectionHeader(title: l10n.t(.rankingTodayTitle))
+                        .padding(.horizontal, 16)
+                    RankingStripSkeleton()
                 }
 
                 let visible = mute.filter(vm.recommendedIllusts)
@@ -181,9 +185,11 @@ struct RecommendedWorksView: View {
                 } else if let err = vm.recommendedError {
                     ErrorBanner(message: err) { Task { await vm.loadRecommended() } }
                         .padding(.horizontal, 12)
+                } else if vm.isLoadingRecommended {
+                    WaterfallSkeleton(columns: mute.waterfallColumns)
                 }
 
-                if vm.isLoadingRanking || vm.isLoadingRecommended {
+                if vm.isLoadingRecommended, !vm.recommendedIllusts.isEmpty {
                     ProgressView().frame(maxWidth: .infinity).padding(.vertical, 16)
                 } else if vm.recommendedNext != nil, !vm.recommendedIllusts.isEmpty {
                     Color.clear
@@ -217,16 +223,17 @@ struct PopularTagsView: View {
                 ErrorBanner(message: err) { Task { await vm.loadTags() } }
                     .padding()
             }
-            LazyVGrid(columns: columns, spacing: 0) {
-                ForEach(vm.trendingTags) { tag in
-                    NavigationLink(value: AppRoute.tagResults(tag: tag.tag ?? "")) {
-                        TagGridCell(tag: tag)
+            if vm.trendingTags.isEmpty, vm.isLoadingTags {
+                TagGridSkeleton(columns: 3)
+            } else {
+                LazyVGrid(columns: columns, spacing: 0) {
+                    ForEach(vm.trendingTags) { tag in
+                        NavigationLink(value: AppRoute.tagResults(tag: tag.tag ?? "")) {
+                            TagGridCell(tag: tag)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
-            }
-            if vm.isLoadingTags {
-                ProgressView().padding()
             }
         }
         .refreshable { await vm.loadTags() }

@@ -677,9 +677,7 @@ struct UserProfileView: View {
         let visible = mute.filter(illusts)
         if visible.isEmpty {
             if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 48)
+                WaterfallSkeleton(columns: mute.waterfallColumns)
             } else {
                 Text(l10n.t(.nothingHere))
                     .font(.footnote)
@@ -1399,21 +1397,27 @@ private struct V3ProfileChip: View {
 
 struct NovelList: View {
     let novels: [Novel]
+    let isLoading: Bool
     let onLoadMore: (() async -> Void)?
     let hasMore: Bool
 
     init(
         novels: [Novel],
+        isLoading: Bool = false,
         onLoadMore: (() async -> Void)? = nil,
         hasMore: Bool = false
     ) {
         self.novels = novels
+        self.isLoading = isLoading
         self.onLoadMore = onLoadMore
         self.hasMore = hasMore
     }
 
     var body: some View {
         ScrollView {
+            if novels.isEmpty, isLoading {
+                NovelListSkeleton()
+            } else {
             LazyVStack(spacing: 8) {
                 ForEach(novels) { novel in
                     NavigationLink(value: AppRoute.novelDetail(novel.id)) {
@@ -1430,6 +1434,7 @@ struct NovelList: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
+            }
         }
     }
 }

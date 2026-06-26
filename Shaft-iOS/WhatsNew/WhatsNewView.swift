@@ -107,6 +107,7 @@ struct WhatsNewView: View {
                 ).tag(Section.illust)
                 NovelList(
                     novels: vm.novels,
+                    isLoading: vm.isLoading,
                     onLoadMore: { await vm.loadMoreNovels() },
                     hasMore: vm.novelNext != nil
                 ).tag(Section.novel)

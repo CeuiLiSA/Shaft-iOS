@@ -125,7 +125,7 @@ private struct WatchlistPage: View {
         .listStyle(.plain)
         .overlay {
             if vm.isLoading && vm.items.isEmpty {
-                ProgressView()
+                RowSkeletonList { MediaRowSkeleton(coverWidth: 72, coverHeight: 96) }
             } else if vm.items.isEmpty, let err = vm.errorMessage {
                 InlineError(message: err) { Task { await vm.load() } }.padding()
             } else if vm.items.isEmpty && !vm.isLoading {

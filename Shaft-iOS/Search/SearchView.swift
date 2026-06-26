@@ -115,8 +115,7 @@ struct SearchView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(l10n.t(.subPopularTags)).font(.headline)
             if trending.isEmpty && loadingTrending {
-                HStack { Spacer(); ProgressView(); Spacer() }
-                    .padding(.vertical, 40)
+                TagGridSkeleton(columns: 2, rows: 3, corner: 8)
             } else {
                 LazyVGrid(columns: gridColumns, spacing: 8) {
                     ForEach(trending) { tag in
@@ -470,11 +469,13 @@ struct SearchResultsView: View {
                 ).tag(Section.illust)
                 NovelList(
                     novels: vm.novels,
+                    isLoading: vm.isLoading,
                     onLoadMore: { await vm.loadMoreNovels() },
                     hasMore: vm.novelNext != nil
                 ).tag(Section.novel)
                 UserPreviewList(
                     items: vm.users,
+                    isLoading: vm.isLoading,
                     onLoadMore: { await vm.loadMoreUsers() },
                     hasMore: vm.userNext != nil
                 ).tag(Section.user)
@@ -528,21 +529,27 @@ struct SearchResultsView: View {
 
 struct UserPreviewList: View {
     let items: [UserPreview]
+    let isLoading: Bool
     let onLoadMore: (() async -> Void)?
     let hasMore: Bool
 
     init(
         items: [UserPreview],
+        isLoading: Bool = false,
         onLoadMore: (() async -> Void)? = nil,
         hasMore: Bool = false
     ) {
         self.items = items
+        self.isLoading = isLoading
         self.onLoadMore = onLoadMore
         self.hasMore = hasMore
     }
 
     var body: some View {
         ScrollView {
+            if items.isEmpty, isLoading {
+                UserListSkeleton()
+            } else {
             LazyVStack(spacing: 12) {
                 ForEach(items) { preview in
                     NavigationLink(value: AppRoute.userProfile(preview.user.id)) {
@@ -558,6 +565,7 @@ struct UserPreviewList: View {
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 8)
+            }
         }
     }
 }

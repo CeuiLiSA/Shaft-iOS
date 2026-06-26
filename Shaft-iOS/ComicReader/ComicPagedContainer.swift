@@ -114,7 +114,16 @@ final class ComicZoomScrollView: UIScrollView, UIScrollViewDelegate {
         if !configured {
             configured = true
             setZoomScale(initial, animated: false)
-            if fitMode == .fitWidth { contentOffset = .zero }   // top-align tall pages
+            // Tall fit-width pages begin at the top so reading flows downward;
+            // every other case — including pages shorter than the viewport —
+            // rests vertically (and horizontally) centered.
+            let scaledHeight = imageSize.height * initial
+            let scaledWidth = imageSize.width * initial
+            let topAlign = fitMode == .fitWidth && scaledHeight > bounds.height
+            contentOffset = CGPoint(
+                x: -max(0, (bounds.width - scaledWidth) / 2),
+                y: topAlign ? 0 : -max(0, (bounds.height - scaledHeight) / 2)
+            )
         } else {
             zoomScale = min(max(zoomScale, minimumZoomScale), maximumZoomScale)
         }

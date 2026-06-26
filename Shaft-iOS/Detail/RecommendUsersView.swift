@@ -41,12 +41,12 @@ struct RecommendUsersView: View {
     var body: some View {
         UserPreviewList(
             items: vm.items,
+            isLoading: vm.isLoading,
             onLoadMore: { await vm.loadMore() },
             hasMore: vm.nextUrl != nil
         )
         .overlay {
-            if vm.items.isEmpty && vm.isLoading { ProgressView() }
-            else if vm.items.isEmpty, let err = vm.errorMessage {
+            if vm.items.isEmpty, !vm.isLoading, let err = vm.errorMessage {
                 InlineError(message: err) { Task { await vm.load() } }.padding()
             }
         }

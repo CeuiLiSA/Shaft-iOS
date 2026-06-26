@@ -165,14 +165,13 @@ struct RankingDetailView: View {
             if vm.kind == .novel {
                 NovelList(
                     novels: vm.novels,
+                    isLoading: vm.isLoading,
                     onLoadMore: { await vm.loadMore() },
                     hasMore: vm.nextUrl != nil
                 )
                 .refreshable { await vm.load() }
                 .overlay {
-                    if vm.isLoading && vm.novels.isEmpty {
-                        ProgressView()
-                    } else if vm.novels.isEmpty, let err = vm.errorMessage {
+                    if vm.novels.isEmpty, !vm.isLoading, let err = vm.errorMessage {
                         InlineError(message: err) { Task { await vm.load() } }.padding()
                     }
                 }

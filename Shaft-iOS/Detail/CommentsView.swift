@@ -206,7 +206,7 @@ struct CommentsView: View {
             }
             .overlay {
                 if vm.isLoading && vm.comments.isEmpty {
-                    ProgressView()
+                    RowSkeletonList(count: 7) { AvatarRowSkeleton() }
                 } else if vm.comments.isEmpty, let err = vm.errorMessage {
                     InlineError(message: err) { Task { await vm.load() } }.padding()
                 } else if vm.comments.isEmpty && !vm.isLoading {
