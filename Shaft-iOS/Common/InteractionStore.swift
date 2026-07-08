@@ -65,7 +65,10 @@ final class InteractionStore {
     // MARK: Bookmark mutations (optimistic; revert + rethrow on failure)
 
     func toggleBookmark(_ illust: Illust, restrict: String = "public") async throws {
-        try await setBookmarked(!isBookmarked(illust), id: illust.id, restrict: restrict, tags: [])
+        let target = !isBookmarked(illust)
+        try await setBookmarked(target, id: illust.id, restrict: restrict, tags: [])
+        // shaft-api-v2 event report (fire-and-forget; no-op without a HMAC secret).
+        Task { await ShaftEventReporter.shared.reportIllustBookmark(illust, added: target) }
     }
 
     /// Bookmark with explicit restrict + tags (the tag-sheet path). Re-applies
@@ -99,7 +102,9 @@ final class InteractionStore {
     // MARK: Follow mutations (optimistic; revert + rethrow on failure)
 
     func toggleFollow(_ user: PixivUser, restrict: String = "public") async throws {
-        try await setFollowed(!isFollowed(user), id: user.id, restrict: restrict)
+        let target = !isFollowed(user)
+        try await setFollowed(target, id: user.id, restrict: restrict)
+        Task { await ShaftEventReporter.shared.reportFollow(user, followed: target) }
     }
 
     func setFollowed(_ target: Bool, id: Int64, restrict: String = "public") async throws {

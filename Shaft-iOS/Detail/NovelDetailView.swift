@@ -60,9 +60,11 @@ final class NovelDetailViewModel {
             if cur.isBookmarked == true {
                 _ = try await api.unbookmarkNovel(novelId)
                 update(isBookmarked: false)
+                Task { await ShaftEventReporter.shared.reportNovelBookmark(cur, added: false) }
             } else {
                 _ = try await api.bookmarkNovel(novelId, restrict: restrict)
                 update(isBookmarked: true)
+                Task { await ShaftEventReporter.shared.reportNovelBookmark(cur, added: true) }
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -81,6 +83,7 @@ final class NovelDetailViewModel {
         do {
             _ = try await api.bookmarkNovel(novelId, restrict: restrict, tags: tags)
             update(isBookmarked: true)
+            if let n = novel { Task { await ShaftEventReporter.shared.reportNovelBookmark(n, added: true) } }
         } catch {
             errorMessage = error.localizedDescription
         }

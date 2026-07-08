@@ -55,6 +55,9 @@ struct MoreView: View {
                 NavigationLink(value: AppRoute.pinnedTags) {
                     Label(l10n.t(.pinnedTagsTitle), systemImage: "pin")
                 }
+                NavigationLink(value: AppRoute.eventHistory) {
+                    Label(l10n.t(.eventHistory), systemImage: "clock.arrow.circlepath")
+                }
             }
 
             Section {

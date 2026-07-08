@@ -1457,6 +1457,10 @@ struct NovelRow: View {
                 HStack(spacing: 10) {
                     if let v = novel.totalView { Label("\(v)", systemImage: "eye") }
                     if let b = novel.totalBookmarks { Label("\(b)", systemImage: "heart") }
+                    // shaft-api-v2 trending pill — only set on 当前最热 / 站长推荐 novel feeds.
+                    if let label = TrendingScore.label(novel.trendingScore) {
+                        Text(label).foregroundStyle(Theme.brand).fontWeight(.bold)
+                    }
                 }
                 .font(.caption2).foregroundStyle(.secondary)
             }

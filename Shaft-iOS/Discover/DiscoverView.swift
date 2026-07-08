@@ -61,6 +61,8 @@ struct DiscoverView: View {
                     chip(.mangaRecommend, label: l10n.t(.profileManga), icon: "book")
                     chip(.novelRecommend, label: l10n.t(.profileNovels), icon: "text.book.closed")
                     chip(.recommendUsers, label: l10n.t(.recommendUsersTitle), icon: "person.2.crop.square.stack")
+                    chip(.currentHot, label: l10n.t(.currentHot), icon: "flame.fill")
+                    chip(.siteRecommend, label: l10n.t(.siteRecommend), icon: "star.circle")
                 }
                 .padding(.horizontal, 12).padding(.vertical, 8)
             }

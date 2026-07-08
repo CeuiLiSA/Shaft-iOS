@@ -47,6 +47,10 @@ enum AppRoute: Hashable, Codable, Sendable {
     case primeTagDetail(file: String, title: String)
     case pinnedTags
     case watchLater
+    // shaft-api-v2 self-hosted feeds
+    case currentHot
+    case siteRecommend
+    case eventHistory
 
     enum CommentTarget: Hashable, Codable, Sendable {
         case illust(Int64)

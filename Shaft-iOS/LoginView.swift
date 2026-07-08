@@ -15,6 +15,10 @@ final class AuthViewModel {
         self.client = c
         self.loginSession = PixivLoginSession(client: c)
         self.token = KeychainTokenStore.shared.load()
+        // Bind the anonymous shaft-api-v2 client_id to the pixiv uid (cached/idempotent).
+        if let uid = token?.user?.id {
+            Task { await ShaftEventReporter.shared.bindUid(uid) }
+        }
     }
 
     func login(provisional: Bool = false) async {
@@ -28,6 +32,9 @@ final class AuthViewModel {
             do {
                 try KeychainTokenStore.shared.save(response)
                 token = response
+                if let uid = response.user?.id {
+                    Task { await ShaftEventReporter.shared.bindUid(uid) }
+                }
             } catch {
                 errorMessage = "Failed to save token: \(error.localizedDescription)"
             }

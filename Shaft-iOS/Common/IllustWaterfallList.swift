@@ -144,6 +144,17 @@ struct IllustWaterfallCell: View {
             .overlay(alignment: .bottomTrailing) {
                 WaterfallBookmarkButton(illust: illust)
             }
+            .overlay(alignment: .topLeading) {
+                // shaft-api-v2 trending "▲ N" pill — only set on 当前最热 / 站长推荐.
+                if let label = TrendingScore.label(illust.trendingScore) {
+                    Text(label)
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(.black.opacity(0.55), in: .capsule)
+                        .foregroundStyle(.white)
+                        .padding(6)
+                }
+            }
     }
 
     private var displayAspect: CGFloat {

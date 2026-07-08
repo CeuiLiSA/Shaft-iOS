@@ -103,6 +103,12 @@ struct Illust: Codable, Hashable, Sendable, Identifiable {
     /// 0/1 = human, 2 = AI-generated. Drives search "only AI" / "exclude AI" filtering.
     let illustAIType: Int?
 
+    /// Non-persisted decoration (NOT in the pixiv payload / not Codable): the
+    /// shaft-api-v2 trending score / bookmark count, rendered as a "▲ N" pill on
+    /// the 当前最热 / 站长推荐 feeds. Mirrors upstream IllustsBean's transient
+    /// `trendingScore`. Defaults nil everywhere else (no pill).
+    var trendingScore: Double? = nil
+
     enum CodingKeys: String, CodingKey {
         case id, title, caption, type
         case imageUrls = "image_urls"
@@ -316,6 +322,9 @@ struct Novel: Codable, Hashable, Sendable, Identifiable {
     let xRestrict: Int?
     /// 0/1 = human, 2 = AI-generated. Drives search "only AI" / "exclude AI" filtering.
     let novelAIType: Int?
+
+    /// Non-persisted trending-score decoration — see `Illust.trendingScore`.
+    var trendingScore: Double? = nil
 
     enum CodingKeys: String, CodingKey {
         case id, title, caption

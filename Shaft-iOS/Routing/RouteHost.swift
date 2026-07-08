@@ -120,6 +120,12 @@ struct RouteHost: ViewModifier {
                 PinnedTagsView()
             case .watchLater:
                 WatchLaterView()
+            case .currentHot:
+                RecentRecommendView()
+            case .siteRecommend:
+                SiteRecommendView()
+            case .eventHistory:
+                EventHistoryView()
         }
     }
 }
