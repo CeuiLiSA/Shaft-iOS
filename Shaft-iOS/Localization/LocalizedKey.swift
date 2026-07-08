@@ -73,6 +73,8 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case rankModeDay, rankModeWeek, rankModeMonth
     case rankModeDayMale, rankModeDayFemale
     case rankModeWeekRookie, rankModeWeekOriginal, rankModeDayManga
+    // Ranking date picker (past rankings — 1:1 with RankActivity's date dialog)
+    case rankDateTitle, rankDateLatest
 
     // Discover
     case discoverSpotlight
@@ -126,6 +128,14 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case watchLaterTitle, watchLaterAdd, watchLaterRemove
     case watchLaterEmpty, watchLaterClear, watchLaterClearOk, watchLaterClearConfirm
     case watchLaterPlayAll
+
+    // shaft-api-v2 self-hosted feeds (当前最热 / 站长推荐 / 操作记录 + gate)
+    case currentHot, siteRecommend, eventHistory
+    case recentWindowLive, recentWindowDay, recentWindowWeek, recentWindowMonth
+    case sensitiveGateTitle, sensitiveGateMessage, sensitiveGateCancel, sensitiveGateProceed
+    case eventHistoryEmpty, eventHistoryCopyClientId, eventHistoryClientIdCopied
+    case eventVerbBookmark, eventVerbUnbookmark, eventVerbDownload, eventVerbFollow, eventVerbUnfollow
+    case typeUser
 
     // Novel markers (小说书签)
     case novelMarkersTitle, markerPageFmt

@@ -93,20 +93,21 @@ actor PixivAPI {
 
     /// `mode` accepts `day`, `week`, `month`, `day_male`, `day_female`,
     /// `day_manga`, etc. — see Shaft `RankingIllustsFragment`.
-    func rankingIllusts(mode: String = "day") async throws -> IllustResponse {
-        try await get(path: "/v1/illust/ranking", query: [
-            "mode": mode,
-            "filter": "for_ios",
-        ])
+    /// `date` (optional, `yyyy-MM-dd`) requests a past ranking — parity with
+    /// upstream `RankActivity`'s date picker (`getRank(mode, date)`). Omitted →
+    /// the latest published ranking.
+    func rankingIllusts(mode: String = "day", date: String? = nil) async throws -> IllustResponse {
+        var query = ["mode": mode, "filter": "for_ios"]
+        if let date { query["date"] = date }
+        return try await get(path: "/v1/illust/ranking", query: query)
     }
 
     /// Novel ranking. `mode` accepts `day`, `week`, `day_male`, `day_female`,
-    /// `week_rookie`, `day_r18` — see Shaft `FragmentRankNovel`.
-    func rankingNovels(mode: String = "day") async throws -> NovelResponse {
-        try await get(path: "/v1/novel/ranking", query: [
-            "mode": mode,
-            "filter": "for_ios",
-        ])
+    /// `week_rookie`, `day_r18` — see Shaft `FragmentRankNovel`. `date` as above.
+    func rankingNovels(mode: String = "day", date: String? = nil) async throws -> NovelResponse {
+        var query = ["mode": mode, "filter": "for_ios"]
+        if let date { query["date"] = date }
+        return try await get(path: "/v1/novel/ranking", query: query)
     }
 
     func walkthroughIllusts() async throws -> IllustResponse {
