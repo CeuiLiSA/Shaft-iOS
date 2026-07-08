@@ -14,13 +14,14 @@ enum ShaftEventsConfig {
     /// ATS exception lives in `Info.plist`. Read endpoints need no auth.
     static let baseURL = URL(string: "http://36.138.103.18:30009")!
 
-    /// HMAC-SHA256 secret for the WRITE path (events/batch, uid-bindings). Empty
-    /// in fork/OSS builds — upstream injects it at build time, so a fork's
-    /// reporter silently no-ops (the READ feeds still work). Set this to your
-    /// shaft-api-v2 `EVENTS_HMAC_SECRET` to enable reporting + populate 操作记录.
-    /// The key is the secret's ASCII bytes verbatim (NOT hex-decoded), matching
-    /// Node's `crypto.createHmac('sha256', secret)`.
-    static let hmacSecret = ""
+    /// HMAC-SHA256 secret for the WRITE path (events/batch, uid-bindings) — the
+    /// same value as the server's `/etc/shaft-api-v2/events-hmac-secret` and the
+    /// Android build's `SHAFT_EVENTS_HMAC`. The key is the secret's ASCII bytes
+    /// verbatim (NOT hex-decoded), matching Node's `crypto.createHmac('sha256', secret)`.
+    /// Empty here would disable reporting (fork-build behavior). Kept in-source
+    /// because this is a PRIVATE repo; move to a gitignored xcconfig if it ever
+    /// goes public.
+    static let hmacSecret = "f193c37033335db2c05dc03e10d38f6fe780b8f70391b6114181e46770f1dfc4"
 
     static var hmacEnabled: Bool { !hmacSecret.isEmpty }
 
