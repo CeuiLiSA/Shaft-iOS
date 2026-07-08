@@ -118,6 +118,8 @@ struct RouteHost: ViewModifier {
                 PrimeTagDetailView(file: file, title: title)
             case .pinnedTags:
                 PinnedTagsView()
+            case .watchLater:
+                WatchLaterView()
         }
     }
 }

@@ -122,6 +122,11 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     // Watchlist (追更)
     case watchlistTitle, watchlistAdd, watchlistAdded, episodesFmt
 
+    // Watch Later (稍后再看) — 1:1 port of pixiv/ui/watchlater/ (local list)
+    case watchLaterTitle, watchLaterAdd, watchLaterRemove
+    case watchLaterEmpty, watchLaterClear, watchLaterClearOk, watchLaterClearConfirm
+    case watchLaterPlayAll
+
     // Novel markers (小说书签)
     case novelMarkersTitle, markerPageFmt
 

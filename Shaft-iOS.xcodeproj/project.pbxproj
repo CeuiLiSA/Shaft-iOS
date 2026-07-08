@@ -34,6 +34,8 @@
 		A1000000000000000000B106 /* QPACK.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F106 /* QPACK.swift */; };
 		A1000000000000000000B107 /* Http3Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F107 /* Http3Client.swift */; };
 		A1000000000000000000B108 /* SkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F108 /* SkeletonView.swift */; };
+		A1000000000000000000B109 /* WatchLaterStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F109 /* WatchLaterStore.swift */; };
+		A1000000000000000000B110 /* WatchLaterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F110 /* WatchLaterView.swift */; };
 		A1000000000000000000B023 /* PlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F023 /* PlaceholderView.swift */; };
 		A1000000000000000000B024 /* LocalizedKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F024 /* LocalizedKey.swift */; };
 		A1000000000000000000B025 /* LocalizedStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F025 /* LocalizedStrings.swift */; };
@@ -146,6 +148,8 @@
 		A1000000000000000000F106 /* QPACK.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QPACK.swift; sourceTree = "<group>"; };
 		A1000000000000000000F107 /* Http3Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Http3Client.swift; sourceTree = "<group>"; };
 		A1000000000000000000F108 /* SkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkeletonView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F109 /* WatchLaterStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLaterStore.swift; sourceTree = "<group>"; };
+		A1000000000000000000F110 /* WatchLaterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLaterView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F023 /* PlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F024 /* LocalizedKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedKey.swift; sourceTree = "<group>"; };
 		A1000000000000000000F025 /* LocalizedStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedStrings.swift; sourceTree = "<group>"; };
@@ -275,6 +279,7 @@
 				A1000000000000000000G022 /* Download */,
 				A1000000000000000000G023 /* Slideshow */,
 				A1000000000000000000G024 /* Prime */,
+				A1000000000000000000G025 /* WatchLater */,
 				A1000000000000000000F003 /* Assets.xcassets */,
 				A1000000000000000000G004 /* Preview Content */,
 			);
@@ -475,6 +480,15 @@
 			path = Prime;
 			sourceTree = "<group>";
 		};
+		A1000000000000000000G025 /* WatchLater */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000F109 /* WatchLaterStore.swift */,
+				A1000000000000000000F110 /* WatchLaterView.swift */,
+			);
+			path = WatchLater;
+			sourceTree = "<group>";
+		};
 		A1000000000000000000G016 /* WhatsNew */ = {
 			isa = PBXGroup;
 			children = (
@@ -667,6 +681,8 @@
 				A1000000000000000000B106 /* QPACK.swift in Sources */,
 				A1000000000000000000B107 /* Http3Client.swift in Sources */,
 				A1000000000000000000B108 /* SkeletonView.swift in Sources */,
+				A1000000000000000000B109 /* WatchLaterStore.swift in Sources */,
+				A1000000000000000000B110 /* WatchLaterView.swift in Sources */,
 				A1000000000000000000B023 /* PlaceholderView.swift in Sources */,
 				A1000000000000000000B024 /* LocalizedKey.swift in Sources */,
 				A1000000000000000000B025 /* LocalizedStrings.swift in Sources */,

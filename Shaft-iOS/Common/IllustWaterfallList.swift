@@ -30,6 +30,7 @@ struct IllustWaterfallList: View {
     let prefiltered: Bool
 
     @State private var mute = MuteStore.shared
+    @State private var watchLater = WatchLaterStore.shared
     @State private var bulkSeed: BulkSelectionSeed?
     @State private var slideshowSeed: SlideshowSeed?
     @Environment(OnboardingStore.self) private var l10n
@@ -80,6 +81,15 @@ struct IllustWaterfallList: View {
                                 slideshowSeed = SlideshowBuilder.seed(from: visible, tapped: illust)
                             } label: {
                                 Label(l10n.t(.slideshowPlay), systemImage: "play.rectangle.on.rectangle")
+                            }
+                            Button {
+                                watchLater.toggle(illust)
+                            } label: {
+                                let saved = watchLater.contains(illust.id)
+                                Label(
+                                    l10n.t(saved ? .watchLaterRemove : .watchLaterAdd),
+                                    systemImage: saved ? "minus.circle" : "clock.badge.checkmark"
+                                )
                             }
                             Button {
                                 bulkSeed = BulkSelectionSeed(illusts: visible)

@@ -29,6 +29,9 @@ struct MoreView: View {
                 NavigationLink(value: AppRoute.history) {
                     Label(l10n.t(.historyTitle), systemImage: "clock.arrow.circlepath")
                 }
+                NavigationLink(value: AppRoute.watchLater) {
+                    Label(l10n.t(.watchLaterTitle), systemImage: "clock.badge.checkmark")
+                }
                 NavigationLink(value: AppRoute.downloads) {
                     Label(l10n.t(.downloadsTitle), systemImage: "arrow.down.circle")
                 }

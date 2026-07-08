@@ -7,6 +7,10 @@ enum LocalizedStrings {
 
     private static let table: [String: [LocalizedKey: String]] = [
         "en": [
+            .watchLaterTitle: "Watch Later", .watchLaterAdd: "Add to Watch Later", .watchLaterRemove: "Remove from Watch Later",
+            .watchLaterEmpty: "Your Watch Later list is empty",
+            .watchLaterClear: "Clear list", .watchLaterClearOk: "Clear", .watchLaterClearConfirm: "Clear your Watch Later list?",
+            .watchLaterPlayAll: "Play all",
             .slideshowPlay: "Slideshow",
             .primeTagsTitle: "Hot tags",
             .actionReport: "Report this work",
@@ -493,6 +497,10 @@ enum LocalizedStrings {
             .nrMsgLoadFail: "Load failed",
         ],
         "zh-Hans": [
+            .watchLaterTitle: "稍后再看", .watchLaterAdd: "加入稍后再看", .watchLaterRemove: "移出稍后再看",
+            .watchLaterEmpty: "稍后再看列表是空的",
+            .watchLaterClear: "清空列表", .watchLaterClearOk: "清空", .watchLaterClearConfirm: "确定要清空「稍后再看」列表吗？",
+            .watchLaterPlayAll: "播放全部",
             .slideshowPlay: "幻灯片播放",
             .primeTagsTitle: "热度标签",
             .actionReport: "举报这个作品",
@@ -979,6 +987,10 @@ enum LocalizedStrings {
             .nrMsgLoadFail: "加载失败",
         ],
         "zh-Hant": [
+            .watchLaterTitle: "稍後再看", .watchLaterAdd: "加入稍後再看", .watchLaterRemove: "移出稍後再看",
+            .watchLaterEmpty: "稍後再看清單是空的",
+            .watchLaterClear: "清空清單", .watchLaterClearOk: "清空", .watchLaterClearConfirm: "確定要清空「稍後再看」清單嗎？",
+            .watchLaterPlayAll: "播放全部",
             .slideshowPlay: "幻燈片播放",
             .primeTagsTitle: "熱度標籤",
             .actionReport: "舉報這個作品",
@@ -1437,6 +1449,10 @@ enum LocalizedStrings {
             .nrMsgLoadFail: "載入失敗",
         ],
         "ja": [
+            .watchLaterTitle: "あとで見る", .watchLaterAdd: "あとで見るに追加", .watchLaterRemove: "あとで見るから削除",
+            .watchLaterEmpty: "あとで見るリストは空です",
+            .watchLaterClear: "リストをクリア", .watchLaterClearOk: "クリア", .watchLaterClearConfirm: "あとで見るリストをクリアしますか？",
+            .watchLaterPlayAll: "すべて再生",
             .actionReport: "この作品を通報する",
             .reportReasonTitle: "違反の種類", .reportDescTitle: "違反の詳細",
             .reportReasonSexual: "過度な性的描写", .reportReasonGrotesque: "過度なグロテスク描写",
@@ -1795,6 +1811,10 @@ enum LocalizedStrings {
             .actionDelete: "削除",
         ],
         "ko": [
+            .watchLaterTitle: "나중에 보기", .watchLaterAdd: "나중에 보기에 추가", .watchLaterRemove: "나중에 보기에서 제거",
+            .watchLaterEmpty: "나중에 보기 목록이 비어 있습니다",
+            .watchLaterClear: "목록 비우기", .watchLaterClearOk: "비우기", .watchLaterClearConfirm: "나중에 보기 목록을 비우시겠습니까?",
+            .watchLaterPlayAll: "모두 재생",
             .actionReport: "이 작품 신고하기",
             .reportReasonTitle: "위반 유형", .reportDescTitle: "위반 상세 내용",
             .reportReasonSexual: "과도한 성적 묘사", .reportReasonGrotesque: "과도한 그로테스크 묘사",
@@ -2153,6 +2173,10 @@ enum LocalizedStrings {
             .actionDelete: "삭제",
         ],
         "ru": [
+            .watchLaterTitle: "Смотреть позже", .watchLaterAdd: "Добавить в «Смотреть позже»", .watchLaterRemove: "Убрать из «Смотреть позже»",
+            .watchLaterEmpty: "Список «Смотреть позже» пуст",
+            .watchLaterClear: "Очистить список", .watchLaterClearOk: "Очистить", .watchLaterClearConfirm: "Очистить список «Смотреть позже»?",
+            .watchLaterPlayAll: "Воспроизвести все",
             .actionReport: "Пожаловаться на работу",
             .reportReasonTitle: "Тип нарушения", .reportDescTitle: "Описание нарушения",
             .reportReasonSexual: "Чрезмерно откровенный контент", .reportReasonGrotesque: "Чрезмерно гротескный контент",
@@ -2511,6 +2535,10 @@ enum LocalizedStrings {
             .actionDelete: "Удалить",
         ],
         "tr": [
+            .watchLaterTitle: "Sonra İzle", .watchLaterAdd: "Sonra İzle'ye ekle", .watchLaterRemove: "Sonra İzle'den kaldır",
+            .watchLaterEmpty: "Sonra İzle listen boş",
+            .watchLaterClear: "Listeyi temizle", .watchLaterClearOk: "Temizle", .watchLaterClearConfirm: "Sonra İzle listen temizlensin mi?",
+            .watchLaterPlayAll: "Tümünü oynat",
             .actionReport: "Bu eseri bildir",
             .reportReasonTitle: "İhlal türü", .reportDescTitle: "İhlal ayrıntıları",
             .reportReasonSexual: "Aşırı cinsel içerik", .reportReasonGrotesque: "Aşırı grotesk içerik",
