@@ -65,20 +65,21 @@ final class InteractionStore {
     // MARK: Bookmark mutations (optimistic; revert + rethrow on failure)
 
     func toggleBookmark(_ illust: Illust, restrict: String = "public") async throws {
-        let target = !isBookmarked(illust)
-        try await setBookmarked(target, id: illust.id, restrict: restrict, tags: [])
-        // shaft-api-v2 event report (fire-and-forget; no-op without a HMAC secret).
-        Task { await ShaftEventReporter.shared.reportIllustBookmark(illust, added: target) }
+        try await setBookmarked(!isBookmarked(illust), id: illust.id, restrict: restrict, tags: [], illust: illust)
     }
 
     /// Bookmark with explicit restrict + tags (the tag-sheet path). Re-applies
     /// when already bookmarked — Pixiv replaces the bookmark's tag/restrict set.
-    func bookmark(illustId: Int64, restrict: String, tags: [String]) async throws {
-        try await setBookmarked(true, id: illustId, restrict: restrict, tags: tags)
+    func bookmark(illustId: Int64, restrict: String, tags: [String], illust: Illust? = nil) async throws {
+        try await setBookmarked(true, id: illustId, restrict: restrict, tags: tags, illust: illust)
     }
 
-    private func setBookmarked(_ target: Bool, id: Int64, restrict: String, tags: [String]) async throws {
-        guard !bookmarkBusy.contains(id) else { return }
+    /// Returns whether the mutation actually ran (false = skipped because a
+    /// concurrent toggle for the same id was already in flight). `illust` (when
+    /// known) is forwarded as the event payload.
+    @discardableResult
+    private func setBookmarked(_ target: Bool, id: Int64, restrict: String, tags: [String], illust: Illust? = nil) async throws -> Bool {
+        guard !bookmarkBusy.contains(id) else { return false }
         bookmarkBusy.insert(id)
         defer { bookmarkBusy.remove(id) }
         let previous = illustBookmarked[id]
@@ -97,18 +98,26 @@ final class InteractionStore {
             }
             throw error
         }
+        // Single reporting choke point: every caller (toggle, tag-sheet, …) lands
+        // here, so no path bypasses the report and none double-reports. Fires only
+        // on a real, successful mutation (busy-skip returns above; failure throws).
+        Task { await ShaftEventReporter.shared.reportIllustBookmark(illust, id: id, added: target) }
+        return true
     }
 
     // MARK: Follow mutations (optimistic; revert + rethrow on failure)
 
     func toggleFollow(_ user: PixivUser, restrict: String = "public") async throws {
-        let target = !isFollowed(user)
-        try await setFollowed(target, id: user.id, restrict: restrict)
-        Task { await ShaftEventReporter.shared.reportFollow(user, followed: target) }
+        try await setFollowed(!isFollowed(user), id: user.id, restrict: restrict, user: user)
     }
 
-    func setFollowed(_ target: Bool, id: Int64, restrict: String = "public") async throws {
-        guard !followBusy.contains(id) else { return }
+    /// Returns whether the mutation actually ran (false = skipped, concurrent toggle
+    /// in flight). Pass `user` when available so the reported event carries payload.
+    /// Reporting lands here (the success choke point) so profile-page follows —
+    /// which call this directly, not `toggleFollow` — are reported too.
+    @discardableResult
+    func setFollowed(_ target: Bool, id: Int64, restrict: String = "public", user: PixivUser? = nil) async throws -> Bool {
+        guard !followBusy.contains(id) else { return false }
         followBusy.insert(id)
         defer { followBusy.remove(id) }
         let previous = userFollowed[id]
@@ -127,5 +136,7 @@ final class InteractionStore {
             }
             throw error
         }
+        Task { await ShaftEventReporter.shared.reportFollow(user, id: id, followed: target) }
+        return true
     }
 }

@@ -213,7 +213,7 @@ final class UserProfileViewModel {
     func follow(restrict: String) async {
         guard !isFollowed else { return }
         do {
-            try await InteractionStore.shared.setFollowed(true, id: userId, restrict: restrict)
+            try await InteractionStore.shared.setFollowed(true, id: userId, restrict: restrict, user: user)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -222,7 +222,7 @@ final class UserProfileViewModel {
     func unfollow() async {
         guard isFollowed else { return }
         do {
-            try await InteractionStore.shared.setFollowed(false, id: userId)
+            try await InteractionStore.shared.setFollowed(false, id: userId, user: user)
         } catch {
             errorMessage = error.localizedDescription
         }

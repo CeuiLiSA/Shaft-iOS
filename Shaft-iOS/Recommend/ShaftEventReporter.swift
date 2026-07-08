@@ -42,15 +42,18 @@ actor ShaftEventReporter {
 
     // MARK: Public report API
 
-    func reportIllustBookmark(_ illust: Illust, added: Bool) {
-        let tt = (illust.type == "manga") ? "manga" : "illust"
-        enqueue(added ? "bookmark" : "unbookmark", tt, illust.id, encode(illust))
+    /// `illust` optional — the payload seeds server-side meta, but even without it
+    /// (id-only callers) the event is still recorded. target_type derives from the
+    /// illust's type when available (manga vs illust), else "illust".
+    func reportIllustBookmark(_ illust: Illust?, id: Int64, added: Bool) {
+        let tt = (illust?.type == "manga") ? "manga" : "illust"
+        enqueue(added ? "bookmark" : "unbookmark", tt, id, illust.flatMap { encode($0) })
     }
     func reportNovelBookmark(_ novel: Novel, added: Bool) {
         enqueue(added ? "bookmark" : "unbookmark", "novel", novel.id, encode(novel))
     }
-    func reportFollow(_ user: PixivUser, followed: Bool) {
-        enqueue(followed ? "follow" : "unfollow", "user", user.id, encode(user))
+    func reportFollow(_ user: PixivUser?, id: Int64, followed: Bool) {
+        enqueue(followed ? "follow" : "unfollow", "user", id, user.flatMap { encode($0) })
     }
 
     /// Bind this anonymous client_id to a pixiv uid (silent, idempotent, cached).

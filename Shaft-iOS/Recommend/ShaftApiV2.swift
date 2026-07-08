@@ -32,11 +32,19 @@ enum ShaftEventsConfig {
     }
 
     private static let clientIdKey = "shaft_events_client_id_v1"
+    /// Guards the check-generate-store sequence below: the reporter actor and the
+    /// main-thread `EventHistoryVM`/`bindUid` can first-access `clientId`
+    /// concurrently, and without this lock they could each mint a different id and
+    /// clobber each other — the reporter would then write under one fingerprint
+    /// while 操作记录 queries another, showing an empty history forever.
+    private static let clientIdLock = NSLock()
 
     /// sha256(randomUUID | randomUUID) — a stable 64-hex anonymous fingerprint,
     /// generated once and reused forever. Never the pixiv uid (that link lives
     /// only server-side in the uid-bindings table). Matches upstream `EventReporter`.
     static var clientId: String {
+        clientIdLock.lock()
+        defer { clientIdLock.unlock() }
         if let existing = UserDefaults.standard.string(forKey: clientIdKey),
            existing.count == 64 {
             return existing
