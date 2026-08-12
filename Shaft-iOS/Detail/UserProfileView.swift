@@ -207,10 +207,10 @@ final class UserProfileViewModel {
         }
     }
 
-    /// Follow with restrict ("public" tap / "private" long-press, parity with
-    /// the upstream ProgressTextButton long-press behavior). Goes through the
-    /// app-wide store (optimistic, store reverts on failure).
-    func follow(restrict: String) async {
+    /// Follow with restrict (default-setting tap / "private" long-press,
+    /// parity with the upstream ProgressTextButton behavior). Goes through
+    /// the app-wide store (optimistic, store reverts on failure).
+    func follow(restrict: String? = nil) async {
         guard !isFollowed else { return }
         do {
             try await InteractionStore.shared.setFollowed(true, id: userId, restrict: restrict, user: user)
@@ -910,7 +910,7 @@ private struct V3ProfileBanner: View {
                 .frame(height: 42)
                 .background(Theme.brand, in: .capsule)
                 .contentShape(.capsule)
-                .onTapGesture { Task { await vm.follow(restrict: "public") } }
+                .onTapGesture { Task { await vm.follow() } }
                 .onLongPressGesture { Task { await vm.follow(restrict: "private") } }
         }
     }

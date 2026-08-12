@@ -101,6 +101,10 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case settingsTitle, aboutTitle
     case settingsLanguage, settingsContent, settingsHideR18, settingsColumns
     case settingsNetwork, settingsDirectConnect
+    // Settings hub (two-level redesign)
+    case settingsSearchHint, settingsSearchEmpty
+    case settingsCatBrowsing, settingsCatViewing, settingsCatBookmarks
+    case settingsCatAI, settingsCatData
 
     // Search filter (V3)
     case filterTitle, filterReset, filterApply, filterAny
@@ -149,12 +153,15 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case stR18Setting, stPremiumSetting, stLogoutConfirmTitle, stDeleteAccountInfo
     // Network
     case stDirectConnect, stSeePixEz, stSecureDns, stSecureDnsHint
-    case stLargeThumbnail, stShowOriginalPreview, stOriginalHint
+    case stImageHost, stLargeThumbnail, stShowOriginalPreview, stOriginalHint
     // Normal
     case stSaveViewHistory, stCloudHistorySync, stClearCloudHistory
     case stFilterStarSearch, stFilterRankBookmarked, stFilterInvalidBookmarks
     case stDeleteAIIllust, stToastDownloadResult, stSearchFilter, stSearchSort
     case stBottomBarOrder, stFilterComment, stR18DefaultFilter, stR18DefaultFilterHint
+    case stAutoRefreshHome, stAutoRefreshHomeHint
+    case stNovelMinLength, stNovelMinLengthHint, stNovelMaxLength, stNovelMaxLengthHint
+    case stNovelMaxTagLength, stNovelMaxTagLengthHint, stSearchExitConfirm, stSearchExitConfirmHint
     case stOptNoLimit, stOptBookmarksOverFmt
     case stOptSortNewest, stOptSortOldest, stOptSortPopular, stOptSortPopularBuiltin
     // UI
@@ -164,6 +171,7 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case stThemeMode, stOptThemeSystem, stOptThemeLight, stOptThemeDark
     case stThemeColor, stLayoutMode, stOptStaggered, stOptLinear
     case stLineCount, stOptColumnsFmt
+    case stWidgetRefreshInterval, stCollapseNovelTags
     // Download
     case stStorageChoice, stOptStoragePictures, stOptStorageDownloads, stOptStorageSaf
     case stOverwritePolicy, stOptPolicySkip, stOptPolicyReplace, stOptPolicyRename
@@ -174,14 +182,18 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case stPageIndex, stOptPageFrom0, stOptPageFrom1
     case stLongPressDownload, stDownloadLimitType, stOptWifiOnly, stOptNoAutoDownload
     case stMaxConcurrent, stOptSerialOne, stOptConcurrentFmt
+    case stWriteExif, stWriteExifHint, stSilentDownload, stSilentDownloadHint
     // Personalization
-    case stPrivateStar, stShowNovelTags, stHideStarButton, stSelectAllTags
+    case stPrivateStar, stPrivateFollow, stShowNovelTags, stHideStarButton, stSelectAllTags
     case stKeepStatusBar, stSynonymEnable, stSynonymDict, stTransformMode
     case stShowRelatedWhenStar, stAutoLikeWhenDownload, stAutoFollowAfterStar
     case stAutoDownloadAfterStar, stKeepScreenOn
     case stCustomDoubleTapZoom, stZoomScale, stZoomScaleHint
     case stThreeLevelZoom, stThreeLevelZoomHint, stLongPressReset, stLongPressResetHint
-    case stFirebase, stUpscaleModel, stRembgModel, stNotSet, stBubbleModel, stOcrModel
+    case stNovelDirectReader, stNovelDirectReaderHint, stCommentJumpButton
+    case stUgoiraRife, stUgoiraRifeHint, stUgoiraAutoPlay
+    case stFirebase, stUpscaleModel, stRembgModel, stRifeModel, stNotSet, stBubbleModel, stOcrModel
+    case stAITranslate, stAITranslateHint
     // Cache
     case stClearImageCache, stClearGifCache, stClearBulkData
     // Experimental

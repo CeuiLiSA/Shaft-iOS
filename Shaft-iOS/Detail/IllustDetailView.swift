@@ -122,12 +122,12 @@ final class IllustDetailViewModel {
 
     /// Flip the artist's follow state through the app-wide store (optimistic,
     /// store reverts on failure). Long-press on the button follows privately.
-    func toggleFollow(restrict: String = "public") async {
+    func toggleFollow(restrict: String? = nil) async {
         guard let user = illust?.user else { return }
         try? await interactions.toggleFollow(user, restrict: restrict)
     }
 
-    func toggleBookmark(restrict: String = "public") async {
+    func toggleBookmark(restrict: String? = nil) async {
         guard let cur = illust else { return }
         do {
             try await interactions.toggleBookmark(cur, restrict: restrict)

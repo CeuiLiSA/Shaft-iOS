@@ -71,10 +71,19 @@ struct BookmarkTagsSheet: View {
             .task {
                 guard !didLoadInitial else { return }
                 didLoadInitial = true
-                guard let loadInitial, let initial = await loadInitial() else { return }
-                restrict = initial.restrict
-                if !initial.tags.isEmpty {
-                    draftTags = initial.tags.joined(separator: ", ")
+                if let loadInitial {
+                    // A failed edit pre-fill must not silently replace an
+                    // existing bookmark's visibility with the global default.
+                    if let initial = await loadInitial() {
+                        restrict = initial.restrict
+                        if !initial.tags.isEmpty {
+                            draftTags = initial.tags.joined(separator: ", ")
+                        }
+                    }
+                } else {
+                    // Same default as Android SelectTagBottomSheet: a new
+                    // bookmark starts private when the global preference is on.
+                    restrict = AppSettingsStore.shared.privateStar ? "private" : "public"
                 }
             }
             .toolbar {

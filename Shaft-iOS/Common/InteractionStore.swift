@@ -64,7 +64,7 @@ final class InteractionStore {
 
     // MARK: Bookmark mutations (optimistic; revert + rethrow on failure)
 
-    func toggleBookmark(_ illust: Illust, restrict: String = "public") async throws {
+    func toggleBookmark(_ illust: Illust, restrict: String? = nil) async throws {
         try await setBookmarked(!isBookmarked(illust), id: illust.id, restrict: restrict, tags: [], illust: illust)
     }
 
@@ -78,7 +78,7 @@ final class InteractionStore {
     /// concurrent toggle for the same id was already in flight). `illust` (when
     /// known) is forwarded as the event payload.
     @discardableResult
-    private func setBookmarked(_ target: Bool, id: Int64, restrict: String, tags: [String], illust: Illust? = nil) async throws -> Bool {
+    private func setBookmarked(_ target: Bool, id: Int64, restrict: String?, tags: [String], illust: Illust? = nil) async throws -> Bool {
         guard !bookmarkBusy.contains(id) else { return false }
         bookmarkBusy.insert(id)
         defer { bookmarkBusy.remove(id) }
@@ -86,7 +86,9 @@ final class InteractionStore {
         illustBookmarked[id] = target
         do {
             if target {
-                _ = try await api.bookmarkIllust(id, restrict: restrict, tags: tags)
+                let resolvedRestrict = restrict
+                    ?? (AppSettingsStore.shared.privateStar ? "private" : "public")
+                _ = try await api.bookmarkIllust(id, restrict: resolvedRestrict, tags: tags)
             } else {
                 _ = try await api.unbookmarkIllust(id)
             }
@@ -107,7 +109,7 @@ final class InteractionStore {
 
     // MARK: Follow mutations (optimistic; revert + rethrow on failure)
 
-    func toggleFollow(_ user: PixivUser, restrict: String = "public") async throws {
+    func toggleFollow(_ user: PixivUser, restrict: String? = nil) async throws {
         try await setFollowed(!isFollowed(user), id: user.id, restrict: restrict, user: user)
     }
 
@@ -116,7 +118,7 @@ final class InteractionStore {
     /// Reporting lands here (the success choke point) so profile-page follows —
     /// which call this directly, not `toggleFollow` — are reported too.
     @discardableResult
-    func setFollowed(_ target: Bool, id: Int64, restrict: String = "public", user: PixivUser? = nil) async throws -> Bool {
+    func setFollowed(_ target: Bool, id: Int64, restrict: String? = nil, user: PixivUser? = nil) async throws -> Bool {
         guard !followBusy.contains(id) else { return false }
         followBusy.insert(id)
         defer { followBusy.remove(id) }
@@ -124,7 +126,12 @@ final class InteractionStore {
         userFollowed[id] = target
         do {
             if target {
-                _ = try await api.followUser(id, restrict: restrict)
+                // Android `PixivActions.defaultFollowRestrict()`: ordinary
+                // taps respect the setting; callers can still pass "private"
+                // explicitly for the long-press shortcut.
+                let resolvedRestrict = restrict
+                    ?? (AppSettingsStore.shared.privateFollow ? "private" : "public")
+                _ = try await api.followUser(id, restrict: resolvedRestrict)
             } else {
                 _ = try await api.unfollowUser(id)
             }

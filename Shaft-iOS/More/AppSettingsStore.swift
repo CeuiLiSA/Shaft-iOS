@@ -42,6 +42,7 @@ final class AppSettingsStore {
     var useFragmentIllust = true { didSet { save(useFragmentIllust, "st_useFragmentIllust") } }
     var useArtworkV3 = false { didSet { save(useArtworkV3, "st_useArtworkV3") } }
     var artworkV3FabDownloadOnLeft = true { didSet { save(artworkV3FabDownloadOnLeft, "st_artworkV3FabDownloadOnLeft") } }
+    var artworkV3ShowCommentJumpFab = false { didSet { save(artworkV3ShowCommentJumpFab, "st_artworkV3ShowCommentJumpFab") } }
     /// 0 跟随系统 / 1 浅色 / 2 深色
     var themeType = 0 { didSet { save(themeType, "st_themeType") } }
     var useStaggeredLayout = true { didSet { save(useStaggeredLayout, "st_useStaggeredLayout") } }
@@ -63,7 +64,9 @@ final class AppSettingsStore {
 
     // MARK: Personalization (个性化)
     var privateStar = false { didSet { save(privateStar, "st_privateStar") } }
+    var privateFollow = false { didSet { save(privateFollow, "st_privateFollow") } }
     var showNovelCardTags = true { didSet { save(showNovelCardTags, "st_showNovelCardTags") } }
+    var collapseNovelCardTags = true { didSet { save(collapseNovelCardTags, "st_collapseNovelCardTags") } }
     var hideStarButtonAtMyCollection = false { didSet { save(hideStarButtonAtMyCollection, "st_hideStarButtonAtMyCollection") } }
     var starWithTagSelectAll = false { didSet { save(starWithTagSelectAll, "st_starWithTagSelectAll") } }
     var keepStatusBarWhenViewImage = false { didSet { save(keepStatusBarWhenViewImage, "st_keepStatusBarWhenViewImage") } }
@@ -116,6 +119,7 @@ final class AppSettingsStore {
         useFragmentIllust = bool("st_useFragmentIllust", true)
         useArtworkV3 = bool("st_useArtworkV3", false)
         artworkV3FabDownloadOnLeft = bool("st_artworkV3FabDownloadOnLeft", true)
+        artworkV3ShowCommentJumpFab = bool("st_artworkV3ShowCommentJumpFab", false)
         themeType = int("st_themeType", 0)
         useStaggeredLayout = bool("st_useStaggeredLayout", true)
         storageChoice = int("st_storageChoice", 0)
@@ -127,7 +131,9 @@ final class AppSettingsStore {
         downloadLimitType = int("st_downloadLimitType", 0)
         maxConcurrentDownloads = int("st_maxConcurrentDownloads", 1)
         privateStar = bool("st_privateStar", false)
+        privateFollow = bool("st_privateFollow", false)
         showNovelCardTags = bool("st_showNovelCardTags", true)
+        collapseNovelCardTags = bool("st_collapseNovelCardTags", true)
         hideStarButtonAtMyCollection = bool("st_hideStarButtonAtMyCollection", false)
         starWithTagSelectAll = bool("st_starWithTagSelectAll", false)
         keepStatusBarWhenViewImage = bool("st_keepStatusBarWhenViewImage", false)

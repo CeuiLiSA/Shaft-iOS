@@ -397,7 +397,8 @@ final class NovelReaderV3ViewModel {
         isBookmarked = target
         do {
             if target {
-                _ = try await api.bookmarkNovel(novelId)
+                let restrict = AppSettingsStore.shared.privateStar ? "private" : "public"
+                _ = try await api.bookmarkNovel(novelId, restrict: restrict)
                 showToast(l10n(.nrMsgBookmarked))
             } else {
                 _ = try await api.unbookmarkNovel(novelId)

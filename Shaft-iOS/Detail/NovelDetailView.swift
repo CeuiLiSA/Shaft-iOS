@@ -52,7 +52,7 @@ final class NovelDetailViewModel {
         totalComments = resp?.totalComments
     }
 
-    func toggleBookmark(restrict: String = "public") async {
+    func toggleBookmark(restrict: String? = nil) async {
         guard let cur = novel else { return }
         isBookmarking = true
         defer { isBookmarking = false }
@@ -62,7 +62,9 @@ final class NovelDetailViewModel {
                 update(isBookmarked: false)
                 Task { await ShaftEventReporter.shared.reportNovelBookmark(cur, added: false) }
             } else {
-                _ = try await api.bookmarkNovel(novelId, restrict: restrict)
+                let resolvedRestrict = restrict
+                    ?? (AppSettingsStore.shared.privateStar ? "private" : "public")
+                _ = try await api.bookmarkNovel(novelId, restrict: resolvedRestrict)
                 update(isBookmarked: true)
                 Task { await ShaftEventReporter.shared.reportNovelBookmark(cur, added: true) }
             }
