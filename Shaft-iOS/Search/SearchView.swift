@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 
 struct SearchView: View {
     @State private var word: String = ""
@@ -281,111 +282,288 @@ enum PixivLinkParser {
 final class SearchResultsViewModel {
     let word: String
 
-    /// Displayed (post client-side filter) results; raw pages kept separately so
-    /// re-filtering on a filter change doesn't need a re-fetch.
+    /// Displayed (post client-side filter) results. Raw pages are retained so
+    /// pagination and client-only filters always use the frozen generation.
     var illusts: [Illust] = []
-    var novels: [Novel] = []
+    var novelItems: [SearchNovelItem] = []
     var users: [UserPreview] = []
     @ObservationIgnored private var rawIllusts: [Illust] = []
-    @ObservationIgnored private var rawNovels: [Novel] = []
+    @ObservationIgnored private var rawNovelItems: [SearchNovelItem] = []
     @ObservationIgnored private var rawUsers: [UserPreview] = []
+    @ObservationIgnored private var illustGeneration = 0
+    @ObservationIgnored private var novelGeneration = 0
+    @ObservationIgnored private var userGeneration = 0
+    @ObservationIgnored private var illustHasLoaded = false
+    @ObservationIgnored private var novelHasLoaded = false
+    @ObservationIgnored private var userHasLoaded = false
+    @ObservationIgnored private var illustLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var novelLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var userLoadTask: Task<Void, Never>?
+    /// Filters backing the currently displayed generation. The sheet's live
+    /// state can change without a refresh when its parent Cancel is tapped.
+    @ObservationIgnored private var illustResultsFilter: SearchFilter
+    @ObservationIgnored private var novelResultsFilter: SearchFilter
+    /// `gs=1` pagination must keep the first page's frozen parameters.
+    @ObservationIgnored private var groupedNovelFilter: SearchFilter?
 
     var illustNext: String?
     var novelNext: String?
     var userNext: String?
 
-    /// The full V3 search filter — single source of truth for both tabs.
-    var filter: SearchFilter
+    /// Shaft keeps independent live filters for illustration and novel tabs.
+    /// Changing one tab must not silently mutate the other tab's query.
+    var illustFilter: SearchFilter
+    var novelFilter: SearchFilter
     /// Dynamic tool / genre / language options, loaded once.
     var options: SearchOptionsResponse?
-    /// Premium gates the male/female popular sorts and the popular-preview routing.
+    /// Refreshed from the authoritative self profile before every generation.
     var isPremium = false
-    @ObservationIgnored private var accountLoaded = false
+    var novelResultsGrouped = false
+    var novelWebAuthenticated = false
 
-    var isLoading = false
+    var isLoadingIllust = false
+    var isLoadingNovel = false
+    var isLoadingUsers = false
     var isLoadingMoreIllusts = false
     var isLoadingMoreNovels = false
     var isLoadingMoreUsers = false
     var errorMessage: String?
 
     @ObservationIgnored private let api: PixivAPI
+    @ObservationIgnored private let requests: SearchRequestCoordinator
 
     init(word: String) {
         self.word = word
-        self.filter = SearchFilter.makeDefault(hideR18: MuteStore.shared.hideR18)
-        self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
+        let illustDefault = SearchFilter.makeDefault()
+        let novelDefault = SearchFilter.makeDefault(forNovel: true)
+        self.illustFilter = illustDefault
+        self.novelFilter = novelDefault
+        self.illustResultsFilter = illustDefault
+        self.novelResultsFilter = novelDefault
+        self.groupedNovelFilter = nil
+        self.isPremium = KeychainTokenStore.shared.load()?.user?.isPremium ?? false
+        let api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
+        self.api = api
+        self.requests = SearchRequestCoordinator(api: api)
     }
 
-    func loadIfNeeded() async {
-        if rawIllusts.isEmpty && rawNovels.isEmpty && rawUsers.isEmpty { await load() }
+    /// Upstream's off-screen ViewPager pages do not search until they are first
+    /// resumed. That distinction matters for borrowed popularity searches: an
+    /// initial illustration page must not silently consume a second novel slot.
+    func loadIllustIfNeeded() async {
+        guard !illustHasLoaded else { return }
+        await reloadIllust()
+    }
+
+    func loadNovelIfNeeded() async {
+        guard !novelHasLoaded else { return }
+        await reloadNovel()
+    }
+
+    func loadUsersIfNeeded() async {
+        guard !userHasLoaded else { return }
+        await reloadUsers()
     }
 
     func loadOptionsIfNeeded() async {
         guard options == nil else { return }
-        options = try? await api.searchOptions()
+        // The response is word-independent but pixiv requires a non-empty word.
+        // Upstream uses this harmless placeholder when a query should not be
+        // leaked merely by opening the filter sheet.
+        options = try? await api.searchOptions(word: "art")
     }
 
     /// Resolves premium status (self id → user detail) so popular sorts route
     /// correctly. Best-effort; defaults to non-premium until known.
-    func loadAccountIfNeeded() async {
-        guard !accountLoaded else { return }
-        guard let uid = try? await api.selfProfile().profile.userId else { return }
+    func refreshAccount() async {
+        guard let uid = try? await api.selfProfile().profile.userId else {
+            return
+        }
         if let detail = try? await api.userDetail(uid) {
-            isPremium = detail.profile?.isPremium ?? false
-            accountLoaded = true
+            if let premium = detail.profile?.isPremium { isPremium = premium }
         }
     }
 
-    /// Apply an edited filter: reset pages and reload both tabs.
-    func apply(_ newFilter: SearchFilter) async {
-        filter = newFilter
-        rawIllusts = []; rawNovels = []; rawUsers = []
-        illusts = []; novels = []; users = []
-        illustNext = nil; novelNext = nil; userNext = nil
-        await load()
+    /// Apply only to the tab that opened the sheet, matching the two LiveData
+    /// stores and two refresh events in Pixiv-Shaft's SearchViewModel.
+    func apply(_ newFilter: SearchFilter, isNovel: Bool) async {
+        if isNovel {
+            novelFilter = newFilter
+            await startNovelGeneration(filter: newFilter, clearCurrent: true)
+        } else {
+            illustFilter = newFilter
+            await startIllustGeneration(filter: newFilter, clearCurrent: true)
+        }
     }
 
-    func load() async {
-        isLoading = true
+    /// Child pickers commit into shared filter state immediately, while the
+    /// displayed generation remains untouched until Search is pressed.
+    func stage(_ newFilter: SearchFilter, isNovel: Bool) {
+        if isNovel { novelFilter = newFilter }
+        else { illustFilter = newFilter }
+    }
+
+    func reloadIllust() async {
+        await startIllustGeneration(filter: illustFilter, clearCurrent: false)
+    }
+
+    func reloadNovel() async {
+        await startNovelGeneration(filter: novelFilter, clearCurrent: false)
+    }
+
+    func reloadUsers() async {
+        userHasLoaded = true
+        userGeneration += 1
+        let generation = userGeneration
+        userLoadTask?.cancel()
+        isLoadingUsers = true
         errorMessage = nil
-        defer { isLoading = false }
-        let f = filter
-        // Non-premium popular sorts must hit the popular-preview endpoint instead.
-        let usePreview = SortType.usesPopularPreview(f.sort, isPremium: isPremium)
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor [weak self] in
-                guard let self else { return }
-                let r = usePreview
-                    ? try? await self.api.searchPopularPreviewIllust(word: self.word, filter: f)
-                    : try? await self.api.searchIllust(word: self.word, filter: f)
-                self.rawIllusts = r?.illusts ?? []
-                self.illustNext = r?.nextUrl
-                self.recomputeIllusts()
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performUserGeneration(generation: generation)
+        }
+        userLoadTask = task
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private func performUserGeneration(generation: Int) async {
+        defer {
+            if userGeneration == generation { isLoadingUsers = false }
+        }
+        do {
+            let response = try await api.searchUser(word: word)
+            guard userGeneration == generation else { return }
+            rawUsers = response.userPreviews
+            userNext = response.nextUrl
+            recomputeUsers()
+        } catch {
+            if userGeneration == generation { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func startIllustGeneration(filter: SearchFilter, clearCurrent: Bool) async {
+        illustHasLoaded = true
+        illustGeneration += 1
+        let generation = illustGeneration
+        illustLoadTask?.cancel()
+        illustResultsFilter = filter
+        if clearCurrent {
+            rawIllusts = []; illusts = []; illustNext = nil
+        }
+        isLoadingIllust = true
+        errorMessage = nil
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performIllustGeneration(filter: filter, generation: generation)
+        }
+        illustLoadTask = task
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private func performIllustGeneration(filter: SearchFilter, generation: Int) async {
+        defer {
+            if illustGeneration == generation { isLoadingIllust = false }
+        }
+        // Membership is deliberately re-read at the start of every result
+        // generation. A stale login snapshot must never decide whether to use
+        // the signed-in token or a borrowed Premium account.
+        await refreshAccount()
+        guard illustGeneration == generation else { return }
+        await requests.startIllustGeneration()
+        guard illustGeneration == generation else { return }
+        let requesterUID = KeychainTokenStore.shared.load()?.user?.id ?? 0
+        do {
+            let response = try await requests.firstIllust(
+                word: word, filter: filter,
+                requesterUID: requesterUID, isPremium: isPremium
+            )
+            guard illustGeneration == generation else { return }
+            rawIllusts = response.illusts
+            illustNext = response.nextUrl
+            recomputeIllusts()
+        } catch {
+            if illustGeneration == generation { errorMessage = error.localizedDescription }
+        }
+    }
+
+    private func startNovelGeneration(filter: SearchFilter, clearCurrent: Bool) async {
+        novelHasLoaded = true
+        novelGeneration += 1
+        let generation = novelGeneration
+        novelLoadTask?.cancel()
+        novelResultsFilter = filter
+        groupedNovelFilter = filter.groupBySeries ? filter : nil
+        novelResultsGrouped = filter.groupBySeries
+        if !filter.groupBySeries { novelWebAuthenticated = false }
+        if clearCurrent {
+            rawNovelItems = []; novelItems = []; novelNext = nil
+        }
+        isLoadingNovel = true
+        errorMessage = nil
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performNovelGeneration(filter: filter, generation: generation)
+        }
+        novelLoadTask = task
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private func performNovelGeneration(filter: SearchFilter, generation: Int) async {
+        defer {
+            if novelGeneration == generation { isLoadingNovel = false }
+        }
+        if !filter.groupBySeries {
+            // Grouped mode is a web-cookie request. App OAuth membership and
+            // the borrowed-session coordinator do not participate in it.
+            await refreshAccount()
+            guard novelGeneration == generation else { return }
+            await requests.startNovelGeneration()
+            guard novelGeneration == generation else { return }
+        }
+        let requesterUID = KeychainTokenStore.shared.load()?.user?.id ?? 0
+        do {
+            if filter.groupBySeries {
+                let page = try await GroupedNovelSearchClient.shared.search(
+                    word: word, filter: filter, page: 1
+                )
+                guard novelGeneration == generation else { return }
+                rawNovelItems = page.items
+                novelNext = page.nextPage.map { "grouped:\($0)" }
+                novelWebAuthenticated = page.webAuthenticated
+            } else {
+                let response = try await requests.firstNovel(
+                    word: word, filter: filter,
+                    requesterUID: requesterUID, isPremium: isPremium
+                )
+                guard novelGeneration == generation else { return }
+                rawNovelItems = response.novels.map(SearchNovelItem.novel)
+                novelNext = response.nextUrl
             }
-            group.addTask { @MainActor [weak self] in
-                guard let self else { return }
-                let r = usePreview
-                    ? try? await self.api.searchPopularPreviewNovel(word: self.word, filter: f)
-                    : try? await self.api.searchNovel(word: self.word, filter: f)
-                self.rawNovels = r?.novels ?? []
-                self.novelNext = r?.nextUrl
-                self.recomputeNovels()
-            }
-            group.addTask { @MainActor [weak self] in
-                guard let self else { return }
-                let r = try? await self.api.searchUser(word: self.word)
-                self.rawUsers = r?.userPreviews ?? []
-                self.userNext = r?.nextUrl
-                self.recomputeUsers()
-            }
+            recomputeNovels()
+        } catch {
+            if novelGeneration == generation { errorMessage = error.localizedDescription }
         }
     }
 
     func loadMoreIllusts() async {
         guard let url = illustNext, !isLoadingMoreIllusts else { return }
+        let generation = illustGeneration
         isLoadingMoreIllusts = true
         defer { isLoadingMoreIllusts = false }
-        if let r: IllustResponse = try? await api.nextPage(url) {
+        if let r = try? await requests.nextIllust(url) {
+            guard illustGeneration == generation else { return }
             rawIllusts.append(contentsOf: r.illusts)
             illustNext = r.nextUrl
             recomputeIllusts()
@@ -394,10 +572,24 @@ final class SearchResultsViewModel {
 
     func loadMoreNovels() async {
         guard let url = novelNext, !isLoadingMoreNovels else { return }
+        let generation = novelGeneration
         isLoadingMoreNovels = true
         defer { isLoadingMoreNovels = false }
-        if let r: NovelResponse = try? await api.nextPage(url) {
-            rawNovels.append(contentsOf: r.novels)
+        if let groupedFilter = groupedNovelFilter,
+           url.hasPrefix("grouped:"),
+           let pageNumber = Int(url.dropFirst("grouped:".count)) {
+            if let page = try? await GroupedNovelSearchClient.shared.search(
+                word: word, filter: groupedFilter, page: pageNumber
+            ) {
+                guard novelGeneration == generation else { return }
+                rawNovelItems.append(contentsOf: page.items)
+                novelNext = page.nextPage.map { "grouped:\($0)" }
+                novelWebAuthenticated = page.webAuthenticated
+                recomputeNovels()
+            }
+        } else if let r = try? await requests.nextNovel(url) {
+            guard novelGeneration == generation else { return }
+            rawNovelItems.append(contentsOf: r.novels.map(SearchNovelItem.novel))
             novelNext = r.nextUrl
             recomputeNovels()
         }
@@ -405,9 +597,11 @@ final class SearchResultsViewModel {
 
     func loadMoreUsers() async {
         guard let url = userNext, !isLoadingMoreUsers else { return }
+        let generation = userGeneration
         isLoadingMoreUsers = true
         defer { isLoadingMoreUsers = false }
         if let r: UserPreviewResponse = try? await api.nextPage(url) {
+            guard userGeneration == generation else { return }
             rawUsers.append(contentsOf: r.userPreviews)
             userNext = r.nextUrl
             recomputeUsers()
@@ -416,16 +610,20 @@ final class SearchResultsViewModel {
 
     // MARK: Client-side filtering
     //
-    // Muted users/tags still apply, but global R-18 hiding is skipped (applyR18:
-    // false) so the per-search R-18 mode — which filters by the real `x_restrict`
-    // field, plus the AI "only AI" mode — fully governs visibility.
+    // The normal mute/global-R18 chain remains active, then search's real
+    // `x_restrict` and AI modes narrow it further. This deliberately means a
+    // global R-18 block still wins over search's “R-18 only” choice, as in Mapper.
 
     private func recomputeIllusts() {
-        illusts = MuteStore.shared.filter(rawIllusts, applyR18: false).filter { filter.accepts($0) }
+        illusts = MuteStore.shared.filter(rawIllusts, applyR18: true)
+            .filter { illustResultsFilter.accepts($0) }
     }
 
     private func recomputeNovels() {
-        novels = MuteStore.shared.filter(rawNovels, applyR18: false).filter { filter.accepts($0) }
+        novelItems = rawNovelItems.filter { item in
+            !MuteStore.shared.filter([item.novel], applyR18: true).isEmpty &&
+                novelResultsFilter.accepts(item.novel)
+        }
     }
 
     private func recomputeUsers() {
@@ -438,6 +636,9 @@ struct SearchResultsView: View {
     @State private var vm: SearchResultsViewModel
     @State private var section: Section = .illust
     @State private var showFilter = false
+    @State private var showWebLogin = false
+    @State private var showUserFilterHint = false
+    @State private var quotaNotices = BorrowedQuotaNoticeStore.shared
     @Environment(OnboardingStore.self) private var l10n
 
     enum Section: Hashable, CaseIterable { case illust, novel, user }
@@ -449,7 +650,11 @@ struct SearchResultsView: View {
 
     /// Active dimensions on the tab currently in view, for the toolbar badge.
     private var activeCount: Int {
-        vm.filter.activeCount(isNovel: section == .novel)
+        switch section {
+        case .novel: return vm.novelFilter.activeCount(isNovel: true)
+        case .illust: return vm.illustFilter.activeCount(isNovel: false)
+        case .user: return 0
+        }
     }
 
     var body: some View {
@@ -460,22 +665,25 @@ struct SearchResultsView: View {
             )
             TabView(selection: $section) {
                 IllustWaterfallList(
-                    illusts: vm.illusts, isLoading: vm.isLoading,
+                    illusts: vm.illusts, isLoading: vm.isLoadingIllust,
                     errorMessage: vm.errorMessage,
-                    onRefresh: { await vm.load() },
+                    onRefresh: { await vm.reloadIllust() },
                     onLoadMore: { await vm.loadMoreIllusts() },
                     hasMore: vm.illustNext != nil,
                     prefiltered: true
                 ).tag(Section.illust)
-                NovelList(
-                    novels: vm.novels,
-                    isLoading: vm.isLoading,
+                SearchNovelList(
+                    items: vm.novelItems,
+                    isLoading: vm.isLoadingNovel,
+                    grouped: vm.novelResultsGrouped,
+                    webAuthenticated: vm.novelWebAuthenticated,
+                    onWebLogin: { showWebLogin = true },
                     onLoadMore: { await vm.loadMoreNovels() },
                     hasMore: vm.novelNext != nil
                 ).tag(Section.novel)
                 UserPreviewList(
                     items: vm.users,
-                    isLoading: vm.isLoading,
+                    isLoading: vm.isLoadingUsers,
                     onLoadMore: { await vm.loadMoreUsers() },
                     hasMore: vm.userNext != nil
                 ).tag(Section.user)
@@ -486,7 +694,21 @@ struct SearchResultsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { showFilter = true } label: {
+                Button {
+                    // Upstream keeps the icon on the author tab and emits a
+                    // short toast instead of opening an illustration filter.
+                    guard section != .user else {
+                        withAnimation { showUserFilterHint = true }
+                        Task { @MainActor in
+                            do { try await Task.sleep(for: .seconds(2)) }
+                            catch { return }
+                            withAnimation { showUserFilterHint = false }
+                        }
+                        return
+                    }
+                    Task { await vm.loadOptionsIfNeeded() }
+                    showFilter = true
+                } label: {
                     Image(systemName: activeCount > 0
                           ? "line.3.horizontal.decrease.circle.fill"
                           : "line.3.horizontal.decrease.circle")
@@ -503,19 +725,83 @@ struct SearchResultsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showFilter) {
-            SearchFilterSheet(
-                filter: vm.filter,
-                options: vm.options,
-                isNovelTab: section == .novel,
-                isPremium: vm.isPremium
-            ) { newFilter in
-                await vm.apply(newFilter)
+        .overlay(alignment: .bottom) {
+            if let notice = quotaNotices.notice {
+                HStack(spacing: 12) {
+                    Text(quotaMessage(notice))
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        withAnimation { quotaNotices.consume(id: notice.id) }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .padding(6)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.leading, 16)
+                .padding(.trailing, 8)
+                .padding(.vertical, 10)
+                .background(.regularMaterial, in: .rect(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(Theme.v3CardHairline, lineWidth: 0.5)
+                )
+                .shadow(color: .black.opacity(0.16), radius: 12, y: 4)
+                .padding(.horizontal, 14)
+                .padding(.bottom, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .task(id: notice.id) {
+                    do { try await Task.sleep(for: .seconds(12)) }
+                    catch { return }
+                    withAnimation { quotaNotices.consume(id: notice.id) }
+                }
             }
         }
-        .task { await vm.loadIfNeeded() }
-        .task { await vm.loadOptionsIfNeeded() }
-        .task { await vm.loadAccountIfNeeded() }
+        .overlay(alignment: .bottom) {
+            if showUserFilterHint {
+                Text(l10n.t(.filterUserUnsupported))
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.regularMaterial, in: .capsule)
+                    .shadow(color: .black.opacity(0.14), radius: 10, y: 3)
+                    .padding(.bottom, quotaNotices.notice == nil ? 12 : 82)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .sheet(isPresented: $showFilter) {
+            let isNovel = section == .novel
+            SearchFilterSheet(
+                filter: isNovel ? vm.novelFilter : vm.illustFilter,
+                options: vm.options,
+                isNovelTab: isNovel,
+                onChange: { vm.stage($0, isNovel: isNovel) },
+                onReloadOptions: { Task { await vm.loadOptionsIfNeeded() } }
+            ) { newFilter in
+                await vm.apply(newFilter, isNovel: isNovel)
+            }
+        }
+        .sheet(isPresented: $showWebLogin, onDismiss: {
+            guard section == .novel, vm.novelResultsGrouped else { return }
+            Task { await vm.reloadNovel() }
+        }) {
+            PixivWebLoginSheet()
+        }
+        .task { await vm.loadIllustIfNeeded() }
+        .onChange(of: section) { _, value in
+            Task { @MainActor in
+                switch value {
+                case .illust: await vm.loadIllustIfNeeded()
+                case .novel: await vm.loadNovelIfNeeded()
+                case .user: await vm.loadUsersIfNeeded()
+                }
+            }
+        }
     }
 
     private func label(for s: Section) -> String {
@@ -525,6 +811,121 @@ struct SearchResultsView: View {
         case .user:   return l10n.t(.searchTabUser)
         }
     }
+
+    private func quotaMessage(_ notice: BorrowedQuotaNotice) -> String {
+        let totalMinutes = (notice.resetInMS + 59_999) / 60_000
+        let days = totalMinutes / (24 * 60)
+        let hours = (totalMinutes % (24 * 60)) / 60
+        let minutes = totalMinutes % 60
+        let duration: String
+        if days > 0 {
+            duration = l10n.t(.borrowQuotaDaysHoursFmt, "\(days)", "\(hours)")
+        } else if hours > 0 {
+            duration = l10n.t(.borrowQuotaHoursMinutesFmt, "\(hours)", "\(minutes)")
+        } else {
+            duration = l10n.t(.borrowQuotaMinutesFmt, "\(minutes)")
+        }
+        return l10n.t(
+            notice.scope == "uid_weekly" ? .borrowQuotaWeeklyFmt : .borrowQuotaSessionFmt,
+            duration
+        )
+    }
+}
+
+/// Search uses a destination-bearing wrapper because the grouped web endpoint
+/// returns a mixed list: a row can be either one novel or one whole series.
+/// Feeding a series id into the novel-detail route would produce a 404.
+private struct SearchNovelList: View {
+    let items: [SearchNovelItem]
+    let isLoading: Bool
+    let grouped: Bool
+    let webAuthenticated: Bool
+    let onWebLogin: () -> Void
+    let onLoadMore: (() async -> Void)?
+    let hasMore: Bool
+    @Environment(OnboardingStore.self) private var l10n
+
+    var body: some View {
+        ScrollView {
+            if items.isEmpty, isLoading {
+                NovelListSkeleton()
+            } else if items.isEmpty, grouped {
+                ContentUnavailableView {
+                    Label(l10n.t(.filterGroupBySeries), systemImage: "books.vertical")
+                } description: {
+                    Text(webAuthenticated ? l10n.t(.nothingHere) : l10n.t(.searchSeriesEmptyHint))
+                } actions: {
+                    if !webAuthenticated {
+                        Button(l10n.t(.filterWebLogin), action: onWebLogin)
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(items) { item in
+                        NavigationLink(value: item.destination) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                NovelRow(novel: item.novel)
+                                if let count = item.episodeCount {
+                                    Text(l10n.t(
+                                        item.isConcluded == true
+                                            ? .searchSeriesConcludedFmt
+                                            : .searchSeriesOngoingFmt,
+                                        "\(count)"
+                                    ))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.leading, 70)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        Divider()
+                    }
+                    if hasMore, !items.isEmpty {
+                        Color.clear
+                            .frame(height: 40)
+                            .onAppear { Task { await onLoadMore?() } }
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            }
+        }
+    }
+}
+
+private struct PixivWebLoginSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(OnboardingStore.self) private var l10n
+
+    var body: some View {
+        NavigationStack {
+            PixivWebLoginView(url: URL(string: "https://www.pixiv.net/")!)
+                .navigationTitle(l10n.t(.filterWebLogin))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(l10n.t(.actionDone)) { dismiss() }
+                    }
+                }
+        }
+    }
+}
+
+private struct PixivWebLoginView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .default()
+        let view = WKWebView(frame: .zero, configuration: configuration)
+        view.allowsBackForwardNavigationGestures = true
+        view.load(URLRequest(url: url))
+        return view
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
 }
 
 struct UserPreviewList: View {
