@@ -226,6 +226,7 @@ private struct RawTokenResponse: Codable {
         let id: StringOrInt
         let name: String?
         let account: String?
+        let is_premium: Bool?
     }
 
     enum StringOrInt: Codable {
@@ -262,7 +263,12 @@ private struct RawTokenResponse: Codable {
             tokenType: token_type ?? "bearer",
             scope: scope ?? "",
             user: user.map {
-                PixivOAuthUser(id: $0.id.int64Value, name: $0.name ?? "", account: $0.account ?? "")
+                PixivOAuthUser(
+                    id: $0.id.int64Value,
+                    name: $0.name ?? "",
+                    account: $0.account ?? "",
+                    isPremium: $0.is_premium
+                )
             },
             issuedAt: issuedAt
         )

@@ -44,5 +44,17 @@ private struct RootView: View {
                 try? await Task.sleep(for: .seconds(Self.splashFade))
                 splashRemoved = true
             }
+            .task {
+                // Retry durable account handoffs left by a rotated borrowed
+                // refresh token before the next search needs that account.
+                await BorrowedAccountReportOutbox.shared.flush()
+                // Prime the per-account kill switch during cold start. Reads
+                // remain non-blocking in the search path and use the cached
+                // value while this refresh runs in the background.
+                let uid = KeychainTokenStore.shared.load()?.user?.id ?? 0
+                if uid > 0 {
+                    _ = await BorrowedSearchRemoteConfig.shared.enabled(uid: uid)
+                }
+            }
     }
 }

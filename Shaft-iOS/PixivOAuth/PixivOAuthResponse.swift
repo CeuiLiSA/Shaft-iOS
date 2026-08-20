@@ -4,6 +4,7 @@ struct PixivOAuthUser: Sendable, Equatable, Codable {
     let id: Int64
     let name: String
     let account: String
+    let isPremium: Bool?
 }
 
 struct PixivOAuthResponse: Sendable, Equatable, Codable {
@@ -52,4 +53,3 @@ enum PixivOAuthResult: Sendable {
         return false
     }
 }
-

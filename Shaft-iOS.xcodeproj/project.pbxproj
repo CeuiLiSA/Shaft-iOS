@@ -41,6 +41,7 @@
 		A1000000000000000000B113 /* SensitiveContentGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F113 /* SensitiveContentGate.swift */; };
 		A1000000000000000000B114 /* TrendingFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F114 /* TrendingFeedView.swift */; };
 		A1000000000000000000B115 /* EventHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F115 /* EventHistoryView.swift */; };
+		A1000000000000000000B116 /* BorrowedSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F116 /* BorrowedSearch.swift */; };
 		A1000000000000000000B023 /* PlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F023 /* PlaceholderView.swift */; };
 		A1000000000000000000B024 /* LocalizedKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F024 /* LocalizedKey.swift */; };
 		A1000000000000000000B025 /* LocalizedStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F025 /* LocalizedStrings.swift */; };
@@ -160,6 +161,7 @@
 		A1000000000000000000F113 /* SensitiveContentGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitiveContentGate.swift; sourceTree = "<group>"; };
 		A1000000000000000000F114 /* TrendingFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendingFeedView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F115 /* EventHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventHistoryView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F116 /* BorrowedSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorrowedSearch.swift; sourceTree = "<group>"; };
 		A1000000000000000000F023 /* PlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F024 /* LocalizedKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedKey.swift; sourceTree = "<group>"; };
 		A1000000000000000000F025 /* LocalizedStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedStrings.swift; sourceTree = "<group>"; };
@@ -389,6 +391,7 @@
 				A1000000000000000000F053 /* SearchHistoryStore.swift */,
 				A1000000000000000000F056 /* SearchFilter.swift */,
 				A1000000000000000000F057 /* SearchFilterSheet.swift */,
+				A1000000000000000000F116 /* BorrowedSearch.swift */,
 			);
 			path = Search;
 			sourceTree = "<group>";
@@ -711,6 +714,7 @@
 				A1000000000000000000B113 /* SensitiveContentGate.swift in Sources */,
 				A1000000000000000000B114 /* TrendingFeedView.swift in Sources */,
 				A1000000000000000000B115 /* EventHistoryView.swift in Sources */,
+				A1000000000000000000B116 /* BorrowedSearch.swift in Sources */,
 				A1000000000000000000B023 /* PlaceholderView.swift in Sources */,
 				A1000000000000000000B024 /* LocalizedKey.swift in Sources */,
 				A1000000000000000000B025 /* LocalizedStrings.swift in Sources */,

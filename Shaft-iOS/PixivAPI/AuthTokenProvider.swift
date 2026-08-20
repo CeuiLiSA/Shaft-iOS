@@ -25,7 +25,34 @@ actor AuthTokenProvider: PixivTokenProvider {
             guard let current = store.load() else { return nil }
             let result = await oauth.refreshToken(current.refreshToken)
             if case .success(let resp, _) = result {
-                try? store.save(resp)
+                let saved: PixivOAuthResponse
+                if let fresh = resp.user {
+                    saved = PixivOAuthResponse(
+                        accessToken: resp.accessToken,
+                        refreshToken: resp.refreshToken,
+                        expiresIn: resp.expiresIn,
+                        tokenType: resp.tokenType,
+                        scope: resp.scope,
+                        user: PixivOAuthUser(
+                            id: fresh.id,
+                            name: fresh.name,
+                            account: fresh.account,
+                            isPremium: fresh.isPremium ?? current.user?.isPremium
+                        ),
+                        issuedAt: resp.issuedAt
+                    )
+                } else {
+                    saved = PixivOAuthResponse(
+                        accessToken: resp.accessToken,
+                        refreshToken: resp.refreshToken,
+                        expiresIn: resp.expiresIn,
+                        tokenType: resp.tokenType,
+                        scope: resp.scope,
+                        user: current.user,
+                        issuedAt: resp.issuedAt
+                    )
+                }
+                try? store.save(saved)
                 return resp.accessToken
             }
             return nil

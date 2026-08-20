@@ -493,9 +493,55 @@ struct SearchOptionsResponse: Codable, Sendable {
     let novel: Scope?
 
     struct Scope: Codable, Sendable {
+        let bookmarkRanges: [BookmarkRangeOption]?
+        let showAICondition: Bool?
         let tool: ToolOptions?
         let genre: GenreOptions?
         let lang: LangOptions?
+        let wordCountSupportedLanguages: String?
+
+        enum CodingKeys: String, CodingKey {
+            case bookmarkRanges = "bookmark_ranges"
+            case showAICondition = "show_ai_condition"
+            case tool, genre, lang
+            case wordCountSupportedLanguages = "word_count_supported_languages"
+        }
+    }
+
+    struct BookmarkRangeOption: Codable, Sendable, Hashable {
+        let minimum: String?
+        let maximum: String?
+
+        enum CodingKeys: String, CodingKey {
+            case minimum = "bookmark_num_min"
+            case maximum = "bookmark_num_max"
+        }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            minimum = Self.stringValue(values, key: .minimum)
+            maximum = Self.stringValue(values, key: .maximum)
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var values = encoder.container(keyedBy: CodingKeys.self)
+            try values.encodeIfPresent(minimum, forKey: .minimum)
+            try values.encodeIfPresent(maximum, forKey: .maximum)
+        }
+
+        private static func stringValue(
+            _ values: KeyedDecodingContainer<CodingKeys>, key: CodingKeys
+        ) -> String? {
+            if let value = try? values.decodeIfPresent(String.self, forKey: key) { return value }
+            if let value = try? values.decodeIfPresent(Int.self, forKey: key) { return String(value) }
+            return nil
+        }
+
+        var range: BookmarkRange? {
+            let min = minimum.flatMap { $0 == "*" ? nil : Int($0) }
+            let max = maximum.flatMap { $0 == "*" ? nil : Int($0) }
+            return min == nil && max == nil ? nil : BookmarkRange(min: min, max: max)
+        }
     }
 
     struct ToolOptions: Codable, Sendable {

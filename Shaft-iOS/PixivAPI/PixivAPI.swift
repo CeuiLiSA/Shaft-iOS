@@ -187,10 +187,20 @@ actor PixivAPI {
     // MARK: User
 
     func userDetail(_ userId: Int64) async throws -> UserDetailResponse {
-        try await get(path: "/v1/user/detail", query: [
+        let response: UserDetailResponse = try await get(path: "/v1/user/detail", query: [
             "user_id": "\(userId)",
             "filter": "for_ios",
         ])
+        // Any real self-detail read refreshes the borrow pool's authoritative
+        // membership observation, not only reads initiated from the search UI.
+        if KeychainTokenStore.shared.load()?.user?.id == userId,
+           let premium = response.profile?.isPremium {
+            await PremiumObservationClock.shared.record(uid: userId)
+            Task {
+                await CurrentAccountOnlineReporter.report(uid: userId, isPremium: premium)
+            }
+        }
+        return response
     }
 
     func userIllusts(_ userId: Int64, type: String = "illust") async throws -> IllustResponse {
@@ -423,6 +433,15 @@ actor PixivAPI {
         return try await perform(request: URLRequest(url: url))
     }
 
+    /// Continue a cursor created with a borrowed account. The explicit token is
+    /// never replaced with the app's logged-in token on a 400 response.
+    func nextPage<T: Decodable>(_ next: String, accessToken: String) async throws -> T {
+        guard let url = URL(string: next) else {
+            throw APIError.http(code: 0, body: "invalid next_url")
+        }
+        return try await performExplicit(request: URLRequest(url: url), accessToken: accessToken)
+    }
+
     // MARK: Search
 
     /// Full V3 illust search — every dimension is built by `SearchFilter.queryItems`.
@@ -430,20 +449,67 @@ actor PixivAPI {
         try await get(path: "/v1/search/illust", query: filter.queryItems(word: word, isNovel: false))
     }
 
+    func searchIllust(
+        word: String, filter: SearchFilter, accessToken: String
+    ) async throws -> IllustResponse {
+        try await getExplicit(
+            path: "/v1/search/illust",
+            query: filter.queryItems(word: word, isNovel: false),
+            accessToken: accessToken
+        )
+    }
+
     /// Full V3 novel search.
-    func searchNovel(word: String, filter: SearchFilter = SearchFilter()) async throws -> NovelResponse {
-        try await get(path: "/v1/search/novel", query: filter.queryItems(word: word, isNovel: true))
+    func searchNovel(
+        word: String,
+        filter: SearchFilter = SearchFilter(),
+        omitDefaultTarget: Bool = false
+    ) async throws -> NovelResponse {
+        try await get(
+            path: "/v1/search/novel",
+            query: filter.queryItems(
+                word: word, isNovel: true, omitDefaultNovelTarget: omitDefaultTarget
+            )
+        )
+    }
+
+    func searchNovel(
+        word: String,
+        filter: SearchFilter,
+        accessToken: String,
+        omitDefaultTarget: Bool = false
+    ) async throws -> NovelResponse {
+        try await getExplicit(
+            path: "/v1/search/novel",
+            query: filter.queryItems(
+                word: word, isNovel: true, omitDefaultNovelTarget: omitDefaultTarget
+            ),
+            accessToken: accessToken
+        )
     }
 
     /// Curated "popular preview" illust search — the endpoint non-premium users are
     /// routed to for popular sorts (returns a single un-paginated preview page).
     func searchPopularPreviewIllust(word: String, filter: SearchFilter = SearchFilter()) async throws -> IllustResponse {
-        try await get(path: "/v1/search/popular-preview/illust", query: filter.queryItems(word: word, isNovel: false))
+        var query = filter.queryItems(word: word, isNovel: false)
+        // Pixiv's preview Retrofit method has no `sort` argument. In particular,
+        // `popular_preview` is a client route name, not an accepted wire sort.
+        query.removeValue(forKey: "sort")
+        return try await get(path: "/v1/search/popular-preview/illust", query: query)
     }
 
     /// Curated "popular preview" novel search.
-    func searchPopularPreviewNovel(word: String, filter: SearchFilter = SearchFilter()) async throws -> NovelResponse {
-        try await get(path: "/v1/search/popular-preview/novel", query: filter.queryItems(word: word, isNovel: true))
+    func searchPopularPreviewNovel(
+        word: String,
+        filter: SearchFilter = SearchFilter(),
+        omitDefaultTarget: Bool = false
+    ) async throws -> NovelResponse {
+        var query = filter.queryItems(
+            word: word, isNovel: true,
+            omitDefaultNovelTarget: omitDefaultTarget
+        )
+        query.removeValue(forKey: "sort")
+        return try await get(path: "/v1/search/popular-preview/novel", query: query)
     }
 
     func searchUser(word: String) async throws -> UserPreviewResponse {
@@ -454,8 +520,8 @@ actor PixivAPI {
     }
 
     /// Dynamic, account-aware filter options (tool / genre / language pickers).
-    func searchOptions() async throws -> SearchOptionsResponse {
-        try await get(path: "/v1/search/options", query: ["filter": "for_ios"])
+    func searchOptions(word: String = "art") async throws -> SearchOptionsResponse {
+        try await get(path: "/v1/search/options", query: ["word": word, "filter": "for_ios"])
     }
 
     func autocompleteTags(prefix: String) async throws -> AutoCompleteResponse {
@@ -532,6 +598,20 @@ actor PixivAPI {
         return try await perform(request: URLRequest(url: comps.url!))
     }
 
+    private func getExplicit<T: Decodable>(
+        path: String,
+        query: [String: String],
+        accessToken: String
+    ) async throws -> T {
+        var comps = URLComponents(url: Self.baseURL.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        if !query.isEmpty {
+            comps.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+        }
+        return try await performExplicit(
+            request: URLRequest(url: comps.url!), accessToken: accessToken
+        )
+    }
+
     private func post<T: Decodable>(path: String, form: [String: String]) async throws -> T {
         try await postPairs(path: path, pairs: form.map { ($0.key, $0.value) })
     }
@@ -572,19 +652,28 @@ actor PixivAPI {
             }
         }
 
+        return try decode(data: data, response: response)
+    }
+
+    private func performExplicit<T: Decodable>(
+        request original: URLRequest,
+        accessToken: String
+    ) async throws -> T {
+        var request = original
+        applyHeaders(&request, accessToken: accessToken)
+        Self.logRequest(request)
+        let (data, response) = try await fetch(request)
+        return try decode(data: data, response: response)
+    }
+
+    private func decode<T: Decodable>(data: Data, response: URLResponse) throws -> T {
         guard let http = response as? HTTPURLResponse else { throw APIError.nonHTTP }
         guard (200..<300).contains(http.statusCode) else {
             throw APIError.http(code: http.statusCode, body: String(data: data, encoding: .utf8) ?? "")
         }
-
-        if data.isEmpty, let empty = EmptyResponse() as? T {
-            return empty
-        }
-        do {
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            throw APIError.decoding(String(describing: error))
-        }
+        if data.isEmpty, let empty = EmptyResponse() as? T { return empty }
+        do { return try JSONDecoder().decode(T.self, from: data) }
+        catch { throw APIError.decoding(String(describing: error)) }
     }
 
     /// One log line per outgoing API request: method + path + query (host and
