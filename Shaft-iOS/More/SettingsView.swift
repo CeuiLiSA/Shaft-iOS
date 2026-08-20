@@ -795,7 +795,14 @@ private struct SettingsCategoryView: View {
     }
 
     private var searchSortOptions: [String] {
-        [l10n.t(.stOptSortNewest), l10n.t(.stOptSortOldest), l10n.t(.stOptSortPopular), l10n.t(.stOptSortPopularBuiltin)]
+        [
+            l10n.t(.sortPopularPreview),
+            l10n.t(.searchSortDateDesc),
+            l10n.t(.searchSortDateAsc),
+            l10n.t(.searchSortPopular),
+            l10n.t(.sortPopularMale),
+            l10n.t(.sortPopularFemale),
+        ]
     }
 
     private var bottomOrderOptions: [String] {

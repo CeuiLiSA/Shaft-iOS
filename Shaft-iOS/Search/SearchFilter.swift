@@ -3,18 +3,19 @@ import Foundation
 /// iOS port of Pixiv-Shaft's **V3 search filter** (`ui/search/v3/SearchFilterV3`).
 ///
 /// Immutable value type carrying every search dimension pixiv's iOS app exposes.
-/// One instance is shared by the illust + novel tabs; `queryItems(word:isNovel:)`
-/// branches on `isNovel` so novel-only / illust-only dimensions are dropped for
-/// the other endpoint (mirrors Android `SearchViewModel.buildSearchConfig`).
+/// Illustration and novel tabs retain independent instances;
+/// `queryItems(word:isNovel:)` drops dimensions invalid for that endpoint
+/// (mirrors Android `SearchViewModel.buildSearchConfig`).
 ///
 /// Two dimensions have **no** server parameter and are applied client-side after
 /// fetch (see `accepts`): `r18` filters by the work's real `x_restrict` age field
 /// (not the `R-18` tag hack), and `ai`'s "only AI" mode filters by `*_ai_type == 2`.
 struct SearchFilter: Equatable, Sendable {
-    var sort: String = SortType.dateDesc
+    /// Pixiv-Shaft 4.8.7 defaults every search to official popularity.
+    var sort: String = SortType.popularDesc
     var target: SearchTarget = .partialTags
-    /// Official `bookmark_num_min` floor (premium + popular sort). 0 = unset.
-    var bookmarkMin: Int = 0
+    /// Official closed bookmark interval. Either edge may be open.
+    var bookmarkRange: BookmarkRange? = nil
     /// Legacy "Nusers入り" tag hack appended to the query — works for non-premium. 0 = unset.
     var keywordUsers: Int = 0
     var tool: String? = nil          // illust only — dynamic from /v1/search/options
@@ -31,21 +32,35 @@ struct SearchFilter: Equatable, Sendable {
     var bodyLength: BodyLength? = nil            // novel only
     var originalOnly: Bool = false               // novel only
     var replaceableOnly: Bool = false            // novel only
+    /// Novel-only web search (`gs=1`), which collapses a series into one row.
+    var groupBySeries: Bool = false
 
-    /// Initial filter seeded from the global R-18 preference so search defaults
-    /// match the rest of the app (hide R-18 → `safeOnly`).
-    static func makeDefault(hideR18: Bool) -> SearchFilter {
+    /// Compatibility accessors keep the query layer explicit while the UI owns
+    /// the interval as one atomic value (matching Android `BookmarkRangeSpec`).
+    var bookmarkMin: Int { bookmarkRange?.min ?? 0 }
+    var bookmarkMax: Int { bookmarkRange?.max ?? 0 }
+
+    /// Search's R-18 mode is independent from the global feed switch, matching
+    /// `SearchFilterV3.fromGlobalDefaults`: its default is always `.all`.
+    static func makeDefault(forNovel: Bool = false) -> SearchFilter {
         var f = SearchFilter()
-        f.r18 = hideR18 ? .safeOnly : .all
+        f.sort = forNovel ? SortType.novelSafe(SearchDefaults.sort) : SearchDefaults.sort
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: "st_deleteAIIllust") { f.ai = .excludeAI }
+        let bucketIndex = defaults.integer(forKey: "st_searchFilter")
+        if KeywordUsersOptions.values.indices.contains(bucketIndex) {
+            f.keywordUsers = KeywordUsersOptions.values[bucketIndex]
+        }
+        f.r18 = .all
         return f
     }
 
     /// Number of non-default dimensions for the entry-button badge.
     func activeCount(isNovel: Bool) -> Int {
         var n = 0
-        if sort != SortType.dateDesc { n += 1 }
+        if sort != SortType.popularDesc { n += 1 }
         if target != .partialTags { n += 1 }
-        if bookmarkMin > 0 { n += 1 }
+        if bookmarkRange != nil { n += 1 }
         if keywordUsers > 0 { n += 1 }
         if language != nil { n += 1 }
         if duration != nil || startDate != nil || endDate != nil { n += 1 }
@@ -56,6 +71,7 @@ struct SearchFilter: Equatable, Sendable {
             if bodyLength != nil { n += 1 }
             if originalOnly { n += 1 }
             if replaceableOnly { n += 1 }
+            if groupBySeries { n += 1 }
         } else {
             if tool != nil { n += 1 }
             if ratio != nil { n += 1 }
@@ -69,7 +85,12 @@ struct SearchFilter: Equatable, Sendable {
 
     /// Builds the complete `[String: String]` query for `/v1/search/{illust,novel}`.
     /// `today` is injectable for tests; duration buckets resolve to `start_date`/`end_date`.
-    func queryItems(word: String, isNovel: Bool, today: Date = Date()) -> [String: String] {
+    func queryItems(
+        word: String,
+        isNovel: Bool,
+        today: Date = Date(),
+        omitDefaultNovelTarget: Bool = false
+    ) -> [String: String] {
         var q: [String: String] = [
             "filter": "for_ios",
             "merge_plain_keyword_results": "true",
@@ -77,7 +98,14 @@ struct SearchFilter: Equatable, Sendable {
         ]
 
         var keyword = word
-        if keywordUsers > 0 { keyword += " \(keywordUsers)users入り" }
+        // Latest Shaft intentionally suppresses the legacy users入り suffix on
+        // novel searches when an official bookmark interval is present. Illust
+        // keeps both dimensions; grouped novel web search follows novel rules.
+        let hasPositiveBookmarkBound = (bookmarkRange?.min ?? 0) > 0
+            || (bookmarkRange?.max ?? 0) > 0
+        if keywordUsers > 0, !isNovel || !hasPositiveBookmarkBound {
+            keyword += " \(keywordUsers)users入り"
+        }
         q["word"] = keyword
         q["sort"] = sort
 
@@ -86,16 +114,26 @@ struct SearchFilter: Equatable, Sendable {
         // through — but only when valid for this endpoint, since one filter drives
         // both tabs (e.g. a novel-only "keyword" target is dropped for illust).
         let validTargets = isNovel ? SearchTarget.forNovel : SearchTarget.forIllust
-        if validTargets.contains(target), let tv = target.queryValue { q["search_target"] = tv }
+        if validTargets.contains(target) {
+            if isNovel, target == .partialTags, !omitDefaultNovelTarget {
+                // Unlike illust, novel needs explicit partial matching for tag
+                // synonyms/translations. Empty first pages are retried without it
+                // by the search repository to preserve title-only hits (#1038).
+                q["search_target"] = SearchTarget.partialTags.rawValue
+            } else if let tv = target.queryValue {
+                q["search_target"] = tv
+            }
+        }
 
-        if bookmarkMin > 0 { q["bookmark_num_min"] = "\(bookmarkMin)" }
+        if let min = bookmarkRange?.min { q["bookmark_num_min"] = "\(min)" }
+        if let max = bookmarkRange?.max { q["bookmark_num_max"] = "\(max)" }
         // Wire name is `lang` (matches Pixiv-Shaft's Retrofit `@Query("lang")`).
         if let language { q["lang"] = language }
 
         // Date posted (3-way mutually exclusive): bucket → custom → unset.
         if let (start, end) = resolvedDates(today: today) {
-            q["start_date"] = start
-            q["end_date"] = end
+            if let start { q["start_date"] = start }
+            if let end { q["end_date"] = end }
         }
 
         // AI: `search_ai_type` is always sent (0 = include, 1 = exclude). "Only AI"
@@ -125,44 +163,75 @@ struct SearchFilter: Equatable, Sendable {
     }
 
     /// Resolves the post-date window to `(start, end)` `yyyy-MM-dd` strings, or nil.
-    func resolvedDates(today: Date = Date()) -> (String, String)? {
+    func resolvedDates(today: Date = Date()) -> (String?, String?)? {
         if let duration {
             let (s, e) = duration.range(today: today)
             return (Self.ymd(s), Self.ymd(e))
         }
         if startDate != nil || endDate != nil {
-            let s = startDate ?? endDate!
-            let e = endDate ?? startDate!
-            return (Self.ymd(min(s, e)), Self.ymd(max(s, e)))
+            return (startDate.map(Self.ymd), endDate.map(Self.ymd))
         }
         return nil
     }
 
-    private static let ymdFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone.current
-        f.dateFormat = "yyyy-MM-dd"
-        return f
-    }()
-
-    static func ymd(_ date: Date) -> String { ymdFormatter.string(from: date) }
+    /// Local Date semantics without sharing DateFormatter across the app-api,
+    /// grouped-web and main-actor call sites (DateFormatter is not Sendable).
+    static func ymd(_ date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(
+            format: "%04d-%02d-%02d",
+            locale: Locale(identifier: "en_US_POSIX"),
+            parts.year ?? 0, parts.month ?? 0, parts.day ?? 0
+        )
+    }
 
     // MARK: Client-side filtering
 
-    /// Whether this work survives the client-side R-18 + "only AI" filters.
-    func accepts(xRestrict: Int?, aiType: Int?) -> Bool {
+    /// Shared client-side R-18 + AI decision. Illustration adds the legacy
+    /// bookmark/users threshold below; latest Android novel `Mapper` does not.
+    func accepts(xRestrict: Int?, aiType: Int?, bookmarks: Int?) -> Bool {
         r18.accepts(xRestrict) && ai.accepts(aiType)
     }
 
     func accepts(_ illust: Illust) -> Bool {
-        accepts(xRestrict: illust.xRestrict, aiType: illust.illustAIType)
+        guard accepts(
+            xRestrict: illust.xRestrict,
+            aiType: illust.illustAIType,
+            bookmarks: illust.totalBookmarks
+        ) else { return false }
+        let count = illust.totalBookmarks ?? 0
+        if count < max(bookmarkRange?.min ?? 0, keywordUsers) { return false }
+        // Legacy FilterMapper treats max <= 0 as the unlimited sentinel even
+        // when a custom range object exists.
+        if let maximum = bookmarkRange?.max, maximum > 0, count > maximum { return false }
+        return true
     }
 
     func accepts(_ novel: Novel) -> Bool {
-        accepts(xRestrict: novel.xRestrict, aiType: novel.novelAIType)
+        accepts(xRestrict: novel.xRestrict, aiType: novel.novelAIType,
+                bookmarks: novel.totalBookmarks)
     }
+}
+
+// MARK: - Bookmark range
+
+struct BookmarkRange: Equatable, Hashable, Sendable {
+    var min: Int?
+    var max: Int?
+
+    /// Static fallback captured from pixiv iOS 8.7.3. `/v1/search/options`
+    /// replaces it when the account receives dynamic ranges.
+    static let defaultPresets: [BookmarkRange] = [
+        .init(min: 1000, max: nil),
+        .init(min: 500, max: 999),
+        .init(min: 300, max: 499),
+        .init(min: 100, max: 299),
+        .init(min: 50, max: 99),
+        .init(min: 30, max: 49),
+        .init(min: 10, max: 29),
+    ]
 }
 
 // MARK: - Sort
@@ -176,24 +245,28 @@ enum SortType {
     static let popularFemaleDesc = "popular_female_desc"
     static let trendingBuiltin = "trending_builtin"
 
-    /// User-selectable sorts for a tab (mirrors `SearchFilterV3BottomSheet.sortList`,
-    /// minus the `popular_preview` / `trending_builtin` internal modes). Male/female
-    /// popular sorts are premium-only and illust-only.
-    static func choices(isNovel: Bool, isPremium: Bool) -> [String] {
-        var list = [dateDesc, dateAsc, popularDesc]
-        if !isNovel && isPremium { list += [popularMaleDesc, popularFemaleDesc] }
+    /// Exact V3 picker order. Borrowed search makes every official popularity
+    /// sort selectable by non-Premium users; only male/female are illust-only.
+    static func choices(isNovel: Bool) -> [String] {
+        var list = [popularPreview, dateDesc, dateAsc, popularDesc]
+        if !isNovel { list += [popularMaleDesc, popularFemaleDesc] }
         return list
     }
 
     /// Whether this sort must route through `/v1/search/popular-preview/*` instead
     /// of `/v1/search/*` — matches Shaft `shouldUsePopularPreview`: the preview
     /// endpoint is the only place non-premium users can get popular results.
-    static func usesPopularPreview(_ sort: String, isPremium: Bool) -> Bool {
-        if sort == popularPreview || sort == trendingBuiltin { return true }
-        if !isPremium && (sort == popularDesc || sort == popularMaleDesc || sort == popularFemaleDesc) {
-            return true
+    static func isPremiumOnly(_ sort: String, isNovel: Bool) -> Bool {
+        if sort == popularDesc { return true }
+        return !isNovel && (sort == popularMaleDesc || sort == popularFemaleDesc)
+    }
+
+    static func novelSafe(_ sort: String) -> String {
+        switch sort {
+        case popularMaleDesc, popularFemaleDesc: return popularDesc
+        case trendingBuiltin: return popularDesc
+        default: return sort
         }
-        return false
     }
 }
 
@@ -214,10 +287,6 @@ enum SearchTarget: String, CaseIterable, Sendable {
 }
 
 // MARK: - Bookmark / users入り buckets (numeric, label-free)
-
-enum BookmarkOptions {
-    static let values: [Int] = [0, 100, 500, 1000, 2000, 5000, 7500, 10000, 20000, 30000, 50000, 100000]
-}
 
 enum KeywordUsersOptions {
     static let values: [Int] = [0, 500, 1000, 2000, 5000, 7500, 10000, 20000, 50000, 100000]
@@ -335,7 +404,7 @@ enum BodyLengthUnit: String, CaseIterable, Sendable {
     }
 }
 
-struct BodyLength: Equatable, Sendable {
+struct BodyLength: Equatable, Hashable, Sendable {
     var unit: BodyLengthUnit
     var min: Int?
     var max: Int?

@@ -29,8 +29,15 @@ final class AppSettingsStore {
     var toastDownloadResult = true { didSet { save(toastDownloadResult, "st_toastDownloadResult") } }
     /// 0 = 无限制, 1…9 = 500/1000/2000/5000/7500/10000/20000/50000/100000 人收藏
     var searchFilterIndex = 0 { didSet { save(searchFilterIndex, "st_searchFilter") } }
-    /// 0 最新作品 / 1 由旧到新 / 2 热度排序 / 3 机内自带热度排序
-    var searchSortIndex = 0 { didSet { save(searchSortIndex, "st_searchDefaultSortType") } }
+    /// V3 exact order: popular preview / newest / oldest / popularity / male / female.
+    var searchSortIndex = 3 {
+        didSet {
+            save(searchSortIndex, "st_searchDefaultSortType")
+            if SearchDefaults.values.indices.contains(searchSortIndex) {
+                SearchDefaults.save(sort: SearchDefaults.values[searchSortIndex])
+            }
+        }
+    }
     /// Permutations of 推荐/发现/动态 — string_343…348
     var bottomBarOrder = 0 { didSet { save(bottomBarOrder, "st_bottomBarOrder") } }
     var filterComment = false { didSet { save(filterComment, "st_filterComment") } }
@@ -111,7 +118,7 @@ final class AppSettingsStore {
         deleteAIIllust = bool("st_deleteAIIllust", false)
         toastDownloadResult = bool("st_toastDownloadResult", true)
         searchFilterIndex = int("st_searchFilter", 0)
-        searchSortIndex = int("st_searchDefaultSortType", 0)
+        searchSortIndex = SearchDefaults.index(of: SearchDefaults.sort)
         bottomBarOrder = int("st_bottomBarOrder", 0)
         filterComment = bool("st_filterComment", false)
         mainViewR18 = bool("st_mainViewR18", false)

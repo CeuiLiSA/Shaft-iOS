@@ -55,6 +55,18 @@ enum Theme {
     static let v3Text3 = Color(light: 0x1A1A2E, dark: 0xF4F4F8, lightAlpha: 0.33, darkAlpha: 0.36)
     static let v3Border = Color(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.06, darkAlpha: 0.06)
     static let v3Surface = Color(light: 0x000000, dark: 0xFFFFFF, lightAlpha: 0.035, darkAlpha: 0.045)
+    /// Search V3's runtime `V3Palette.cardFill` derived from brand `#7C6CFF`:
+    /// HSL saturation × 0.50 + L=0.96 in light mode, × 0.16 + L=0.135 in dark.
+    static let v3CardFill = Color(light: 0xF1F0FA, dark: 0x1E1D28)
+    /// Matching 12% runtime hairline. Light mode first clamps brand HSL L to
+    /// 0.40 (`#1600CC`); dark mode already satisfies the L≥0.60 clamp.
+    static let v3CardHairline = Color(
+        light: 0x1600CC, dark: 0x7C6CFF,
+        lightAlpha: 0.12, darkAlpha: 0.12
+    )
+    /// `V3Palette.textAccent` against the card fill. Light clamps L to 0.40;
+    /// dark needs one 0.02 contrast-correction step to reach 4.5:1.
+    static let v3TextAccent = Color(light: 0x1600CC, dark: 0x8576FF)
 
     /// V3 detail floating action bar (`bg_v3_fab_bar`): fixed `#CC1A1A2E`
     /// capsule in BOTH light and dark (the upstream drawable isn't

@@ -120,7 +120,30 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case durationHalfYear, durationYear
     case ratioLandscape, ratioPortrait, ratioSquare
     case bodyUnitChars, bodyUnitWords, bodyUnitReadingTime
+    case bodyUnitCharShort, bodyUnitWordShort, bodyUnitMinute
     case typeIllust, typeUgoira
+    case filterSearchConditions, filterSearch, filterOther, filterNone, filterDisabled
+    case filterUserUnsupported
+    case sortPopularPreview, filterBookmarkCustom, filterCustom
+    case filterMinimum, filterMaximum
+    case filterConfirm, filterRangeConfirm, filterRangeHint
+    case filterDateStart, filterDateEnd, filterDateUnset, filterClearDates
+    case filterGroupBySeries, filterGroupBySeriesHint
+    case searchSeriesOngoingFmt, searchSeriesConcludedFmt
+    case filterAll, filterBookmarkAll, filterToolAll, filterToolLoading, filterGenreAll
+    case filterLanguageAll, filterRatioAll, filterResolutionAll, filterWorkLanguage
+    case filterDurationAll, filterBodyAll, filterRangeUnlimited
+    case filterResolutionAbove, filterResolutionMiddle, filterResolutionBelow
+    case filterContentAll, filterContentIllustUgoira
+    case filterSummaryNoAI, filterSummaryOnlyAI
+    case bodyCharsMicro, bodyCharsShort, bodyCharsMedium, bodyCharsLong
+    case bodyWordsBelow, bodyWordsFrom5K, bodyWordsFrom20K, bodyWordsAbove80K
+    case bodyTimeUnder10, bodyTime10To59, bodyTime60To179, bodyTimeAbove180
+    case bodyCustomCharsFmt, bodyCustomWordsFmt, bodyCustomTimeFmt
+    case searchSeriesEmptyHint
+    case filterWebLogin
+    case borrowQuotaSessionFmt, borrowQuotaWeeklyFmt
+    case borrowQuotaDaysHoursFmt, borrowQuotaHoursMinutesFmt, borrowQuotaMinutesFmt
 
     // Notifications & announcements
     case notificationsTitle, notificationsTab, notificationsInfoTab
