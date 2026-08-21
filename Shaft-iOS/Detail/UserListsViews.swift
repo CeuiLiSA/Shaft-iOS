@@ -701,57 +701,85 @@ struct UserNovelBookmarksView: View {
     }
 }
 
-// MARK: - User illusts filtered by tag (V3 profile "插画标签" chips)
+// MARK: - User works filtered by tag (V3 work-tab filter bar / advanced search)
 
-/// Pages the author's illusts through the app API and keeps only works carrying
-/// `tag`. Upstream UserActivityV3 routes this to a web-ajax page; the app API
-/// equivalent pages + filters client-side, auto-fetching while matches are thin.
+/// Pages the author's works through the app API and keeps only the ones
+/// carrying `tag`. `category` mirrors the upstream web-ajax path segment
+/// ("illusts" / "manga" / "novels"), which is how `UserTagSearchSheet.routeOf`
+/// picks the destination list.
+///
+/// Deviation: upstream routes this to the pixiv **web** ajax endpoint, which
+/// returns the server-side filtered id list. That endpoint needs a web session
+/// (PHPSESSID) we don't have on iOS, so we page the app API and filter
+/// client-side, chasing a few extra pages while matches are thin.
 @MainActor
 @Observable
-private final class UserIllustTagVM {
+private final class UserWorksByTagVM {
     let userId: Int64
     let tag: String
+    let category: String
     var illusts: [Illust] = []
+    var novels: [Novel] = []
     var nextUrl: String?
     var isLoading = false; var isLoadingMore = false
     var errorMessage: String?
 
     @ObservationIgnored private let api: PixivAPI
 
-    init(userId: Int64, tag: String) {
-        self.userId = userId; self.tag = tag
+    init(userId: Int64, tag: String, category: String) {
+        self.userId = userId; self.tag = tag; self.category = category
         self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
     }
 
-    private func matches(_ illust: Illust) -> Bool {
-        illust.tags?.contains { $0.name == tag } ?? false
+    var isNovel: Bool { category == "novels" }
+    private var illustType: String { category == "manga" ? "manga" : "illust" }
+    private var count: Int { isNovel ? novels.count : illusts.count }
+
+    private func matches(_ tags: [Tag]?) -> Bool {
+        tags?.contains { $0.name == tag } ?? false
     }
 
-    func loadIfNeeded() async { if illusts.isEmpty { await load() } }
+    func loadIfNeeded() async { if illusts.isEmpty && novels.isEmpty { await load() } }
+
     func load() async {
         isLoading = true; errorMessage = nil
         defer { isLoading = false }
         do {
-            let r = try await api.userIllusts(userId, type: "illust")
-            illusts = r.illusts.filter(matches)
-            nextUrl = r.nextUrl
+            if isNovel {
+                let r = try await api.userNovels(userId)
+                novels = r.novels.filter { matches($0.tags) }
+                nextUrl = r.nextUrl
+            } else {
+                let r = try await api.userIllusts(userId, type: illustType)
+                illusts = r.illusts.filter { matches($0.tags) }
+                nextUrl = r.nextUrl
+            }
             await fillIfThin()
         } catch { errorMessage = error.localizedDescription }
     }
+
     func loadMore() async {
         guard let url = nextUrl, !isLoadingMore else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
-        if let r: IllustResponse = try? await api.nextPage(url) {
-            illusts.append(contentsOf: r.illusts.filter(matches))
-            nextUrl = r.nextUrl
+        if isNovel {
+            if let r: NovelResponse = try? await api.nextPage(url) {
+                novels.append(contentsOf: r.novels.filter { matches($0.tags) })
+                nextUrl = r.nextUrl
+            }
+        } else {
+            if let r: IllustResponse = try? await api.nextPage(url) {
+                illusts.append(contentsOf: r.illusts.filter { matches($0.tags) })
+                nextUrl = r.nextUrl
+            }
         }
     }
+
     /// A page can filter down to zero matches; chase a few more pages so the
     /// first screen isn't empty even though more matches exist further in.
     private func fillIfThin() async {
         var hops = 0
-        while illusts.count < 10, nextUrl != nil, hops < 5 {
+        while count < 10, nextUrl != nil, hops < 5 {
             await loadMore()
             hops += 1
         }
@@ -761,21 +789,34 @@ private final class UserIllustTagVM {
 struct UserIllustTagView: View {
     let userId: Int64
     let tag: String
-    @State private var vm: UserIllustTagVM
+    let category: String
+    @State private var vm: UserWorksByTagVM
 
-    init(userId: Int64, tag: String) {
-        self.userId = userId; self.tag = tag
-        _vm = State(wrappedValue: UserIllustTagVM(userId: userId, tag: tag))
+    init(userId: Int64, tag: String, category: String = "illusts") {
+        self.userId = userId; self.tag = tag; self.category = category
+        _vm = State(wrappedValue: UserWorksByTagVM(userId: userId, tag: tag, category: category))
     }
 
     var body: some View {
-        IllustWaterfallList(
-            illusts: vm.illusts, isLoading: vm.isLoading,
-            errorMessage: vm.errorMessage,
-            onRefresh: { await vm.load() },
-            onLoadMore: { await vm.loadMore() },
-            hasMore: vm.nextUrl != nil
-        )
+        Group {
+            if vm.isNovel {
+                NovelList(
+                    novels: vm.novels,
+                    isLoading: vm.isLoading,
+                    onLoadMore: { await vm.loadMore() },
+                    hasMore: vm.nextUrl != nil
+                )
+                .refreshable { await vm.load() }
+            } else {
+                IllustWaterfallList(
+                    illusts: vm.illusts, isLoading: vm.isLoading,
+                    errorMessage: vm.errorMessage,
+                    onRefresh: { await vm.load() },
+                    onLoadMore: { await vm.loadMore() },
+                    hasMore: vm.nextUrl != nil
+                )
+            }
+        }
         .navigationTitle("#\(tag)")
         .navigationBarTitleDisplayMode(.inline)
         .task { await vm.loadIfNeeded() }

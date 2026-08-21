@@ -44,16 +44,23 @@ struct PixivUser: Codable, Hashable, Sendable, Identifiable {
     let isFollowed: Bool?
     /// User bio (HTML-ish plain text). Only present on `userDetail` responses.
     let comment: String?
+    /// `/v2/user/detail?filter=for_ios` extras (upstream `UserBean`): premium
+    /// flag and "accepting commissions", the latter gating the 约稿中 tab.
+    let isPremium: Bool?
+    let isAcceptRequest: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, name, account, comment
         case profileImageUrls = "profile_image_urls"
         case isFollowed = "is_followed"
+        case isPremium = "is_premium"
+        case isAcceptRequest = "is_accept_request"
     }
 
     init(
         id: Int64, name: String?, account: String?,
-        profileImageUrls: ImageUrls?, isFollowed: Bool?, comment: String? = nil
+        profileImageUrls: ImageUrls?, isFollowed: Bool?, comment: String? = nil,
+        isPremium: Bool? = nil, isAcceptRequest: Bool? = nil
     ) {
         self.id = id
         self.name = name
@@ -61,6 +68,8 @@ struct PixivUser: Codable, Hashable, Sendable, Identifiable {
         self.profileImageUrls = profileImageUrls
         self.isFollowed = isFollowed
         self.comment = comment
+        self.isPremium = isPremium
+        self.isAcceptRequest = isAcceptRequest
     }
 }
 
@@ -276,11 +285,24 @@ struct CommentItem: Codable, Hashable, Sendable, Identifiable {
     let user: PixivUser?
     let hasReplies: Bool?
     let parentComment: ParentComment?
+    /// Sticker comments carry no text — upstream's `cell_comment_preview`
+    /// swaps the body for a 64dp rounded image (`comment.stamp.stamp_url`).
+    let stamp: CommentStamp?
 
     enum CodingKeys: String, CodingKey {
-        case id, comment, date, user
+        case id, comment, date, user, stamp
         case hasReplies = "has_replies"
         case parentComment = "parent_comment"
+    }
+
+    struct CommentStamp: Codable, Hashable, Sendable {
+        let stampId: Int64?
+        let stampUrl: String?
+
+        enum CodingKeys: String, CodingKey {
+            case stampId = "stamp_id"
+            case stampUrl = "stamp_url"
+        }
     }
 
     struct ParentComment: Codable, Hashable, Sendable {
@@ -429,6 +451,9 @@ struct Article: Codable, Hashable, Sendable, Identifiable {
     let articleUrl: String?
     let publishDate: String?
     let category: String?
+    /// e.g. "Illustration" / "Manga" — shown as the tonal pill on the Discover
+    /// pixivision rail card (upstream `Article.subcategory_label`).
+    let subcategoryLabel: String?
 
     enum CodingKeys: String, CodingKey {
         case id, title
@@ -437,6 +462,7 @@ struct Article: Codable, Hashable, Sendable, Identifiable {
         case articleUrl = "article_url"
         case publishDate = "publish_date"
         case category
+        case subcategoryLabel = "subcategory_label"
     }
 }
 

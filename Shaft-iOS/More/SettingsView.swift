@@ -640,6 +640,8 @@ private struct SettingsCategoryView: View {
                 .settingRow("fabOrder", highlightID)
                 Toggle(l10n.t(.stCommentJumpButton), isOn: $st.artworkV3ShowCommentJumpFab)
                     .listRowBackground(Theme.v3Surface)
+                Toggle(l10n.t(.artworkV3DetailPanelCollapsed), isOn: $st.detailPanelCollapsedByDefault)
+                    .listRowBackground(Theme.v3Surface)
             }
             actionRow(l10n.t(.stNovelDirectReader), hint: l10n.t(.stNovelDirectReaderHint), value: l10n.t(.stNotAvailable)) { showNotAvailable = true }
                 .settingRow("novelDirectReader", highlightID)

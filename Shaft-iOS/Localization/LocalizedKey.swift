@@ -33,10 +33,25 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case detailArtworkDetails, detailTagsLabel, detailViewsLabel, detailBookmarksLabel
     case detailSeriesLabel, detailFollow, detailUnfollow, detailSeeMore, detailNoRelated
     case detailAuthorWorksFmt, detailPageOne, detailPagesFmt
+    /// `empty_list_2` — the feeds empty state on the V3 profile tabs.
+    case userV3EmptyList
     case detailExpandRemainingFmt, detailCollapsePages
     case dpArtworkId, dpUserId, dpType, dpResolution, dpPages, dpAI, dpRestriction, dpPublished
     case dpAIYes, dpAINo, dpAllAges
     case detailTypeIllust, detailTypeManga, detailTypeUgoira
+
+    // ArtworkV3 first-level detail page (ArtworkV3Fragment + section_v3_*.xml).
+    // All keys here are prefixed `artworkV3` so they can't collide.
+    case artworkV3ExpandAllPagesFmt, artworkV3ReaderEnterIllust
+    case artworkV3DescLabel, artworkV3DescExpand, artworkV3DescCollapse
+    case artworkV3AddCommentHint, artworkV3AuthorBadge, artworkV3NoCommentsYet
+    case artworkV3CopyComment, artworkV3ViewUser, artworkV3Translate
+    case artworkV3ShareFirstImage, artworkV3MuteSettings, artworkV3MuteThisWork
+    case artworkV3CopyWorkLink, artworkV3LoadOriginal, artworkV3FlagPost
+    case artworkV3UnmuteWork, artworkV3UnmuteUser, artworkV3LeavePage
+    case artworkV3ResOriginal, artworkV3ResLarge, artworkV3ResMedium, artworkV3ResSquareMedium
+    case artworkV3EditTags, artworkV3TitleLabel, artworkV3CaptionLabel
+    case artworkV3JumpToComments, artworkV3DetailPanelCollapsed
 
     // Profile sections
     case profileIllusts, profileManga, profileNovels, profileBookmarks
@@ -51,6 +66,29 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case chipUserId, chipAccount, chipGender, chipRegion, chipBirthday, chipJob
     case chipPremium, chipPixivUrl, chipPremiumUser, chipStandard
     case genderMale, genderFemale
+
+    // UserActivityV3 (V3 画师主页) — tab strip, filter bar, overflow menu, jump
+    // dialog and the 约稿中 tab. All prefixed `userV3` so they can't collide.
+    case userV3TabBookmarks, userV3TabRequest, userV3FollowingPrivate
+    case userV3SegIllustBookmarks, userV3SegNovelBookmarks
+    case userV3AdvancedSearch, userV3TagSheetHint, userV3TagSheetSectionWorks
+    case userV3TagSheetFailed, userV3TagSheetNoTag, userV3TagSheetNoMatch
+    case userV3TagCopyOriginal, userV3TagCopyTranslation, userV3TagMute, userV3TagUnmute
+    case userV3MenuJumpIllust, userV3MenuJumpManga
+    case userV3MenuDownloadAllIllust, userV3MenuDownloadAllManga
+    case userV3MenuOpenDownloadManager, userV3UnblockUserWorks
+    case userV3JumpLoading, userV3JumpNoWorks, userV3JumpEarliest
+    case userV3JumpByDate, userV3JumpByPage, userV3JumpTitleFmt
+    case userV3JumpPageTitle, userV3JumpPageHintFmt, userV3JumpRangeErrorFmt
+    case userV3JumpLocatingFmt, userV3JumpLocateFailedFmt
+    case userV3RequestPriceFmt, userV3RequestBadgeAdult
+    case userV3RequestFlagIllust, userV3RequestFlagManga, userV3RequestFlagUgoira
+    case userV3RequestFlagNovel, userV3RequestFlagAnonymous, userV3RequestFlagAI
+    case userV3RequestPriceLabel, userV3RequestFlagsLabel, userV3RequestTitleLabel
+    case userV3RequestDescLabel, userV3RequestMetaLabel, userV3RequestMetaId
+    case userV3RequestMetaAI, userV3RequestAINone, userV3RequestAIGenerated
+    case userV3RequestAIUnknown, userV3RequestGoCommission, userV3RequestOrigFmt
+    case userV3BulkFetchingFmt
 
     // Search
     case searchTitle, searchPlaceholder
@@ -78,6 +116,31 @@ enum LocalizedKey: String, CaseIterable, Sendable {
 
     // Discover
     case discoverSpotlight
+    // Discover tab — 1:1 FragmentCenter / fragment_new_center.xml
+    case discoverOtherCategories      // string_76 其他分类
+    case discoverViewAll              // string_167 查看全部
+    case discoverSeeMore              // see_more 查看更多
+    case discoverLatest               // latest_work 最新
+    case discoverTypeManga            // type_manga 漫画
+    case discoverTypeNovel            // type_novel 小说
+    case discoverRecommendManga       // recommend_manga 推荐漫画
+    case discoverRecommendNovel       // recommend_novel 推荐小说
+    case discoverWalkThrough          // type_walk_through 画廊
+    case artistRank, artistAvgRank, viewRank, pixivComic
+    case bookmarkRank, aiRank, yearRank, tagRank, wallpaperRank
+    case followingNovels              // string_196 关注者的小说
+    case followingNovelsPageTitle     // string_197 关注者的最新小说
+    case discoveryFeed                // string_discovery 发现
+    case webHome                      // street_title Web 首页
+    case niceFriendWorks              // nice_friend_works 好P友作品
+    case niceFriendWorksPageTitle     // string_274 好P友的插画/漫画作品
+    // 动态 tab — 1:1 FragmentRight / fragment_new_right.xml
+    case dynRecommendUsers            // string_78 推荐用户
+    case dynSeeMore                   // string_79 查看更多
+    case dynRestrictAll, dynRestrictPublic, dynRestrictPrivate   // string_390/391/392
+    case dynTypeIllustManga           // dynamic_type_illust_manga 插画/漫画
+    case dynTypeNovel                 // string_171 小说
+    case timeJustNow                  // date_minute_plurals_zero
 
     // Comments
     case commentCompose, commentReply, commentShowReplies, commentHideReplies

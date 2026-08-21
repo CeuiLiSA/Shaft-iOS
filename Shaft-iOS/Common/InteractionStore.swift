@@ -20,6 +20,13 @@ final class InteractionStore {
     /// single-item server fetches; reads fall back to the model snapshot.
     private(set) var illustBookmarked: [Int64: Bool] = [:]
     private(set) var userFollowed: [Int64: Bool] = [:]
+    /// *How* a follow is set — "public" / "private". `is_followed` is only a
+    /// bool, so the V3 profile pill reads this to say 「悄悄关注中」 instead of
+    /// 「已关注」 (upstream `FollowVisibility` + `followedLabelRes`).
+    private(set) var followRestrict: [Int64: String] = [:]
+    /// Ids whose visibility we set locally — a later server read must not
+    /// clobber them (upstream `FollowVisibility.writeRemote` drops the write).
+    @ObservationIgnored private var followRestrictLocal: Set<Int64> = []
     /// In-flight guards — one concurrent mutation per id; also drives the
     /// disabled state of bookmark/follow buttons.
     private(set) var bookmarkBusy: Set<Int64> = []
@@ -43,6 +50,19 @@ final class InteractionStore {
 
     func isFollowed(id: Int64, fallback: Bool?) -> Bool {
         userFollowed[id] ?? fallback ?? false
+    }
+
+    func isPrivateFollow(id: Int64) -> Bool { followRestrict[id] == "private" }
+
+    /// `/v1/user/follow/detail` result. Dropped when the visibility was set
+    /// locally (or a mutation is in flight) so a slow read can't rewind it.
+    func ingestRemoteFollowRestrict(_ restrict: String?, id: Int64) {
+        guard !followRestrictLocal.contains(id), !followBusy.contains(id) else { return }
+        if let restrict {
+            followRestrict[id] = restrict
+        } else {
+            followRestrict.removeValue(forKey: id)
+        }
     }
 
     /// A fresh single-item fetch (`/illust/detail`, `/user/detail`) is newer
@@ -124,13 +144,13 @@ final class InteractionStore {
         defer { followBusy.remove(id) }
         let previous = userFollowed[id]
         userFollowed[id] = target
+        // Android `PixivActions.defaultFollowRestrict()`: ordinary taps respect
+        // the setting; callers can still pass "private" explicitly for the
+        // long-press shortcut.
+        let resolvedRestrict = restrict
+            ?? (AppSettingsStore.shared.privateFollow ? "private" : "public")
         do {
             if target {
-                // Android `PixivActions.defaultFollowRestrict()`: ordinary
-                // taps respect the setting; callers can still pass "private"
-                // explicitly for the long-press shortcut.
-                let resolvedRestrict = restrict
-                    ?? (AppSettingsStore.shared.privateFollow ? "private" : "public")
                 _ = try await api.followUser(id, restrict: resolvedRestrict)
             } else {
                 _ = try await api.unfollowUser(id)
@@ -143,6 +163,13 @@ final class InteractionStore {
             }
             throw error
         }
+        // Visibility follows the mutation and outranks any later server read.
+        if target {
+            followRestrict[id] = resolvedRestrict
+        } else {
+            followRestrict.removeValue(forKey: id)
+        }
+        followRestrictLocal.insert(id)
         Task { await ShaftEventReporter.shared.reportFollow(user, id: id, followed: target) }
         return true
     }

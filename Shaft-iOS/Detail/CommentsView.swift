@@ -154,7 +154,7 @@ final class CommentsViewModel {
         let c = comments[idx]
         comments[idx] = CommentItem(
             id: c.id, comment: c.comment, date: c.date, user: c.user,
-            hasReplies: value, parentComment: c.parentComment
+            hasReplies: value, parentComment: c.parentComment, stamp: c.stamp
         )
     }
 }

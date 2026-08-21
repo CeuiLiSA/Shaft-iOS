@@ -11,6 +11,9 @@ final class MuteStore {
 
     private let mutedUserKey = "muted_user_ids_v1"
     private let mutedTagKey = "muted_tags_v1"
+    /// Upstream keeps a Room row per muted work (`IllustMuteEntity`); the V3
+    /// detail page's full-page mask reads it (see `attachMuteObserver`).
+    private let mutedIllustKey = "muted_illust_ids_v1"
     private let hideR18Key = "content_hide_r18_v1"
     private let waterfallColumnsKey = "ui_waterfall_columns_v1"
     private let defaults = UserDefaults.standard
@@ -20,6 +23,7 @@ final class MuteStore {
 
     var mutedUserIDs: Set<Int64> = []
     var mutedTags: Set<String> = []
+    var mutedIllustIDs: Set<Int64> = []
     var hideR18: Bool = true
     var waterfallColumns: Int = 2
 
@@ -31,6 +35,9 @@ final class MuteStore {
         }
         if let tags = defaults.stringArray(forKey: mutedTagKey) {
             mutedTags = Set(tags)
+        }
+        if let arr = defaults.array(forKey: mutedIllustKey) as? [Int] {
+            mutedIllustIDs = Set(arr.map { Int64($0) })
         }
         if defaults.object(forKey: hideR18Key) != nil {
             hideR18 = defaults.bool(forKey: hideR18Key)
@@ -53,6 +60,14 @@ final class MuteStore {
     }
 
     func isUserMuted(_ id: Int64) -> Bool { mutedUserIDs.contains(id) }
+    func isIllustMuted(_ id: Int64) -> Bool { mutedIllustIDs.contains(id) }
+
+    /// `IllustMuteStore.setMuted` — the detail page's mask and the "mute this
+    /// work" menu row both go through here so they can never disagree.
+    func setIllustMuted(_ id: Int64, _ muted: Bool) {
+        if muted { mutedIllustIDs.insert(id) } else { mutedIllustIDs.remove(id) }
+        defaults.set(Array(mutedIllustIDs).map { Int($0) }, forKey: mutedIllustKey)
+    }
     func isTagMuted(_ tag: String) -> Bool { mutedTags.contains(tag) }
 
     func toggleUser(_ id: Int64) {

@@ -50,6 +50,9 @@ final class AppSettingsStore {
     var useArtworkV3 = false { didSet { save(useArtworkV3, "st_useArtworkV3") } }
     var artworkV3FabDownloadOnLeft = true { didSet { save(artworkV3FabDownloadOnLeft, "st_artworkV3FabDownloadOnLeft") } }
     var artworkV3ShowCommentJumpFab = false { didSet { save(artworkV3ShowCommentJumpFab, "st_artworkV3ShowCommentJumpFab") } }
+    /// Upstream `Settings.isDetailPanelCollapsedByDefault` (#1044) — seeds the
+    /// V3 detail page's collapsible "artwork details" panel.
+    var detailPanelCollapsedByDefault = false { didSet { save(detailPanelCollapsedByDefault, "st_detailPanelCollapsedByDefault") } }
     /// 0 跟随系统 / 1 浅色 / 2 深色
     var themeType = 0 { didSet { save(themeType, "st_themeType") } }
     var useStaggeredLayout = true { didSet { save(useStaggeredLayout, "st_useStaggeredLayout") } }
@@ -127,6 +130,7 @@ final class AppSettingsStore {
         useArtworkV3 = bool("st_useArtworkV3", false)
         artworkV3FabDownloadOnLeft = bool("st_artworkV3FabDownloadOnLeft", true)
         artworkV3ShowCommentJumpFab = bool("st_artworkV3ShowCommentJumpFab", false)
+        detailPanelCollapsedByDefault = bool("st_detailPanelCollapsedByDefault", false)
         themeType = int("st_themeType", 0)
         useStaggeredLayout = bool("st_useStaggeredLayout", true)
         storageChoice = int("st_storageChoice", 0)

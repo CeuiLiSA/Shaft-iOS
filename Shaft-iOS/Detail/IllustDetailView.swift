@@ -1,4 +1,5 @@
 import SwiftUI
+import Translation
 
 @MainActor
 @Observable
@@ -36,6 +37,15 @@ final class IllustDetailViewModel {
     var commentsLoaded = false
     var relatedLoaded = false
     var authorWorksLoaded = false
+    /// `ArtworkCommentsItem.loadFailedMessage` (#592): a conclusive failure is a
+    /// result, not a pending state — render the message, never the spinner.
+    var commentsFailedMessage: String?
+    /// Cursor for the related waterfall — see `loadMoreRelated`.
+    var relatedNextUrl: String?
+    var isLoadingMoreRelated = false
+    /// `ArtworkV3ViewModel.forceOriginalPreview` — the overflow menu's "load the
+    /// original for this work", overriding the global preview-resolution setting.
+    var forceOriginalPreview = false
     @ObservationIgnored private var commentsTriggered = false
     @ObservationIgnored private var relatedTriggered = false
     @ObservationIgnored private var authorWorksTriggered = false
@@ -90,23 +100,69 @@ final class IllustDetailViewModel {
         }
     }
 
-    /// Fired from `V3RelatedSection.onAppear` — once per page.
+    /// Fired from `V3RelatedSection.onAppear` — once per page. Mirrors
+    /// `ArtworkSection.RELATED`: the first page of related works is fetched only
+    /// when the section scrolls into view, and it hands its cursor to the feed so
+    /// scrolling on keeps paging (`adoptCursorAndMutateItems`).
     func loadRelatedIfNeeded() async {
         guard !relatedTriggered else { return }
         relatedTriggered = true
         let resp = try? await api.relatedIllusts(illustId)
         related = resp?.illusts ?? []
+        relatedNextUrl = resp?.nextUrl
         relatedLoaded = true
     }
 
-    /// Fired from `V3CommentsSection.onAppear` — once per page.
+    /// `ArtworkV3FeedSource.load(cursor)` — page 2+ of the related waterfall.
+    func loadMoreRelated() async {
+        guard let url = relatedNextUrl, !isLoadingMoreRelated else { return }
+        isLoadingMoreRelated = true
+        defer { isLoadingMoreRelated = false }
+        guard let resp: IllustResponse = try? await api.nextPage(url) else {
+            relatedNextUrl = nil
+            return
+        }
+        let known = Set(related.map(\.id))
+        related.append(contentsOf: resp.illusts.filter { !known.contains($0.id) })
+        relatedNextUrl = resp.nextUrl
+    }
+
+    /// Fired from `V3CommentsSection.onAppear` — once per page. Upstream shows
+    /// the first three (`fetchArtworkComments` … `.take(3)`), and renders a
+    /// human-readable message instead of a spinner when the endpoint answers a
+    /// permanent 404 for app-api-blocked works (#592).
     func loadCommentsIfNeeded() async {
         guard !commentsTriggered else { return }
         commentsTriggered = true
-        let resp = try? await api.illustComments(illustId)
-        comments = resp?.comments ?? []
-        totalComments = resp?.totalComments
+        do {
+            let resp = try await api.illustComments(illustId)
+            // Locally-posted comments stay in front, de-duped by id — upstream
+            // `ArtworkCommentsItem.withComments`.
+            let known = Set(comments.map(\.id))
+            comments += resp.comments.prefix(3).filter { !known.contains($0.id) }
+            totalComments = resp.totalComments
+            commentsFailedMessage = nil
+        } catch {
+            commentsFailedMessage = error.localizedDescription
+        }
         commentsLoaded = true
+    }
+
+    /// Post a top-level comment from the detail page's inline composer, then
+    /// splice the server's echo (or a local stand-in) into the preview.
+    func postComment(_ text: String) async -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        guard (try? await api.postIllustComment(illustId, comment: trimmed)) != nil else { return false }
+        // app-api's POST answers with the created comment under `comment`, but
+        // the shared client models it as `EmptyResponse`; re-reading page 1 is
+        // both cheap and authoritative.
+        if let resp = try? await api.illustComments(illustId) {
+            comments = Array(resp.comments.prefix(3))
+            totalComments = resp.totalComments
+            commentsLoaded = true
+        }
+        return true
     }
 
     /// Fired from `V3AuthorWorksSection.onAppear` — once per page. Needs the
@@ -169,6 +225,14 @@ struct IllustDetailView: View {
     @State private var showComicReader = false
     @State private var showBookmarkSheet = false
     @State private var showReport = false
+    @State private var showMenu = false
+    @State private var showMuteSettings = false
+    @State private var showComposer = false
+    @State private var translateText: String?
+    @State private var showTranslate = false
+    @State private var shareItem: ShareTarget?
+    @State private var descExpanded = false
+    @State private var mute = MuteStore.shared
     @State private var actionBarVisible = true
     @State private var toolbarTitleVisible = false
     /// Plain class box, deliberately NOT observable state: the anchor advances
@@ -177,12 +241,13 @@ struct IllustDetailView: View {
     /// invalidates the view.
     @State private var scrollAnchor = ScrollAnchor()
     @State private var pagesExpanded = false
-    @State private var detailPanelExpanded = true
+    /// `ArtworkV3Fragment.detailPanelExpanded` — seeded from the setting (#1044),
+    /// then owned by the page so scrolling away and back doesn't reset it.
+    @State private var detailPanelExpanded = !AppSettingsStore.shared.detailPanelCollapsedByDefault
     /// Links each page image to the full-screen viewer for the system zoom
     /// transition (zoom in on open; interactive pull-down zooms back out).
     @Namespace private var viewerZoom
     @Environment(OnboardingStore.self) private var l10n
-    @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
 
     init(illustId: Int64) {
@@ -202,6 +267,9 @@ struct IllustDetailView: View {
     /// Stable id of the scroll-content top anchor — the floating "收起" pill
     /// snaps here on collapse (see `body`).
     private static let pagesTopID = "pagesTop"
+
+    /// Anchor for the comment-jump FAB (#970) — `scrollToCommentsSection`.
+    private static let commentsSectionID = "commentsSection"
 
     /// Whether the current work has enough pages to collapse — gates the floating
     /// "收起" pill, mirroring `content(for:)`'s `collapsible`.
@@ -234,36 +302,40 @@ struct IllustDetailView: View {
         withAnimation(.easeOut(duration: 0.2)) { toolbarTitleVisible = visible }
     }
 
-    @ViewBuilder private var menuItems: some View {
-        ShareLink(item: pixivURL) {
-            Label(l10n.t(.actionShare), systemImage: "square.and.arrow.up")
+    /// Rows of the V3 overflow menu — 1:1 with `ArtworkV3Fragment.showMoreMenu`
+    /// (order, labels and actions), rendered by `V3MenuDialog`.
+    ///
+    /// Deviation: upstream's last three rows (AI upscale ×2 / "share to plaza")
+    /// have no iOS counterpart — the first two run a bundled ncnn model, the
+    /// third is behind `Dev.showPlazaShareInArtwork` and the plaza isn't ported.
+    private var menuRows: [V3MenuRow] {
+        guard let illust = vm.illust else { return [] }
+        var rows: [V3MenuRow] = [
+            V3MenuRow(title: l10n.t(.actionShare), icon: "square.and.arrow.up") {
+                shareItem = ShareTarget(url: pixivURL)
+            },
+            V3MenuRow(title: l10n.t(.artworkV3ShareFirstImage), icon: "square.and.arrow.up") {
+                Task { await shareFirstImage(illust) }
+            },
+            V3MenuRow(title: l10n.t(.artworkV3CopyWorkLink), icon: "arrow.up.forward.app") {
+                UIPasteboard.general.string = pixivURL.absoluteString
+            },
+            V3MenuRow(title: l10n.t(.artworkV3MuteSettings), icon: "gearshape") {
+                showMuteSettings = true
+            },
+            V3MenuRow(title: l10n.t(.artworkV3MuteThisWork), icon: "eye.slash") {
+                mute.setIllustMuted(illustId, true)
+            },
+            V3MenuRow(title: l10n.t(.artworkV3FlagPost), icon: "flag") {
+                showReport = true
+            },
+        ]
+        if illust.type != "ugoira" {
+            rows.append(V3MenuRow(title: l10n.t(.artworkV3LoadOriginal), icon: "eye") {
+                vm.forceOriginalPreview = true
+            })
         }
-        Button {
-            UIPasteboard.general.string = pixivURL.absoluteString
-        } label: {
-            Label(l10n.t(.actionCopyLink), systemImage: "doc.on.doc")
-        }
-        Button {
-            openURL(pixivURL)
-        } label: {
-            Label(l10n.t(.actionOpenInBrowser), systemImage: "safari")
-        }
-        if let user = vm.illust?.user {
-            Divider()
-            Button(role: .destructive) {
-                MuteStore.shared.toggleUser(user.id)
-            } label: {
-                let muted = MuteStore.shared.isUserMuted(user.id)
-                Label(muted ? l10n.t(.actionUnmuteUser) : l10n.t(.actionMuteArtist),
-                      systemImage: "speaker.slash")
-            }
-        }
-        Divider()
-        Button(role: .destructive) {
-            showReport = true
-        } label: {
-            Label(l10n.t(.actionReport), systemImage: "flag")
-        }
+        return rows
     }
 
     /// Floating top bar that replaces the hidden navigation bar (see body): back
@@ -283,9 +355,12 @@ struct IllustDetailView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                Menu { menuItems } label: {
+                // Upstream `nav_more` opens a centered `V3MenuDialog`, not a
+                // system menu — see the overlay on `body`.
+                Button { showMenu = true } label: {
                     DetailGlassCircle(system: "ellipsis")
                 }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 12)
@@ -343,9 +418,17 @@ struct IllustDetailView: View {
                     handleScroll(offset)
                 }
                 .ignoresSafeArea(.container, edges: .top)
-                BottomActionBar(vm: vm, onShowBookmarkSheet: { showBookmarkSheet = true })
-                    .offset(y: actionBarVisible ? 0 : 180)
-                    .opacity(actionBarVisible ? 1 : 0)
+                BottomActionBar(
+                    vm: vm,
+                    onShowBookmarkSheet: { showBookmarkSheet = true },
+                    onJumpToComments: {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            scrollProxy.scrollTo(Self.commentsSectionID, anchor: .top)
+                        }
+                    }
+                )
+                .offset(y: actionBarVisible ? 0 : 180)
+                .opacity(actionBarVisible ? 1 : 0)
             }
             // iOS 26 Liquid Glass paints a scroll-edge material on the navigation bar
             // that no toolbar-background modifier can clear, leaving a dark band over
@@ -368,6 +451,25 @@ struct IllustDetailView: View {
                         .padding(.trailing, 12)
                         .transition(.opacity)
                     }
+                }
+            }
+            // `abandoned_frame` is declared last in the Android FrameLayout, so
+            // it covers the toolbar and the floating pill too — the mask must be
+            // the topmost overlay here for the same reason (#983). Upstream
+            // additionally hides the FAB bar because its 12dp elevation would
+            // otherwise keep it clickable under the mask; a SwiftUI overlay with
+            // a content shape already swallows the taps.
+            .overlay {
+                if let illust = vm.illust, isMuted(illust) {
+                    MuteMaskOverlay(
+                        illust: illust,
+                        illustMuted: mute.isIllustMuted(illustId),
+                        userMuted: illust.user.map { mute.isUserMuted($0.id) } ?? false,
+                        onUnmuteIllust: { mute.setIllustMuted(illustId, false) },
+                        onUnmuteUser: { if let u = illust.user { mute.toggleUser(u.id) } },
+                        onLeave: { dismiss() }
+                    )
+                    .transition(.opacity)
                 }
             }
         }
@@ -403,6 +505,58 @@ struct IllustDetailView: View {
         .sheet(isPresented: $showReport) {
             ReportIllustView(illustId: illustId)
         }
+        // `MuteTagSheet.show(childFragmentManager, illust.tags, illust.user)`
+        .sheet(isPresented: $showMuteSettings) {
+            if let illust = vm.illust {
+                MuteTargetsSheet(tags: illust.tags ?? [], user: illust.user)
+            }
+        }
+        // The inline composer (`CommentComposerController`, ON_DEMAND_OVERLAY):
+        // there's no persistent input bar, tapping "留下你的评论吧" raises one.
+        .sheet(isPresented: $showComposer) {
+            CommentComposerSheet { text in await vm.postComment(text) }
+        }
+        // `translateTitleAndCaption` / `translateComment` — upstream runs its own
+        // translator (custom AI, else Google) and shows the result in a WitDialog.
+        // Deviation: iOS has no bundled translator, so the same text goes to the
+        // system translation sheet, which is the platform-native equivalent.
+        .translationPresentation(isPresented: $showTranslate, text: translateText ?? "")
+        // `V3MenuDialog`: a centered 78 %-width card, not a system menu.
+        .v3MenuDialog(isPresented: $showMenu, rows: menuRows)
+        .sheet(item: $shareItem) { target in
+            V3ShareSheet(items: target.items)
+        }
+    }
+
+    /// `translateTitleAndCaption` — title and caption joined the same way
+    /// upstream joins them ("标题：… \n\n 简介：…") before handing them over.
+    private func translate(title: String?, caption: String?) {
+        let t = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let c = (caption ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        var parts: [String] = []
+        if !t.isEmpty { parts.append(l10n.t(.artworkV3TitleLabel) + t) }
+        if !c.isEmpty { parts.append(l10n.t(.artworkV3CaptionLabel) + c) }
+        guard !parts.isEmpty else { return }
+        translateText = parts.joined(separator: "\n\n")
+        showTranslate = true
+    }
+
+    /// `ShareIllust`'s "分享首图": hand the first page's bytes to the share sheet
+    /// rather than the URL.
+    private func shareFirstImage(_ illust: Illust) async {
+        guard let url = IllustPages.pages(for: illust).first?.original
+                ?? IllustPages.pages(for: illust).first?.large else { return }
+        guard let data = await PixivImageCache.shared.loadData(url, onProgress: { _ in }),
+              let image = UIImage(data: data) else { return }
+        shareItem = ShareTarget(image: image)
+    }
+
+    /// Whether the whole-page mute mask applies — upstream watches the Room rows
+    /// for this work and its artist (`attachMuteObserver`).
+    private func isMuted(_ illust: Illust) -> Bool {
+        if mute.isIllustMuted(illustId) { return true }
+        if let u = illust.user, mute.isUserMuted(u.id) { return true }
+        return false
     }
 
     @ViewBuilder
@@ -413,45 +567,48 @@ struct IllustDetailView: View {
         let pages = IllustPages.pages(for: illust)
         let collapsible = pages.count > collapsePagesThreshold
         let collapsed = collapsible && !pagesExpanded
+        // `IllustAdapter.onBindViewHolder` (#961): a 2-page **manga** opens the
+        // reader on tap; a 2-page illustration must NOT — only the type check
+        // keeps those out of the reader. 3P+ works keep the plain tap and get
+        // the reader via the pill in the first page's overlay instead.
+        let tapOpensReader = illust.type == "manga" && pages.count > 1 && !collapsible
 
         IllustFirstPage(
             illust: illust,
             pages: pages,
             collapsed: collapsed,
-            onTap: { viewerIndex = 0; showViewer = true },
-            onExpand: { withAnimation(.easeInOut(duration: 0.25)) { pagesExpanded = true } }
+            forceOriginal: vm.forceOriginalPreview,
+            onTap: {
+                if tapOpensReader { showComicReader = true }
+                else { viewerIndex = 0; showViewer = true }
+            },
+            onExpand: { withAnimation(.easeInOut(duration: 0.25)) { pagesExpanded = true } },
+            onOpenReader: { showComicReader = true }
         )
         .matchedTransitionSource(id: 0, in: viewerZoom)
 
         if !collapsed {
             ForEach(Array(pages.enumerated()).dropFirst(), id: \.offset) { idx, page in
-                StackedPage(urls: page) { viewerIndex = idx; showViewer = true }
-                    .matchedTransitionSource(id: idx, in: viewerZoom)
+                StackedPage(urls: page, forceOriginal: vm.forceOriginalPreview) {
+                    if tapOpensReader { showComicReader = true }
+                    else { viewerIndex = idx; showViewer = true }
+                }
+                .matchedTransitionSource(id: idx, in: viewerZoom)
             }
             // Collapse is driven by the floating "收起" pill pinned below the
             // toolbar (see `body`), not an in-list button — 1:1 with V3.
         }
 
-        // Multi-page works can open the dedicated manga reader (the existing
-        // zoom-pager on tap is kept; this is an explicit, non-destructive entry).
-        if pages.count > 1 {
-            Button {
-                showComicReader = true
-            } label: {
-                Label(l10n.t(.crEnter), systemImage: "book.pages")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Theme.brandGradient, in: .rect(cornerRadius: 14))
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
-            .padding(.bottom, 2)
-        }
-
-        V3TitleCard(illust: illust)
+        // Order below is `ArtworkV3FeedSource.buildArtworkHeaderItems`:
+        // hero / (series) / artist / (desc) / tags / stats / detail panel /
+        // comments / author works / related header + related waterfall.
+        V3HeroSection(
+            illust: illust,
+            // `ArtworkHeroItem.showTranslate`: the stand-in translate button only
+            // appears when the work has no caption block of its own.
+            showTranslate: vm.captionPlain.isEmpty,
+            onTranslate: { translate(title: illust.title, caption: nil) }
+        )
 
         if let series = illust.series, let title = series.title, !title.isEmpty, series.id != nil {
             V3SeriesStrip(series: series)
@@ -460,18 +617,30 @@ struct IllustDetailView: View {
         V3ArtistCard(vm: vm)
 
         if !vm.captionPlain.isEmpty {
-            V3CaptionView(text: vm.captionPlain)
+            V3CaptionSection(
+                html: illust.caption ?? "",
+                plain: vm.captionPlain,
+                expanded: $descExpanded,
+                onTranslate: { translate(title: illust.title, caption: vm.captionPlain) }
+            )
         }
 
-        if let tags = illust.tags, !tags.isEmpty {
-            V3TagsSection(tags: tags, previewURL: illust.imageUrls?.squareMedium)
-        }
+        // Upstream emits the tag block unconditionally (it is the stable anchor
+        // the late-arriving caption is inserted before).
+        V3TagsSection(tags: illust.tags ?? [], previewURL: illust.imageUrls?.squareMedium)
 
         V3StatsCard(illust: illust)
 
         V3DetailPanel(illust: illust, expanded: $detailPanelExpanded)
 
-        V3CommentsSection(vm: vm, illustId: illustId)
+        V3CommentsSection(
+            vm: vm,
+            illustId: illustId,
+            illustAuthorId: illust.user?.id ?? 0,
+            onCompose: { showComposer = true },
+            onTranslate: { text in translateText = text; showTranslate = true }
+        )
+        .id(Self.commentsSectionID)
 
         V3AuthorWorksSection(vm: vm, user: illust.user)
 
@@ -492,8 +661,10 @@ private struct IllustFirstPage: View {
     let illust: Illust
     let pages: [IllustPageURLs]
     let collapsed: Bool
+    let forceOriginal: Bool
     var onTap: () -> Void
     var onExpand: () -> Void
+    var onOpenReader: () -> Void
 
     private var firstAspect: CGFloat {
         let w = max(CGFloat(illust.width ?? 1), 1)
@@ -513,13 +684,22 @@ private struct IllustFirstPage: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: UIScreen.main.bounds.width / max(firstAspect, 0.1))
             } else if let first = pages.first {
-                StretchyFirstPage(urls: first, aspect: firstAspect, onTap: onTap)
+                StretchyFirstPage(urls: first, aspect: firstAspect,
+                                  forceOriginal: forceOriginal, onTap: onTap)
                 .overlay(alignment: .bottom) {
                     if collapsed {
-                        ExpandPagesPill(remaining: pages.count - 1, onTap: onExpand)
+                        FirstPageOverlay(
+                            remaining: pages.count - 1,
+                            isManga: illust.type == "manga",
+                            onExpand: onExpand,
+                            onOpenReader: onOpenReader
+                        )
                     }
                 }
             }
+            // `recy_illust_detail`'s `page_divider`: a hairline under every page
+            // so stacked full-bleed images read as separate pages.
+            Rectangle().fill(Theme.v3PageDivider).frame(height: 1 / UIScreen.main.scale)
         }
     }
 }
@@ -529,6 +709,7 @@ private struct IllustFirstPage: View {
 private struct StretchyFirstPage: View {
     let urls: IllustPageURLs
     let aspect: CGFloat
+    var forceOriginal: Bool = false
     var onTap: () -> Void
 
     @State private var loader = HeroImageLoader()
@@ -561,75 +742,144 @@ private struct StretchyFirstPage: View {
             .offset(y: -stretch)
             .contentShape(Rectangle())
             .onTapGesture { onTap() }
-            .task(id: urls.original) {
+            // `forceOriginal` re-keys the task so the menu's "load original for
+            // this work" re-runs the loader (upstream rebuilds the page adapter).
+            .task(id: TaskKey(url: urls.original, forceOriginal: forceOriginal)) {
                 await loader.run(large: urls.large, original: urls.original,
-                                 pixelWidth: Int(proxy.size.width * UIScreen.main.scale))
+                                 pixelWidth: Int(proxy.size.width * UIScreen.main.scale),
+                                 skipLarge: forceOriginal)
             }
         }
         .frame(height: baseHeight)
     }
 }
 
+/// Re-keys a page's load when the user opts into originals mid-page.
+private struct TaskKey: Equatable {
+    let url: URL?
+    let forceOriginal: Bool
+}
+
 /// A non-first page in the vertical stack — laid out at the image's natural
 /// aspect (Pixiv `meta_pages` carry no per-page dimensions, so the height
 /// settles once the image loads).
+///
+/// Deviation: upstream backfills exact per-page dimensions from the web ajax
+/// endpoint (`ArtworkV3ViewModel.pageDimensions`), which needs pixiv web
+/// cookies the iOS app never holds; the height settles on decode instead.
 private struct StackedPage: View {
     let urls: IllustPageURLs
+    var forceOriginal: Bool = false
     var onTap: () -> Void
 
     @State private var loader = HeroImageLoader()
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            if let image = loader.image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity)
-            } else {
-                Rectangle()
-                    .fill(Color(.secondarySystemBackground))
-                    .aspectRatio(0.8, contentMode: .fit)
-                    .overlay(ProgressView())
+        VStack(spacing: 0) {
+            ZStack(alignment: .bottomTrailing) {
+                if let image = loader.image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Rectangle()
+                        .fill(Color(.secondarySystemBackground))
+                        .aspectRatio(0.8, contentMode: .fit)
+                        .overlay(ProgressView())
+                }
+                if loader.isLoadingOriginal {
+                    HeroOriginalProgress(progress: loader.progress).allowsHitTesting(false)
+                }
             }
-            if loader.isLoadingOriginal {
-                HeroOriginalProgress(progress: loader.progress).allowsHitTesting(false)
+            .contentShape(Rectangle())
+            .onTapGesture { onTap() }
+            .task(id: TaskKey(url: urls.original, forceOriginal: forceOriginal)) {
+                // Stacked pages span the full screen width (no geometry reader here).
+                await loader.run(large: urls.large, original: urls.original,
+                                 pixelWidth: Int(UIScreen.main.bounds.width * UIScreen.main.scale),
+                                 skipLarge: forceOriginal)
             }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { onTap() }
-        .task(id: urls.original) {
-            // Stacked pages span the full screen width (no geometry reader here).
-            await loader.run(large: urls.large, original: urls.original,
-                             pixelWidth: Int(UIScreen.main.bounds.width * UIScreen.main.scale))
+            Rectangle().fill(Theme.v3PageDivider).frame(height: 1 / UIScreen.main.scale)
         }
     }
 }
 
-private struct ExpandPagesPill: View {
+/// `recy_illust_detail`'s `expand_overlay`, shown on page 0 while a 3P+ work is
+/// collapsed: an 88dp bottom scrim (`bg_v3_first_page_scrim`, #CC000000 →
+/// #55000000 → transparent, bottom-up) carrying two glass pills — "展开剩余 N 张"
+/// and the reader entry ("阅读漫画" for manga, "用阅读器看" for illustrations,
+/// #1029). Both use `bg_v3_expand_pill`: #B3111116, r=999, 1dp #33FFFFFF.
+private struct FirstPageOverlay: View {
     let remaining: Int
-    var onTap: () -> Void
+    let isManga: Bool
+    var onExpand: () -> Void
+    var onOpenReader: () -> Void
     @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom)
-                .frame(height: 88)
-                .allowsHitTesting(false)
-            Button(action: onTap) {
-                HStack(spacing: 8) {
-                    Image(systemName: "rectangle.stack.fill")
-                    Text(l10n.t(.detailExpandRemainingFmt, "\(remaining)"))
-                        .font(.system(size: 13, weight: .bold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16).padding(.vertical, 9)
-                .background(.black.opacity(0.55), in: .capsule)
-                .overlay(Capsule().strokeBorder(.white.opacity(0.25)))
+            LinearGradient(
+                stops: [
+                    .init(color: .black.opacity(0), location: 0),
+                    .init(color: .black.opacity(1 / 3), location: 0.5),
+                    .init(color: .black.opacity(0.8), location: 1),
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: 88)
+            .allowsHitTesting(false)
+
+            HStack(spacing: 8) {
+                ExpandOverlayPill(
+                    system: "square.stack",
+                    title: l10n.t(.artworkV3ExpandAllPagesFmt, "\(remaining)"),
+                    action: onExpand
+                )
+                ExpandOverlayPill(
+                    system: "book",
+                    title: isManga ? l10n.t(.crEnter) : l10n.t(.artworkV3ReaderEnterIllust),
+                    action: onOpenReader
+                )
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
             .padding(.bottom, 14)
         }
+    }
+}
+
+private struct ExpandOverlayPill: View {
+    let system: String
+    let title: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: system).font(.system(size: 14, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .tracking(0.26)   // letterSpacing 0.02 × 13sp
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .foregroundStyle(.white)
+            .padding(.leading, 16)
+            .padding(.trailing, 18)
+            .padding(.vertical, 9)
+            .background(Color(red: 17 / 255, green: 17 / 255, blue: 22 / 255).opacity(0.70), in: .capsule)
+            .overlay(Capsule().strokeBorder(.white.opacity(0.2), lineWidth: 1))
+        }
+        .buttonStyle(PressablePillStyle())
+    }
+}
+
+/// `CollapsibleIllustAdapter.applyPillTouchFeedback` — 0.94 scale while held.
+private struct PressablePillStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -646,7 +896,9 @@ private struct FloatingCollapsePill: View {
             HStack(spacing: 6) {
                 Image(systemName: "chevron.up")
                     .font(.system(size: 12, weight: .bold))
-                Text(l10n.t(.detailCollapsePages))
+                // `v3_collapse_pages_title` is the same source string as
+                // `v3_desc_collapse` in every locale upstream ships.
+                Text(l10n.t(.artworkV3DescCollapse))
                     .font(.system(size: 12, weight: .bold))
                     .tracking(0.24)   // letterSpacing 0.02 × 12sp
             }
@@ -664,41 +916,77 @@ private struct FloatingCollapsePill: View {
 
 // MARK: - V3 sections
 
-private struct V3TitleCard: View {
+/// `section_v3_hero.xml` — title (23sp bold, letterSpacing −0.03) over the meta
+/// row `type · EXT · date · pages`, with the stand-in translate button on the
+/// right when the work carries no caption block.
+private struct V3HeroSection: View {
     let illust: Illust
+    let showTranslate: Bool
+    var onTranslate: () -> Void
     @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(illust.title ?? "")
                 .font(.system(size: 23, weight: .bold))
-                .tracking(-0.5)
+                .tracking(-0.69)          // letterSpacing −0.03 em × 23sp
                 .foregroundStyle(Theme.v3Text1)
                 .fixedSize(horizontal: false, vertical: true)
-                .lineSpacing(2)
+                .lineSpacing(23 * 0.2)    // lineSpacingMultiplier 1.2
+                .contextMenu {
+                    Button {
+                        UIPasteboard.general.string = illust.title ?? ""
+                    } label: { Label(l10n.t(.actionCopyLink), systemImage: "doc.on.doc") }
+                }
 
-            HStack(spacing: 8) {
-                Text(typeLabel)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Theme.v3Text2)
-                dot
-                Text(V3Date.dateTime(illust.createDate))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.v3Text3)
-                dot
-                Text(pagesLabel)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.v3Text3)
+            HStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    Text(typeLabel)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Theme.v3Text2)
+                    if let ext = pageExtension {
+                        dot
+                        Text(ext)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Theme.v3Text2)
+                    }
+                    dot
+                    Text(V3Date.dateTime(illust.createDate))
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.v3Text3)
+                    dot
+                    Text(pagesLabel)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.v3Text3)
+                }
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if showTranslate {
+                    Button(action: onTranslate) {
+                        Image(systemName: "translate")
+                            .resizable().scaledToFit().frame(width: 25, height: 25)
+                            .foregroundStyle(Theme.v3Text3)
+                            .frame(width: 25, height: 25)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(l10n.t(.artworkV3Translate))
+                }
             }
+            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
-        .padding(.top, 12)
+        .padding(.top, 10)
         .padding(.bottom, 16)
     }
 
+    /// `v3_nav_btn_bg` 3dp dot with 8dp on each side — the meta separators.
     private var dot: some View {
-        Circle().fill(Theme.v3Text3).frame(width: 3, height: 3)
+        Circle()
+            .fill(Theme.v3NavBtnBg)
+            .frame(width: 3, height: 3)
+            .padding(.horizontal, 8)
     }
 
     private var typeLabel: String {
@@ -713,43 +1001,72 @@ private struct V3TitleCard: View {
         let n = illust.pageCount ?? 1
         return n <= 1 ? l10n.t(.detailPageOne) : l10n.t(.detailPagesFmt, "\(n)")
     }
+
+    /// `page0Extension` — the uppercase file extension of page 0's original URL.
+    private var pageExtension: String? {
+        guard let url = IllustPages.pages(for: illust).first?.original?.absoluteString else { return nil }
+        let clean = url.split(separator: "?").first.map(String.init)?
+            .split(separator: "#").first.map(String.init) ?? url
+        guard let dot = clean.lastIndex(of: "."), dot < clean.index(before: clean.endIndex) else { return nil }
+        let ext = String(clean[clean.index(after: dot)...])
+        guard ext.count <= 5, !ext.contains("/") else { return nil }
+        return ext.uppercased()
+    }
 }
 
+/// `section_v3_series.xml` + `V3Palette.seriesStripBg` / `seriesIconBg`: the
+/// strip fill is the theme color at 35 % → hue+25° at 30 % (r=20, 15 % hairline),
+/// the icon square is the solid theme color → hue+40° (r=10).
 private struct V3SeriesStrip: View {
     let series: IllustSeriesRef
     @Environment(OnboardingStore.self) private var l10n
+
+    private static let stripGradient = LinearGradient(
+        colors: [Theme.brand.opacity(0.35), Theme.brand.hueShifted(25).opacity(0.30)],
+        startPoint: .bottomLeading, endPoint: .topTrailing
+    )
+    private static let iconGradient = LinearGradient(
+        colors: [Theme.brand, Theme.brand.hueShifted(40)],
+        startPoint: .bottomLeading, endPoint: .topTrailing
+    )
 
     var body: some View {
         NavigationLink(value: AppRoute.illustSeries(seriesId: series.id ?? 0)) {
             HStack(spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.18))
-                    Image(systemName: "rectangle.stack.fill").font(.system(size: 14)).foregroundStyle(.white)
+                    RoundedRectangle(cornerRadius: 10).fill(Self.iconGradient)
+                    Image(systemName: "square.stack").font(.system(size: 16)).foregroundStyle(.white)
                 }
                 .frame(width: 32, height: 32)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(l10n.t(.detailSeriesLabel).uppercased())
                         .font(.system(size: 9, weight: .bold))
-                        .tracking(1)
-                        .foregroundStyle(.white.opacity(0.7))
+                        .tracking(0.9)                       // letterSpacing 0.1 × 9sp
+                        .foregroundStyle(Theme.v3SeriesStripText)
+                        .opacity(0.7)
                     Text(series.title ?? "")
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Theme.v3SeriesStripText)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.white.opacity(0.8))
+                Text("›")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Theme.v3SeriesStripText)
             }
             .padding(12)
-            .background(Theme.brandGradient, in: .rect(cornerRadius: 16))
+            .background(Self.stripGradient, in: .rect(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(Theme.brand.opacity(0.15), lineWidth: 1))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressableCardStyle())
         .padding(.horizontal, 12)
         .padding(.bottom, 16)
     }
 }
 
+/// `section_v3_artist.xml` — glass XL card (r=28), 58dp avatar with a 1.5dp
+/// theme-colored ring, name/handle stack, the follow pill, and the 2-line bio.
 private struct V3ArtistCard: View {
     let vm: IllustDetailViewModel
     @Environment(OnboardingStore.self) private var l10n
@@ -763,23 +1080,36 @@ private struct V3ArtistCard: View {
             // hidden copy inside the link reserves its exact footprint so the
             // name truncates rather than running under it.
             NavigationLink(value: AppRoute.userProfile(user.id)) {
-                HStack(spacing: 12) {
-                    PixivAsyncImage(url: avatarURL(for: user), showsProgress: false)
-                        .frame(width: 58, height: 58)
-                        .clipShape(.circle)
-                        .overlay(Circle().strokeBorder(Theme.v3Border, lineWidth: 3))
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(user.name ?? "")
-                            .font(.montserratBold(16))
-                            .foregroundStyle(Theme.v3Text1)
-                            .lineLimit(1)
-                        Text("@\(user.account ?? "")")
-                            .font(.montserratMedium(11))
-                            .foregroundStyle(Theme.v3Text3)
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 8) {
+                        PixivAsyncImage(url: avatarURL(for: user), showsProgress: false)
+                            .frame(width: 58, height: 58)
+                            .clipShape(.circle)
+                            .overlay(Circle().strokeBorder(Theme.brand, lineWidth: 1.5))
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(user.name ?? "")
+                                .font(.montserratBold(16))
+                                .tracking(-0.16)      // letterSpacing −0.01 × 16sp
+                                .foregroundStyle(Theme.v3Text1)
+                                .lineLimit(1)
+                            Text("@\(user.account ?? "")")
+                                .font(.montserratMedium(11))
+                                .foregroundStyle(Theme.v3Text3)
+                        }
+                        Spacer(minLength: 8)
+                        FollowButton(followed: vm.authorFollowed, onTap: {}, onLongPress: {})
+                            .hidden()
                     }
-                    Spacer(minLength: 8)
-                    FollowButton(followed: vm.authorFollowed, onTap: {}, onLongPress: {})
-                        .hidden()
+                    // `artist_bio`: 2 lines, 12sp, `v3_text_2`, 1.65 line spacing.
+                    if let bio = user.comment, !bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(V3Caption.plain(bio))
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.v3Text2)
+                            .lineSpacing(12 * 0.65)
+                            .lineLimit(2)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 14)
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 18)
@@ -788,13 +1118,14 @@ private struct V3ArtistCard: View {
                 .contentShape(.rect(cornerRadius: 28))
             }
             .buttonStyle(PressableCardStyle())
-            .overlay(alignment: .trailing) {
+            .overlay(alignment: .topTrailing) {
                 FollowButton(followed: vm.authorFollowed) {
                     Task { await vm.toggleFollow() }
                 } onLongPress: {
                     Task { await vm.toggleFollow(restrict: "private") }
                 }
                 .padding(.trailing, 12)
+                .padding(.top, 31)   // 18dp card padding + (58 − 32) / 2 avatar centering
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 18)
@@ -807,6 +1138,9 @@ private struct V3ArtistCard: View {
     }
 }
 
+/// `V3Palette.applyFollowBtn` / `applyUnfollowBtn`: solid theme fill + white
+/// label when not following; 20 % fill with a 30 % hairline and the muted
+/// `textSecondary` label once followed. 32dp tall, 20dp side padding.
 private struct FollowButton: View {
     let followed: Bool
     var onTap: () -> Void
@@ -817,14 +1151,15 @@ private struct FollowButton: View {
         Button(action: onTap) {
             Text(followed ? l10n.t(.detailUnfollow) : l10n.t(.detailFollow))
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(followed ? AnyShapeStyle(Theme.v3Text2) : AnyShapeStyle(Color.white))
-                .padding(.horizontal, 18)
+                .foregroundStyle(followed ? AnyShapeStyle(Theme.v3TextSecondary) : AnyShapeStyle(Color.white))
+                .padding(.horizontal, 20)
                 .frame(height: 32)
                 .background {
                     if followed {
-                        Capsule().fill(Theme.v3Surface).overlay(Capsule().strokeBorder(Theme.v3Border, lineWidth: 1))
+                        Capsule().fill(Theme.brand.opacity(0.20))
+                            .overlay(Capsule().strokeBorder(Theme.brand.opacity(0.30), lineWidth: 1))
                     } else {
-                        Capsule().fill(Theme.brandGradient)
+                        Capsule().fill(Theme.brand)
                     }
                 }
         }
@@ -838,28 +1173,78 @@ private struct FollowButton: View {
 private struct PressableCardStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+            // `applyTouchScale`: scale only, 200 ms, no dimming.
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .opacity(configuration.isPressed ? 0.82 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
     }
 }
 
-private struct V3CaptionView: View {
-    /// Already-plaintext caption (HTML stripped by the view model).
-    let text: String
+/// `section_v3_description.xml` — "简介" label + translate button, the caption
+/// body (14sp, `v3_text_1` at 78 %, 1.65 line spacing, links in `v3_blue`), and
+/// the 5-line collapse toggle from #965.
+private struct V3CaptionSection: View {
+    let html: String
+    let plain: String
+    @Binding var expanded: Bool
+    var onTranslate: () -> Void
+    @Environment(OnboardingStore.self) private var l10n
+
+    /// #965: fold anything past this many lines. The issue suggested 3–5; the
+    /// upper bound was taken.
+    private static let collapsedLines = 5
 
     var body: some View {
-        Text(text)
-            .font(.system(size: 13))
-            .foregroundStyle(Theme.v3Text2)
-            .lineSpacing(5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .textSelection(.enabled)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 18)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                V3Label(l10n.t(.artworkV3DescLabel))
+                Spacer(minLength: 0)
+                Button(action: onTranslate) {
+                    Image(systemName: "translate")
+                        .resizable().scaledToFit().frame(width: 24, height: 24)
+                        .foregroundStyle(Theme.v3Text3)
+                        .frame(width: 48, height: 48)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(l10n.t(.artworkV3Translate))
+            }
+            .frame(height: 48)          // the translate button's 48dp touch target
+            .padding(.bottom, 10)       // header marginBottom
+
+            Text(V3Caption.attributed(html, plain: plain))
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.v3Text1.opacity(0.78))
+                .tint(Theme.v3Blue)                 // textColorLink = v3_blue
+                .lineSpacing(14 * 0.65)             // lineSpacingMultiplier 1.65
+                .lineLimit(expanded ? nil : Self.collapsedLines)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 16)
+
+            // Upstream only shows the toggle once the layout reports an overflow;
+            // SwiftUI has no equivalent pre-draw hook, so it appears whenever the
+            // caption is long enough to plausibly wrap past five lines.
+            if plain.count > 120 || plain.contains("\n") {
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { expanded.toggle() }
+                } label: {
+                    Text(expanded ? l10n.t(.artworkV3DescCollapse) : l10n.t(.artworkV3DescExpand))
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.v3Blue)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 18)
     }
 }
 
+/// `section_v3_tags.xml` + `V3TagFlowView`: one chip per tag reading
+/// `# name  translation` in `V3Palette.textTag`, on the 8 %-fill / 15 %-hairline
+/// capsule, 13sp, 14×7 padding, 8dp gaps.
 private struct V3TagsSection: View {
     let tags: [Tag]
     /// Square thumb of the host work, stored as the pin preview (mirrors
@@ -871,25 +1256,23 @@ private struct V3TagsSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             V3Label(l10n.t(.detailTagsLabel))
-            FlowLayout(spacing: 6) {
+            FlowLayout(spacing: 8) {
                 ForEach(Array(tags.enumerated()), id: \.offset) { _, tag in
                     NavigationLink(value: AppRoute.tagResults(tag: tag.name ?? "")) {
-                        HStack(spacing: 4) {
-                            Text("#\(tag.name ?? "")")
-                                .font(.caption.bold())
-                                .foregroundStyle(Theme.v3Ambient)
-                            if let translated = tag.translatedName, !translated.isEmpty {
-                                Text(translated)
-                                    .font(.caption)
-                                    .foregroundStyle(Theme.v3Text3)
-                            }
-                        }
-                        .padding(.horizontal, 9).padding(.vertical, 5)
-                        .background(Theme.v3Surface, in: .capsule)
-                        .overlay(Capsule().strokeBorder(Theme.v3Border, lineWidth: 1))
+                        Text(chipText(tag))
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.v3TagText)
+                            .lineLimit(1)
+                            .padding(.horizontal, 14).padding(.vertical, 7)
+                            .background(Theme.v3TagChipFill, in: .capsule)
+                            .overlay(Capsule().strokeBorder(Theme.v3TagChipBorder, lineWidth: 1))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PressablePillStyle())
                     .contextMenu {
+                        // `V3TagFlowView.showTagActionMenu`
+                        Button {
+                            UIPasteboard.general.string = tag.name
+                        } label: { Label(l10n.t(.actionCopyLink), systemImage: "doc.on.doc") }
                         let isPinned = pinned.isPinned(tag.name)
                         Button {
                             pinned.toggle(name: tag.name,
@@ -906,8 +1289,21 @@ private struct V3TagsSection: View {
         .padding(.horizontal, 12)
         .padding(.bottom, 18)
     }
+
+    private func chipText(_ tag: Tag) -> String {
+        var out = "# " + (tag.name ?? "")
+        if let t = tag.translatedName, !t.isEmpty { out += "  " + t }
+        return out
+    }
 }
 
+/// `section_v3_stats.xml` — two gradient numbers on the glass surface, split by
+/// a `v3_border_1` hairline.
+///
+/// Deviation: upstream's bookmark half opens "喜欢这个作品的用户" (who bookmarked
+/// this), which is scraped from the pixiv web front end; there is no app-api
+/// endpoint for it and the iOS client holds no web session, so the half is
+/// rendered but not tappable.
 private struct V3StatsCard: View {
     let illust: Illust
     @Environment(OnboardingStore.self) private var l10n
@@ -915,9 +1311,11 @@ private struct V3StatsCard: View {
     var body: some View {
         HStack(spacing: 0) {
             stat(value: illust.totalView ?? 0, label: l10n.t(.detailViewsLabel), gradient: Theme.v3ViewsGradient)
-            Rectangle().fill(Theme.v3Border).frame(width: 1, height: 36)
+            Rectangle().fill(Theme.v3Border1).frame(width: 1)
+                .padding(.vertical, 4)
             stat(value: illust.totalBookmarks ?? 0, label: l10n.t(.detailBookmarksLabel), gradient: Theme.v3BookmarksGradient)
         }
+        .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 8)
         .padding(.vertical, 16)
         .v3Glass(corner: 20)
@@ -928,12 +1326,13 @@ private struct V3StatsCard: View {
     private func stat(value: Int, label: String, gradient: LinearGradient) -> some View {
         VStack(spacing: 3) {
             Text(value.formatted(.number.grouping(.automatic)))
-                .font(.system(size: 20, weight: .bold))
-                .tracking(-0.5)
+                // style/textMontserratBold, letterSpacing -0.03 em x 20sp
+                .font(.montserratBold(20))
+                .tracking(-0.6)
                 .foregroundStyle(gradient)
             Text(label.uppercased())
                 .font(.system(size: 9, weight: .bold))
-                .tracking(1)
+                .tracking(0.9)          // letterSpacing 0.1 em × 9sp
                 .foregroundStyle(Theme.v3Text3)
         }
         .frame(maxWidth: .infinity)
@@ -982,20 +1381,23 @@ private struct V3DetailPanel: View {
     private struct Chip { let label: String; let value: String; let color: Color; let mono: Bool }
 
     private func chip(_ c: Chip) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        // Upstream stacks the two TextViews with no margin between them.
+        VStack(alignment: .leading, spacing: 0) {
             Text(c.label.uppercased())
                 .font(.system(size: 9, weight: .regular))
-                .tracking(0.7)
+                .tracking(0.72)          // letterSpacing 0.08 em × 9sp
                 .foregroundStyle(Theme.v3Text3)
+                .opacity(0.7)
             Text(c.value)
                 .font(c.mono ? .system(size: 13, weight: .bold).monospaced() : .system(size: 13, weight: .bold))
                 .foregroundStyle(c.color)
+                .opacity(c.mono ? 1 : 0.8)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12).padding(.vertical, 10)
-        .background(Theme.v3Surface, in: .rect(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.v3Border, lineWidth: 1))
+        .background(Theme.v3Surface1, in: .rect(cornerRadius: 14))   // v3_detail_chip_bg
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.v3Border1, lineWidth: 1))
         .contentShape(Rectangle())
         .onTapGesture { UIPasteboard.general.string = c.value }
     }
@@ -1023,8 +1425,8 @@ private struct V3DetailPanel: View {
         }()
         let restrictValue: String = restrict == 1 ? "R-18" : (restrict == 2 ? "R-18G" : l10n.t(.dpAllAges))
         return [
-            Chip(label: l10n.t(.dpArtworkId), value: "\(illust.id)", color: Theme.v3Ambient, mono: true),
-            Chip(label: l10n.t(.dpUserId), value: illust.user.map { "\($0.id)" } ?? "--", color: Theme.v3Ambient, mono: true),
+            Chip(label: l10n.t(.dpArtworkId), value: "\(illust.id)", color: Theme.v3TextAccent, mono: true),
+            Chip(label: l10n.t(.dpUserId), value: illust.user.map { "\($0.id)" } ?? "--", color: Theme.v3TextAccent, mono: true),
             Chip(label: l10n.t(.dpType), value: typeValue, color: Theme.v3Text1, mono: false),
             Chip(label: l10n.t(.dpResolution), value: "\(illust.width ?? 0) × \(illust.height ?? 0)", color: Theme.v3Text1, mono: false),
             Chip(label: l10n.t(.dpPages), value: "\(illust.pageCount ?? 1)", color: Theme.v3Text1, mono: false),
@@ -1035,82 +1437,165 @@ private struct V3DetailPanel: View {
     }
 }
 
+/// `section_v3_comments.xml` — the "COMMENTS · see more" header, the
+/// "留下你的评论吧" entry pill that raises the composer, then at most three
+/// preview cards (or the spinner / empty / #592 failure text).
 private struct V3CommentsSection: View {
     let vm: IllustDetailViewModel
     let illustId: Int64
+    let illustAuthorId: Int64
+    var onCompose: () -> Void
+    var onTranslate: (String) -> Void
     @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            V3Label(l10n.t(.commentsTitle))
-                .padding(.bottom, 4)
-            if !vm.commentsLoaded {
-                ProgressView().frame(maxWidth: .infinity).padding(.vertical, 20)
-            } else {
-                if vm.comments.isEmpty {
-                    // Upstream `comments_empty`: centered, paddingVertical
-                    // 48dp with a 160dp floor so the section doesn't collapse.
-                    Text(l10n.t(.commentsEmpty))
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.v3Text3)
-                        .padding(.vertical, 48)
-                        .frame(maxWidth: .infinity, minHeight: 160)
-                } else {
-                    ForEach(Array(vm.comments.prefix(3).enumerated()), id: \.element.id) { idx, comment in
-                        if idx > 0 { Rectangle().fill(Theme.v3Border).frame(height: 1) }
-                        V3CommentRow(comment: comment)
-                    }
-                }
-                // Upstream `comments_more`: full-width centered button with a
-                // hairline `v3_border_2` r=14 outline, shown whenever comments
-                // have loaded — the comments page stays reachable from the
-                // empty state too.
+            HStack(spacing: 0) {
+                V3Label(l10n.t(.commentsTitle))
+                Spacer(minLength: 0)
+                // `comments_more` sits on the right unconditionally — the full
+                // list stays reachable even from the empty state.
                 NavigationLink(value: AppRoute.comments(target: .illust(illustId))) {
-                    Text(l10n.t(.viewAllComments))
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Theme.v3Text2)
-                        .frame(maxWidth: .infinity)
-                        .padding(12)
-                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.v3Border, lineWidth: 1))
-                        .contentShape(.rect)
+                    Text(l10n.t(.detailSeeMore))
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.v3TextAccent)
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 8)
+            }
+            .padding(.bottom, 14)
+
+            // `add_comment_entry`: a fake input capsule on the settings-card
+            // fill (r=22 + 1dp hairline), avatar 32dp, hint 14sp.
+            Button(action: onCompose) {
+                HStack(spacing: 10) {
+                    // `add_comment_avatar` — the signed-in user's icon.
+                    MyAvatarView(userId: KeychainTokenStore.shared.load()?.user?.id, size: 32)
+                    Text(l10n.t(.artworkV3AddCommentHint))
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.v3Text3)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .background(Theme.v3CardFill, in: .rect(cornerRadius: 22))
+                .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Theme.v3CardHairline, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 14)
+
+            if !vm.commentsLoaded {
+                ProgressView()
+                    .controlSize(.large)            // 36dp indeterminate
+                    .tint(Theme.v3Text3)            // indeterminateTint=v3_text_3
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 50)
+            } else if vm.comments.isEmpty {
+                // One label carries both states: "还没有评论" on a successful
+                // empty read, the server message on a conclusive failure (#592).
+                Text(vm.commentsFailedMessage ?? l10n.t(.artworkV3NoCommentsYet))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.v3Text3)
+                    .multilineTextAlignment(.center)
+                    .padding(.vertical, 48)
+                    .frame(maxWidth: .infinity, minHeight: 160)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(vm.comments.prefix(3)) { comment in
+                        V3CommentPreviewCard(
+                            comment: comment,
+                            isAuthor: comment.user?.id == illustAuthorId,
+                            onTranslate: onTranslate
+                        )
+                    }
+                }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 12)
         .padding(.bottom, 18)
         .onScrolledIntoView { Task { await vm.loadCommentsIfNeeded() } }
     }
+
 }
 
-private struct V3CommentRow: View {
+/// `cell_comment_preview.xml` — a `v3_surface_2` r=14 card: 32dp ringed avatar,
+/// optional "作者" badge, name, relative time, then the body (text or a 64dp
+/// sticker). Long-press opens copy / translate / view-user, exactly the rows
+/// upstream builds with `showV3Menu("PreviewCommentMenu")`.
+private struct V3CommentPreviewCard: View {
     let comment: CommentItem
+    let isAuthor: Bool
+    var onTranslate: (String) -> Void
+    @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            PixivAsyncImage(url: avatarURL, showsProgress: false)
-                .frame(width: 36, height: 36)
-                .clipShape(.circle)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(comment.user?.name ?? "")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Theme.v3Text1)
-                    Text(V3Date.relative(comment.date))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.v3Text3)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                PixivAsyncImage(url: avatarURL, showsProgress: false)
+                    .frame(width: 32, height: 32)
+                    .clipShape(.circle)
+                    .overlay(Circle().strokeBorder(isAuthor ? Theme.v3TextAccent : Theme.v3Border2, lineWidth: 1.5))
+                    .padding(.trailing, 10)
+                if isAuthor {
+                    Text(l10n.t(.artworkV3AuthorBadge))
+                        .font(.system(size: 9, weight: .bold))
+                        .tracking(0.18)
+                        .foregroundStyle(Theme.v3TextAccent)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1.5)
+                        .background(Theme.brand.opacity(0.15), in: .rect(cornerRadius: 6))
+                        .padding(.trailing, 6)
                 }
-                if let text = comment.comment, !text.isEmpty {
-                    Text(text)
+                Text(comment.user?.name ?? "")
+                    .font(.montserratSemiBold(13))
+                    .tracking(-0.13)
+                    .foregroundStyle(Theme.v3Text1)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text(V3Date.relative(comment.date))
+                    .font(.system(size: 11))
+                    .tracking(0.22)
+                    .foregroundStyle(Theme.v3Text3)
+                    .lineLimit(1)
+            }
+
+            Group {
+                if let stamp = comment.stamp?.stampUrl.flatMap(URL.init(string:)) {
+                    // `RoundImageView` scaleType=fitCenter — a non-square
+                    // sticker must letterbox, not centre-crop.
+                    PixivAsyncImage(url: stamp, contentMode: .fit, showsProgress: false)
+                        .frame(width: 64, height: 64)
+                        .clipShape(.rect(cornerRadius: 12))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    Text(comment.comment ?? "")
                         .font(.system(size: 13))
-                        .foregroundStyle(Theme.v3Text1.opacity(0.72))
-                        .lineSpacing(4)
+                        .tracking(0.13)
+                        .lineSpacing(13 * 0.3)
+                        .foregroundStyle(Theme.v3Text2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            Spacer(minLength: 0)
+            .padding(.leading, 42)
+            .padding(.top, 6)
         }
-        .padding(.vertical, 14)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Theme.v3Surface2, in: .rect(cornerRadius: 14))
+        .contextMenu {
+            if let text = comment.comment, !text.trimmingCharacters(in: .whitespaces).isEmpty {
+                Button {
+                    UIPasteboard.general.string = text
+                } label: { Label(l10n.t(.artworkV3CopyComment), systemImage: "doc.on.doc") }
+                Button {
+                    onTranslate(text)
+                } label: { Label(l10n.t(.artworkV3Translate), systemImage: "character.bubble") }
+            }
+            if let uid = comment.user?.id {
+                NavigationLink(value: AppRoute.userProfile(uid)) {
+                    Label(l10n.t(.artworkV3ViewUser), systemImage: "person.crop.circle")
+                }
+            }
+        }
     }
 
     private var avatarURL: URL? {
@@ -1119,52 +1604,68 @@ private struct V3CommentRow: View {
     }
 }
 
+/// `section_v3_author_works.xml` — the label + "see more", then a full-bleed
+/// horizontal rail of square covers. Cover side is `(screenWidth − 48dp) / 3`
+/// (`LAdapter.imageSize`), r=12, 8dp gaps, 12dp content insets.
 private struct V3AuthorWorksSection: View {
     let vm: IllustDetailViewModel
     let user: PixivUser?
     @Environment(OnboardingStore.self) private var l10n
 
+    private var coverSide: CGFloat { (UIScreen.main.bounds.width - 48) / 3 }
+
     var body: some View {
         Group {
             if !vm.authorWorksLoaded {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack { V3Label(l10n.t(.detailAuthorWorksFmt, user?.name ?? "")); Spacer() }
-                    ProgressView().frame(maxWidth: .infinity, minHeight: 110)
+                    header(seeAll: false)
+                    ProgressView().controlSize(.large).tint(Theme.v3Text3)
+                        .frame(maxWidth: .infinity).padding(.vertical, 50)
                 }
-                .padding(.horizontal, 12)
                 .padding(.bottom, 18)
-            } else if !vm.authorWorks.isEmpty, let user {
+            } else if !vm.authorWorks.isEmpty {
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        V3Label(l10n.t(.detailAuthorWorksFmt, user.name ?? ""))
-                        Spacer()
-                        NavigationLink(value: AppRoute.userProfile(user.id)) {
-                            Text(l10n.t(.detailSeeMore))
-                                .font(.system(size: 12))
-                                .foregroundStyle(Theme.v3Ambient)
-                        }
-                        .buttonStyle(.plain)
-                    }
+                    header(seeAll: true)
                     ScrollView(.horizontal) {
                         LazyHStack(spacing: 8) {
-                            ForEach(vm.authorWorks.prefix(12)) { work in
+                            // `fetchAuthorWorks` keeps the first 10, current work excluded.
+                            ForEach(vm.authorWorks.prefix(10)) { work in
                                 NavigationLink(value: work) {
                                     PixivAsyncImage(url: thumbURL(work))
-                                        .frame(width: 110, height: 110)
-                                        .clipShape(.rect(cornerRadius: 10))
+                                        .frame(width: coverSide, height: coverSide)
+                                        .clipShape(.rect(cornerRadius: 12))
                                 }
                                 .buttonStyle(.plain)
                             }
                         }
+                        .padding(.horizontal, 12)
                     }
                     .scrollIndicators(.hidden)
+                    .frame(height: coverSide + 16)   // RV height = imageSize + 16dp
                 }
-                .padding(.horizontal, 12)
                 .padding(.bottom, 18)
             }
-            // Loaded but empty → render nothing (the section collapses).
+            // Loaded but empty → render nothing (the whole section collapses,
+            // label included — `renderAuthorWorks`).
         }
         .onScrolledIntoView { Task { await vm.loadAuthorWorksIfNeeded() } }
+    }
+
+    @ViewBuilder
+    private func header(seeAll: Bool) -> some View {
+        HStack(spacing: 0) {
+            V3Label(l10n.t(.detailAuthorWorksFmt, user?.name ?? ""))
+            Spacer(minLength: 0)
+            if seeAll, let user {
+                NavigationLink(value: AppRoute.userIllusts(userId: user.id, type: "illust")) {
+                    Text(l10n.t(.detailSeeMore))
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.v3TextAccent)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 12)
     }
 
     private func thumbURL(_ illust: Illust) -> URL? {
@@ -1172,6 +1673,9 @@ private struct V3AuthorWorksSection: View {
     }
 }
 
+/// `section_v3_related_header.xml` + the related waterfall the feed pages
+/// through. The header's "see more" only appears once the section has loaded
+/// and found something (`ArtworkRelatedHeaderItem.state == true`).
 private struct V3RelatedSection: View {
     let vm: IllustDetailViewModel
     let illustId: Int64
@@ -1179,31 +1683,40 @@ private struct V3RelatedSection: View {
     @State private var mute = MuteStore.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
                 V3Label(l10n.t(.detailRelated))
-                Spacer()
-                if !vm.related.isEmpty {
+                Spacer(minLength: 0)
+                if vm.relatedLoaded, !vm.related.isEmpty {
                     NavigationLink(value: AppRoute.relatedIllusts(illustId: illustId)) {
                         Text(l10n.t(.detailSeeMore))
                             .font(.system(size: 12))
-                            .foregroundStyle(Theme.v3Ambient)
+                            .foregroundStyle(Theme.v3TextAccent)
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 12)
+            .padding(.top, 6)
+            .padding(.bottom, 12)
 
             if !vm.relatedLoaded {
-                WaterfallSkeleton(columns: mute.waterfallColumns, rowsPerColumn: 2)
+                // `related_loading_container`: a centred spinner, not a grid
+                // skeleton — the header above it is already real content.
+                ProgressView()
+                    .controlSize(.large)            // 36dp indeterminate
+                    .tint(Theme.v3Text3)            // indeterminateTint=v3_text_3
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 50)
             } else {
                 let visible = mute.filter(vm.related)
                 if visible.isEmpty {
                     Text(l10n.t(.detailNoRelated))
                         .font(.system(size: 13))
                         .foregroundStyle(Theme.v3Text3)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 48)
+                        .frame(maxWidth: .infinity, minHeight: 200)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 64)
                 } else {
                     WaterfallGrid(
                         items: visible,
@@ -1218,6 +1731,14 @@ private struct V3RelatedSection: View {
                         .contextMenu { IllustCellContextMenuItems(illust: item) }
                     }
                     .padding(.horizontal, 8)
+
+                    // `section_v3_loading_more.xml`: a 120dp footer that also
+                    // triggers the next related page (the feed's `loadMore`).
+                    if vm.relatedNextUrl != nil {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, minHeight: 120)
+                            .onAppear { Task { await vm.loadMoreRelated() } }
+                    }
                 }
             }
         }
@@ -1271,7 +1792,7 @@ private struct V3Label: View {
     var body: some View {
         Text(text.uppercased())
             .font(.system(size: 12, weight: .bold))
-            .tracking(1.2)
+            .tracking(1.44)   // letterSpacing 0.12 em × 12sp
             .foregroundStyle(Theme.v3Text3)
     }
 }
@@ -1297,6 +1818,43 @@ enum V3Caption {
         for (k, v) in entities { s = s.replacingOccurrences(of: k, with: v) }
         return trimmed ? s.trimmingCharacters(in: .whitespacesAndNewlines) : s
     }
+
+    /// Captions carry `<a href>` links, and #552/#960 were exactly about them
+    /// disappearing. Rewrite anchors as markdown so `Text` renders them tappable
+    /// (upstream: `HtmlCompat.fromHtml` + `LinkMovementMethod`), then strip what
+    /// is left. `plain` is the already-computed fallback for captions without
+    /// links, so the common case costs nothing extra.
+    static func attributed(_ html: String, plain: String) -> AttributedString {
+        guard html.range(of: "<a ", options: .caseInsensitive) != nil else {
+            return AttributedString(plain)
+        }
+        var s = html
+        for br in ["<br />", "<br/>", "<br>", "</p>", "</P>"] {
+            s = s.replacingOccurrences(of: br, with: "\n")
+        }
+        // <a href="URL" ...>label</a> → [label](URL)
+        s = s.replacingOccurrences(
+            of: "<a[^>]*href=\"([^\"]*)\"[^>]*>(.*?)</a>",
+            with: "[$2]($1)",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        s = s.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        let entities = [
+            "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"",
+            "&#39;": "'", "&apos;": "'", "&nbsp;": " ",
+        ]
+        for (k, v) in entities { s = s.replacingOccurrences(of: k, with: v) }
+        s = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        // `.inlineOnlyPreservingWhitespace` keeps the caption's own line breaks;
+        // full markdown parsing would eat them.
+        if let a = try? AttributedString(
+            markdown: s,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            return a
+        }
+        return AttributedString(plain)
+    }
 }
 
 enum V3Date {
@@ -1314,8 +1872,16 @@ enum V3Date {
     // Formatters are expensive to construct (locale/calendar load) and these
     // run in list-row bodies — cache them like `iso` above. Calls are
     // main-thread only (view bodies), matching DateFormatter's thread rules.
+    // Upstream is `Common.getLocalYYYYMMDDHHMMString`: java.time renders the
+    // ISO chronology regardless of locale, so Android always shows a Gregorian
+    // year and a 24-hour clock. A bare DateFormatter would instead follow the
+    // device's calendar (era year on th_TH/ja_JP-japanese) and let a 12-hour
+    // region rewrite `HH` — pin calendar + locale, keep the local time zone.
     private static let dateTimeFormatter: DateFormatter = {
         let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = .current
         f.dateFormat = "yyyy-MM-dd HH:mm"
         return f
     }()
@@ -1352,7 +1918,9 @@ private final class HeroImageLoader {
 
     /// `pixelWidth` is the rendered width in physical pixels — geometry is the
     /// view's knowledge, not this loader's.
-    func run(large: URL?, original: URL?, pixelWidth: Int) async {
+    /// `skipLarge` mirrors the menu's "load the original for this work": don't
+    /// paint the `large` placeholder first, go straight for the original.
+    func run(large: URL?, original: URL?, pixelWidth: Int, skipLarge: Bool = false) async {
         // Memoized display-sized original from a previous visit — skip
         // the large placeholder and the disk round-trip entirely.
         if let original, let cached = PixivImageCache.shared.displayImage(for: original) {
@@ -1361,7 +1929,7 @@ private final class HeroImageLoader {
             return
         }
 
-        if let large {
+        if let large, !skipLarge {
             if let cached = PixivImageCache.shared.image(for: large) {
                 if !showedOriginal { image = cached }
             } else if let img = await PixivImageCache.shared.load(large), !showedOriginal {
@@ -1423,15 +1991,21 @@ private struct ScrollOffsetPreferenceKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {}
 }
 
-/// Floating download + bookmark pill (Shaft V3 `fab_bar`). No full-width mask —
-/// a compact capsule that floats over the content; the parent slides/fades it
-/// with scroll direction.
+/// `view_v3_fab_bar.xml` + `V3FabBarController` — the floating download /
+/// bookmark (/ jump-to-comments) capsule shared with the second-level image
+/// page. 48dp tall, 6dp side padding, 60×40 buttons, 1×24 dividers with 2dp
+/// margins. The plate is NOT the drawable's fixed `#CC1A1A2E`: `applyPalette`
+/// repaints it with `floatingPillBg` (the theme-tinted card fill at 80 %) and
+/// tints every icon with `floatingPillContent`.
 private struct BottomActionBar: View {
     let vm: IllustDetailViewModel
     let onShowBookmarkSheet: () -> Void
+    var onJumpToComments: () -> Void
     @Environment(OnboardingStore.self) private var l10n
 
     @State private var download: DownloadState = .idle
+    @State private var showResolutionPicker = false
+    @State private var settings = AppSettingsStore.shared
 
     enum DownloadState: Equatable {
         case idle, downloading(Double), done, failed
@@ -1439,45 +2013,72 @@ private struct BottomActionBar: View {
     }
 
     var body: some View {
-        // 1:1 with upstream `fab_bar`: 48dp capsule `#CC1A1A2E` (same in light
-        // mode — the drawable isn't theme-aware), 60×40 buttons, 6dp side
-        // padding, 1×24 divider `#33FFFFFF` with 2dp side margins.
         HStack(spacing: 0) {
-            downloadButton
-            Theme.v3FabDivider
-                .frame(width: 1, height: 24)
-                .padding(.horizontal, 2)
-            bookmarkButton
+            // `applyDownloadOrderPreference`: the bookmark half moves to the
+            // left when the user prefers it there; the comment segment always
+            // stays right-most.
+            if settings.artworkV3FabDownloadOnLeft {
+                downloadButton
+                divider
+                bookmarkButton
+            } else {
+                bookmarkButton
+                divider
+                downloadButton
+            }
+            if settings.artworkV3ShowCommentJumpFab {
+                divider
+                commentButton
+            }
         }
         .frame(height: 48)
         .padding(.horizontal, 6)
-        .background(Theme.v3FabBar, in: .capsule)
-        .shadow(color: .black.opacity(0.25), radius: 8, y: 3)
-        .padding(.bottom, 10)
+        .background(Theme.v3CardFill.opacity(0.80), in: .capsule)
+        .shadow(color: .black.opacity(0.25), radius: 8, y: 3)   // elevation 12dp
+        .padding(.bottom, 24)                                   // V3FabBarController: inset + 24dp
+        // Long-press on the download half → the four-resolution picker
+        // (`WitDialog.MenuDialogBuilder` over the `resolution_*` strings).
+        .confirmationDialog(
+            l10n.t(.downloadsTitle), isPresented: $showResolutionPicker, titleVisibility: .hidden
+        ) {
+            Button(l10n.t(.artworkV3ResOriginal)) { Task { await runDownload(.original) } }
+            Button(l10n.t(.artworkV3ResLarge)) { Task { await runDownload(.large) } }
+            Button(l10n.t(.artworkV3ResMedium)) { Task { await runDownload(.medium) } }
+            Button(l10n.t(.artworkV3ResSquareMedium)) { Task { await runDownload(.squareMedium) } }
+            Button(l10n.t(.actionCancel), role: .cancel) {}
+        }
+    }
+
+    private var divider: some View {
+        Theme.v3FloatingPillContent.opacity(0.20)
+            .frame(width: 1, height: 24)
+            .padding(.horizontal, 2)
     }
 
     // MARK: Download
 
     private var downloadButton: some View {
         Button {
-            Task { await runDownload() }
+            Task { await runDownload(.original) }
         } label: {
             Group {
                 switch download {
                 case .idle:
-                    Image(systemName: "arrow.down.to.line").font(.title3).foregroundStyle(.white)
+                    Image(systemName: "arrow.down.to.line").font(.system(size: 24))
+                        .foregroundStyle(Theme.v3FloatingPillContent)
                 case .downloading(let p):
                     ZStack {
-                        ProgressRing(progress: p, lineWidth: 3, tint: .white, track: Theme.v3FabDivider)
-                        Text("\(Int(p * 100))")
-                            .font(.system(size: 9, weight: .bold).monospacedDigit())
-                            .foregroundStyle(.white)
+                        ProgressRing(progress: p, lineWidth: 3,
+                                     tint: Theme.v3FloatingPillContent,
+                                     track: Theme.v3FloatingPillContent.opacity(0.20))
                     }
-                    .frame(width: 24, height: 24)
+                    .frame(width: 24, height: 24)   // ring only — upstream draws no percentage
                 case .done:
-                    Image(systemName: "checkmark.circle.fill").font(.title3).foregroundStyle(.green)
+                    // `ic_file_download_done_24dp` tinted `has_downloaded`.
+                    Image(systemName: "arrow.down.to.line.circle.fill").font(.system(size: 24))
+                        .foregroundStyle(Theme.v3HasDownloaded)
                 case .failed:
-                    Image(systemName: "exclamationmark.triangle").font(.title3).foregroundStyle(.orange)
+                    Image(systemName: "exclamationmark.triangle").font(.system(size: 24)).foregroundStyle(.orange)
                 }
             }
             .frame(width: 60, height: 40)
@@ -1486,13 +2087,40 @@ private struct BottomActionBar: View {
         .buttonStyle(.plain)
         .disabled(download.isActive || vm.illust == nil)
         .accessibilityLabel(l10n.t(.downloadsTitle))
+        .simultaneousGesture(LongPressGesture().onEnded { _ in showResolutionPicker = true })
     }
 
-    private func runDownload() async {
+    /// The four `Params.IMAGE_RESOLUTION_*` buckets the long-press menu offers.
+    private enum DownloadResolution {
+        case original, large, medium, squareMedium
+
+        func url(_ page: IllustPageURLs, illust: Illust, index: Int) -> URL? {
+            switch self {
+            case .original: return page.original ?? page.large
+            case .large: return page.large ?? page.original
+            case .medium, .squareMedium:
+                // `meta_pages` carries the small variants; single-page works
+                // fall back to the work-level `image_urls`.
+                let urls = illust.metaPages?.indices.contains(index) == true
+                    ? illust.metaPages?[index].imageUrls
+                    : illust.imageUrls
+                let s = self == .medium ? urls?.medium : urls?.squareMedium
+                return s.flatMap(URL.init(string:)) ?? page.large ?? page.original
+            }
+        }
+    }
+
+    private func runDownload(_ resolution: DownloadResolution) async {
         guard let illust = vm.illust else { return }
-        let urls = IllustPages.urls(for: illust)   // originals (fallback large)
+        let pages = IllustPages.pages(for: illust)
+        let urls = pages.enumerated().compactMap { resolution.url($1, illust: illust, index: $0) }
         guard !urls.isEmpty else { return }
         guard await PhotoLibrarySaver.requestAuthorization() else { await flashFailed(); return }
+
+        // `isAutoPostLikeWhenDownload`: bookmark the work as the download starts.
+        if settings.autoPostLikeWhenDownload, !vm.isBookmarked {
+            Task { await vm.toggleBookmark() }
+        }
 
         let total = Double(urls.count)
         download = .downloading(0)
@@ -1520,18 +2148,28 @@ private struct BottomActionBar: View {
 
     private var bookmarkButton: some View {
         Button {
-            Task { await vm.toggleBookmark() }
+            Task {
+                let willBookmark = !vm.isBookmarked
+                await vm.toggleBookmark()
+                // `isAutoDownloadAfterStar`: bookmarking pulls every page down.
+                if willBookmark, settings.autoDownloadAfterStar {
+                    await runDownload(.original)
+                }
+            }
         } label: {
-            // Upstream `ic_favorite`: the heart is ALWAYS filled — white when
-            // not bookmarked, `has_bookmarked` red when bookmarked.
+            // Upstream `ic_favorite`: the heart is ALWAYS filled — the pill's
+            // content color when not bookmarked, `has_bookmarked` red when it is.
             Image(systemName: "heart.fill")
-                .font(.title3)
-                .foregroundStyle(vm.isBookmarked ? Theme.v3Bookmarked : .white)
+                .font(.system(size: 24))
+                .foregroundStyle(vm.isBookmarked ? Theme.v3Bookmarked : Theme.v3FloatingPillContent)
                 .frame(width: 60, height: 40)
                 .contentShape(.rect)
         }
         .buttonStyle(.plain)
         .disabled(vm.isBookmarking || vm.illust == nil)
+        // Upstream long-press goes straight to `SelectTagBottomSheet`; the
+        // public/private rows ride along because iOS has no separate gesture
+        // for the "私密收藏" preference the Android setting covers.
         .contextMenu {
             if !vm.isBookmarked {
                 Button {
@@ -1551,6 +2189,20 @@ private struct BottomActionBar: View {
                 Label(l10n.t(.bookmarkWithTags), systemImage: "tag")
             }
         }
+    }
+
+    // MARK: Jump to comments (#970)
+
+    private var commentButton: some View {
+        Button(action: onJumpToComments) {
+            Image(systemName: "bubble.left.fill")
+                .font(.system(size: 24))
+                .foregroundStyle(Theme.v3FloatingPillContent)
+                .frame(width: 60, height: 40)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(l10n.t(.artworkV3JumpToComments))
     }
 }
 

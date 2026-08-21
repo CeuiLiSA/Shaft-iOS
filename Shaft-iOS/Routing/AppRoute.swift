@@ -12,7 +12,12 @@ enum AppRoute: Hashable, Codable, Sendable {
     case tagResults(tag: String)
     case relatedIllusts(illustId: Int64)
     case userIllusts(userId: Int64, type: String)
-    case userIllustTag(userId: Int64, tag: String)
+    /// Works of one author filtered by a tag. `category` is the upstream web
+    /// ajax path segment — "illusts" / "manga" / "novels" (`UserTagSearchSheet`).
+    case userIllustTag(userId: Int64, tag: String, category: String)
+    /// A user's illust/manga/novel list opened at an arbitrary page offset —
+    /// the 「跳转到…」 entry (upstream `UserIllustJumpHelper`).
+    case userWorksJump(userId: Int64, type: String, offset: Int, targetDate: String?)
     case userBookmarks(userId: Int64)
     case userNovelBookmarks(userId: Int64)
     case userNovels(userId: Int64)
@@ -51,6 +56,18 @@ enum AppRoute: Hashable, Codable, Sendable {
     case currentHot
     case siteRecommend
     case eventHistory
+    /// Discover tab (FragmentCenter) destinations
+    case webArticle(url: String)
+    case niceFriendWorks
+    case followingNovels
+    case artistRank(mode: String)        // "total" 画师榜 / "avg" 画师均分榜
+    case viewRank
+    case pixivComic
+    case bookmarkRank(aiOnly: Bool)      // 收藏榜 / AI榜
+    case yearRank
+    case tagRank
+    case wallpaperRank
+    case discoveryFeed
 
     enum CommentTarget: Hashable, Codable, Sendable {
         case illust(Int64)

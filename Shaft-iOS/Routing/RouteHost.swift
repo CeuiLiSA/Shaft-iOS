@@ -48,8 +48,10 @@ struct RouteHost: ViewModifier {
                 RelatedIllustsView(illustId: id)
             case .userIllusts(let userId, let type):
                 UserIllustsView(userId: userId, type: type)
-            case .userIllustTag(let userId, let tag):
-                UserIllustTagView(userId: userId, tag: tag)
+            case .userIllustTag(let userId, let tag, let category):
+                UserIllustTagView(userId: userId, tag: tag, category: category)
+            case .userWorksJump(let userId, let type, let offset, let targetDate):
+                UserWorksJumpListView(userId: userId, type: type, offset: offset, targetDate: targetDate)
             case .userBookmarks(let userId):
                 UserBookmarksView(userId: userId)
             case .userNovelBookmarks(let userId):
@@ -126,6 +128,34 @@ struct RouteHost: ViewModifier {
                 SiteRecommendView()
             case .eventHistory:
                 EventHistoryView()
+            case .webArticle(let urlString):
+                if let url = URL(string: urlString) {
+                    WebArticleView(url: url)
+                } else {
+                    PlaceholderView(title: urlString, systemImage: "link")
+                }
+            case .niceFriendWorks:
+                NiceFriendIllustsView()
+            case .followingNovels:
+                FollowingNovelsView()
+            // Discover "其他分类" entries whose upstream pages (shaft-api-v2 榜单 /
+            // pixiv 漫画 / 算法发现流) are not ported yet — placeholder until then.
+            case .artistRank(let mode):
+                DiscoverPendingView(titleKey: mode == "avg" ? .artistAvgRank : .artistRank)
+            case .viewRank:
+                DiscoverPendingView(titleKey: .viewRank)
+            case .pixivComic:
+                DiscoverPendingView(titleKey: .pixivComic)
+            case .bookmarkRank(let aiOnly):
+                DiscoverPendingView(titleKey: aiOnly ? .aiRank : .bookmarkRank)
+            case .yearRank:
+                DiscoverPendingView(titleKey: .yearRank)
+            case .tagRank:
+                DiscoverPendingView(titleKey: .tagRank)
+            case .wallpaperRank:
+                DiscoverPendingView(titleKey: .wallpaperRank)
+            case .discoveryFeed:
+                DiscoverPendingView(titleKey: .discoveryFeed)
         }
     }
 }

@@ -186,8 +186,11 @@ actor PixivAPI {
 
     // MARK: User
 
+    /// `v2` + `filter=for_ios`, matching upstream `AppApi.getUserDetailV2`: same
+    /// shape as v1 plus `is_accept_request` / `badge` / `disabled_links` on the
+    /// user object (v1 was deleted upstream, everything goes through v2).
     func userDetail(_ userId: Int64) async throws -> UserDetailResponse {
-        let response: UserDetailResponse = try await get(path: "/v1/user/detail", query: [
+        let response: UserDetailResponse = try await get(path: "/v2/user/detail", query: [
             "user_id": "\(userId)",
             "filter": "for_ios",
         ])
@@ -209,6 +212,38 @@ actor PixivAPI {
             "type": type,
             "filter": "for_ios",
         ])
+    }
+
+    /// Same list starting at an arbitrary `offset` — the "跳转到插画…" entry point
+    /// (upstream `UserIllustJumpHelper` / `buildOffsetUrl`). pixiv accepts any
+    /// offset on this endpoint.
+    func userIllusts(_ userId: Int64, type: String, offset: Int) async throws -> IllustResponse {
+        try await get(path: "/v1/user/illusts", query: [
+            "user_id": "\(userId)",
+            "type": type,
+            "filter": "for_ios",
+            "offset": "\(offset)",
+        ])
+    }
+
+    func userNovels(_ userId: Int64, offset: Int) async throws -> NovelResponse {
+        try await get(path: "/v1/user/novels", query: [
+            "user_id": "\(userId)",
+            "offset": "\(offset)",
+        ])
+    }
+
+    /// `is_followed` only says *whether*; this says *how* (public vs private),
+    /// which the header pill needs to show 「悄悄关注中」 (upstream
+    /// `AppApi.getFollowDetail` + `followRestrictOf`).
+    func userFollowDetail(_ userId: Int64) async throws -> UserFollowDetailResponse {
+        try await get(path: "/v1/user/follow/detail", query: ["user_id": "\(userId)"])
+    }
+
+    /// Commission plans, shown as the 约稿中 tab when `is_accept_request` is set.
+    /// Single page, no `next_url` (upstream `getUserRequestPlans`).
+    func userRequestPlans(_ userId: Int64) async throws -> UserRequestPlansResponse {
+        try await get(path: "/v1/user/request-plans", query: ["user_id": "\(userId)"])
     }
 
     func userBookmarkedIllusts(
@@ -306,6 +341,12 @@ actor PixivAPI {
 
     func latestNovels() async throws -> NovelResponse {
         try await get(path: "/v1/novel/new")
+    }
+
+    /// 好P友作品 — illusts/manga from mutual "My pixiv" friends (upstream
+    /// `API.getNiceFriendIllust`, `GET /v2/illust/mypixiv`, no params).
+    func niceFriendIllusts() async throws -> IllustResponse {
+        try await get(path: "/v2/illust/mypixiv")
     }
 
     // MARK: Series
