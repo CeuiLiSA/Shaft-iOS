@@ -394,4 +394,15 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     // View-history backup — local JSON export/import (pixiv/ui/history/BrowseHistoryBackup)
     case actionExport, actionImport
     case historyExportEmpty, historyImportedFmt, historyImportFailed
+
+    // MARK: 聊天室 (chat) — 1:1 with Android `chat_*` in values*/strings.xml
+    case chatDrawerEntry, chatRoomGlobalTitle, chatPreviewYouPrefix, chatRoomCount
+    case chatNewMessages, chatSelfLabel, chatInputHint, chatGlobalClosedHint
+    case chatPeerTyping, chatPeerTypingAnon, chatActionBack, chatActionMore
+    case chatActionCopy, chatActionDelete, chatActionForward, chatActionReply
+    case chatStateLoadingDefault, chatStateErrorDefault, chatStateEmptyDefault, chatStateRetry
+    case chatListLoadingMore, chatListLoadError, chatErrorNetworkUnavailable, chatErrorRequestTimeout
+    case chatErrorSecurity, chatErrorUnauthorized, chatErrorForbidden, chatErrorNotFound
+    case chatErrorGone, chatErrorRateLimited, chatErrorRateLimitedWithDelay, chatErrorServiceUnavailable
+    case chatErrorSerialization, chatErrorUnknown, chatWithHim
 }

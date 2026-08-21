@@ -26,6 +26,14 @@ struct MoreView: View {
                 NavigationLink(value: AppRoute.notifications) {
                     Label(l10n.t(.notificationsTitle), systemImage: "bell")
                 }
+                // 聊天室 — gated behind the same experimental toggle as
+                // upstream's drawer entry (`Settings.showChatRoomEntry`,
+                // default off), so the row only appears once the user opts in.
+                if AppSettingsStore.shared.showChatRoomEntry {
+                    NavigationLink(value: AppRoute.chatRoomList) {
+                        Label(l10n.t(.chatDrawerEntry), systemImage: "bubble.left.and.bubble.right")
+                    }
+                }
                 NavigationLink(value: AppRoute.history) {
                     Label(l10n.t(.historyTitle), systemImage: "clock.arrow.circlepath")
                 }

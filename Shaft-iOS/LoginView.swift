@@ -18,6 +18,10 @@ final class AuthViewModel {
         // Bind the anonymous shaft-api-v2 client_id to the pixiv uid (cached/idempotent).
         if let uid = token?.user?.id {
             Task { await ShaftEventReporter.shared.bindUid(uid) }
+            // One chat WS per process, opened as soon as the uid is known — doc
+            // §12 requires a DM to reach the local store even when no chat
+            // screen is open. No-ops when the uid is 0 or the build has no HMAC.
+            ShaftChatGateway.shared.start(uid: uid)
         }
     }
 
@@ -34,6 +38,7 @@ final class AuthViewModel {
                 token = response
                 if let uid = response.user?.id {
                     Task { await ShaftEventReporter.shared.bindUid(uid) }
+                    ShaftChatGateway.shared.start(uid: uid)
                 }
             } catch {
                 errorMessage = "Failed to save token: \(error.localizedDescription)"
@@ -63,6 +68,9 @@ final class AuthViewModel {
     func logout() {
         KeychainTokenStore.shared.clear()
         token = nil
+        // Close the socket rather than let it thrash on a uid the server will
+        // now reject (`bad_uid` → fatal auth → permanently disconnected).
+        ShaftChatGateway.shared.stop()
     }
 }
 

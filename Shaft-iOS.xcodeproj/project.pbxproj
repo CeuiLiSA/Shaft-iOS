@@ -130,6 +130,13 @@
 		A1000000000000000000B064 /* tunnel-atlas-lq.webp in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F064 /* tunnel-atlas-lq.webp */; };
 		A1000000000000000000B065 /* AppSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F065 /* AppSettingsStore.swift */; };
 		A1000000000000000000B066 /* ZoomImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F066 /* ZoomImageView.swift */; };
+		A1000000000000000000B906 /* ChatThreadId.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F906 /* ChatThreadId.swift */; };
+		A1000000000000000000B907 /* ChatFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F907 /* ChatFrame.swift */; };
+		A1000000000000000000B908 /* ChatModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F908 /* ChatModels.swift */; };
+		A1000000000000000000B909 /* ShaftChatAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F909 /* ShaftChatAPI.swift */; };
+		A1000000000000000000B910 /* ShaftChatGateway.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F910 /* ShaftChatGateway.swift */; };
+		A1000000000000000000B911 /* ChatRoomListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F911 /* ChatRoomListView.swift */; };
+		A1000000000000000000B912 /* ChatThreadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F912 /* ChatThreadView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -257,6 +264,13 @@
 		A1000000000000000000F064 /* tunnel-atlas-lq.webp */ = {isa = PBXFileReference; lastKnownFileType = file; path = "tunnel-atlas-lq.webp"; sourceTree = "<group>"; };
 		A1000000000000000000F065 /* AppSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsStore.swift; sourceTree = "<group>"; };
 		A1000000000000000000F066 /* ZoomImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomImageView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F906 /* ChatThreadId.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatThreadId.swift; sourceTree = "<group>"; };
+		A1000000000000000000F907 /* ChatFrame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatFrame.swift; sourceTree = "<group>"; };
+		A1000000000000000000F908 /* ChatModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatModels.swift; sourceTree = "<group>"; };
+		A1000000000000000000F909 /* ShaftChatAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShaftChatAPI.swift; sourceTree = "<group>"; };
+		A1000000000000000000F910 /* ShaftChatGateway.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShaftChatGateway.swift; sourceTree = "<group>"; };
+		A1000000000000000000F911 /* ChatRoomListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatRoomListView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F912 /* ChatThreadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatThreadView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -281,6 +295,7 @@
 		A1000000000000000000G002 /* Shaft-iOS */ = {
 			isa = PBXGroup;
 			children = (
+				A1000000000000000000G027 /* Chat */,
 				A1000000000000000000F001 /* Shaft_iOSApp.swift */,
 				A1000000000000000000F002 /* ContentView.swift */,
 				A1000000000000000000F006 /* LoginView.swift */,
@@ -600,6 +615,20 @@
 			path = "Preview Content";
 			sourceTree = "<group>";
 		};
+		A1000000000000000000G027 /* Chat */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000F911 /* ChatRoomListView.swift */,
+				A1000000000000000000F912 /* ChatThreadView.swift */,
+				A1000000000000000000F906 /* ChatThreadId.swift */,
+				A1000000000000000000F907 /* ChatFrame.swift */,
+				A1000000000000000000F908 /* ChatModels.swift */,
+				A1000000000000000000F909 /* ShaftChatAPI.swift */,
+				A1000000000000000000F910 /* ShaftChatGateway.swift */,
+			);
+			path = Chat;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -676,6 +705,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1000000000000000000B911 /* ChatRoomListView.swift in Sources */,
+				A1000000000000000000B912 /* ChatThreadView.swift in Sources */,
+				A1000000000000000000B906 /* ChatThreadId.swift in Sources */,
+				A1000000000000000000B907 /* ChatFrame.swift in Sources */,
+				A1000000000000000000B908 /* ChatModels.swift in Sources */,
+				A1000000000000000000B909 /* ShaftChatAPI.swift in Sources */,
+				A1000000000000000000B910 /* ShaftChatGateway.swift in Sources */,
 				A1000000000000000000B002 /* ContentView.swift in Sources */,
 				A1000000000000000000B001 /* Shaft_iOSApp.swift in Sources */,
 				A1000000000000000000B073 /* ReaderCore.swift in Sources */,

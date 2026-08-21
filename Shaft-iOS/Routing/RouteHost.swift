@@ -156,6 +156,10 @@ struct RouteHost: ViewModifier {
                 DiscoverPendingView(titleKey: .wallpaperRank)
             case .discoveryFeed:
                 DiscoverPendingView(titleKey: .discoveryFeed)
+            case .chatRoomList:
+                ChatRoomListView()
+            case .chatThread(let peerUid, let title):
+                ChatThreadView(peerUid: peerUid, peerTitle: title)
         }
     }
 }
