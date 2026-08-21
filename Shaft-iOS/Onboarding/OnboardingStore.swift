@@ -46,6 +46,11 @@ final class OnboardingStore {
         String(format: t(key), arg)
     }
 
+    /// Format a localized template that takes two `%@` placeholders.
+    func t(_ key: LocalizedKey, _ arg1: String, _ arg2: String) -> String {
+        String(format: t(key), arg1, arg2)
+    }
+
     func apply(tag: String) {
         chosenTag = tag
         hasUserConfigured = true

@@ -348,13 +348,16 @@ struct PixivAsyncImage: View {
     /// for small images like the author avatar where a spinner reads as "loading"
     /// even though the URL is already known from seeded data.
     var showsProgress: Bool = true
+    /// Fill shown behind the image while loading / on failure. Defaults to the
+    /// system grouped surface; V3 cards pass their own (e.g. `Theme.v3Surface2`).
+    var placeholder: Color = Color(.secondarySystemBackground)
 
     @State private var image: UIImage?
     @State private var loadFailed = false
 
     var body: some View {
         ZStack {
-            Rectangle().fill(Color(.secondarySystemBackground))
+            Rectangle().fill(placeholder)
             if let image {
                 // Overlay keeps the image layout-neutral: a `.fill` image whose
                 // aspect differs from the proposal reports a size LARGER than

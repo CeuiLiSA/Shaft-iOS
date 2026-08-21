@@ -586,7 +586,7 @@ private enum DurationChoice: Hashable, CaseIterable {
         default: return nil
         }
     }
-    func label(_ l10n: OnboardingStore) -> String {
+    @MainActor func label(_ l10n: OnboardingStore) -> String {
         switch self {
         case .any: return l10n.t(.filterDurationAll)
         case .day: return l10n.t(.searchDurationDay)

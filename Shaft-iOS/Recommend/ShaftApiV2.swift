@@ -102,6 +102,27 @@ actor ShaftApiV2Client {
         return decodeWorks(data, type: type, scoreFromBookmark: false)
     }
 
+    /// 发现页首屏聚合 — one `/api/v1/discover` call fills both shaft-api-v2
+    /// shelves (本月收藏 `site` / 当前最热 `recent`), 1:1 with upstream
+    /// `DiscoverViewModel.loadDiscover`: `site` scores by weighted `score`,
+    /// `recent` by raw `bookmark_count`; reporter bookmark state cleared;
+    /// beans without a `user` dropped; each shelf truncated to `limit`.
+    func discover(limit: Int = 12) async throws -> DiscoverShelves {
+        // No query → build the URL directly (an empty queryItems array would leave a dangling "?").
+        let data = try await getData(url: base.appendingPathComponent("/api/v1/discover"))
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw ShaftApiError.decode
+        }
+        func shelf(_ key: String, scoreFromBookmark: Bool) -> [Illust] {
+            let items = (obj[key] as? [String: Any])?["items"] as? [[String: Any]] ?? []
+            return Array(decodeIllusts(items, scoreFromBookmark: scoreFromBookmark)
+                .filter { $0.user != nil }
+                .prefix(limit))
+        }
+        return DiscoverShelves(site: shelf("site", scoreFromBookmark: false),
+                               recent: shelf("recent", scoreFromBookmark: true))
+    }
+
     // 操作记录 — reads this client's own event log by client_id (public, no auth).
     func eventsHistory(clientId: String, limit: Int = 50, before: Int64? = nil) async throws -> EventHistoryPage {
         var q = [URLQueryItem(name: "client_id", value: clientId),
@@ -150,6 +171,25 @@ actor ShaftApiV2Client {
         if let n = v as? NSNumber { return n.doubleValue }
         if let s = v as? String { return Double(s) }
         return nil
+    }
+
+    /// Illust-only variant of `decodeWorks` over an already-parsed `items` array
+    /// (the `/discover` aggregate nests two of them).
+    private func decodeIllusts(_ rawItems: [[String: Any]], scoreFromBookmark: Bool) -> [Illust] {
+        let dec = JSONDecoder()
+        var illusts: [Illust] = []
+        for it in rawItems {
+            guard var bean = it["bean"] as? [String: Any] else { continue }
+            bean["is_bookmarked"] = false
+            let score = scoreFromBookmark
+                ? Double(Self.int64(it["bookmark_count"]) ?? 0)
+                : (Self.double(it["score"]) ?? 0)
+            guard let beanData = try? JSONSerialization.data(withJSONObject: bean),
+                  var il = try? dec.decode(Illust.self, from: beanData) else { continue }
+            il.trendingScore = score
+            illusts.append(il)
+        }
+        return illusts
     }
 
     private func decodeWorks(_ data: Data, type: String, scoreFromBookmark: Bool) -> WorksPage {
@@ -224,6 +264,12 @@ struct WorksPage {
     var illusts: [Illust]
     var novels: [Novel]
     var nextUrl: String?
+}
+
+/// `/api/v1/discover` result — the two Discover-tab shelves.
+struct DiscoverShelves {
+    var site: [Illust]
+    var recent: [Illust]
 }
 
 struct EventHistoryPage {
