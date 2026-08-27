@@ -188,6 +188,7 @@ final class IllustDetailViewModel {
         do {
             try await interactions.toggleBookmark(cur, restrict: restrict)
         } catch {
+            BookmarkHaptics.failed()
             errorMessage = error.localizedDescription
         }
     }
@@ -2148,8 +2149,9 @@ private struct BottomActionBar: View {
 
     private var bookmarkButton: some View {
         Button {
+            let willBookmark = !vm.isBookmarked
+            BookmarkHaptics.commit(bookmarking: willBookmark)
             Task {
-                let willBookmark = !vm.isBookmarked
                 await vm.toggleBookmark()
                 // `isAutoDownloadAfterStar`: bookmarking pulls every page down.
                 if willBookmark, settings.autoDownloadAfterStar {
@@ -2162,10 +2164,11 @@ private struct BottomActionBar: View {
             Image(systemName: "heart.fill")
                 .font(.system(size: 24))
                 .foregroundStyle(vm.isBookmarked ? Theme.v3Bookmarked : Theme.v3FloatingPillContent)
+                .bookmarkBounce(vm.isBookmarked)
                 .frame(width: 60, height: 40)
                 .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.bookmark)
         .disabled(vm.isBookmarking || vm.illust == nil)
         // Upstream long-press goes straight to `SelectTagBottomSheet`; the
         // public/private rows ride along because iOS has no separate gesture

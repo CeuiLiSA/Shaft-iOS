@@ -69,6 +69,7 @@ final class NovelDetailViewModel {
                 Task { await ShaftEventReporter.shared.reportNovelBookmark(cur, added: true) }
             }
         } catch {
+            BookmarkHaptics.failed()
             errorMessage = error.localizedDescription
         }
     }
@@ -324,15 +325,17 @@ struct NovelDetailView: View {
     private var bottomBar: some View {
         HStack(spacing: 14) {
             Button {
+                BookmarkHaptics.commit(bookmarking: vm.novel?.isBookmarked != true)
                 Task { await vm.toggleBookmark() }
             } label: {
                 Image(systemName: (vm.novel?.isBookmarked == true) ? "heart.fill" : "heart")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle((vm.novel?.isBookmarked == true) ? Theme.v3Bookmarked : .secondary)
+                    .bookmarkBounce(vm.novel?.isBookmarked == true)
                     .frame(width: 50, height: 50)
                     .background(Color(.tertiarySystemFill), in: .circle)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.bookmark)
             .disabled(vm.isBookmarking || vm.novel == nil)
             .contextMenu { bookmarkMenu }
 

@@ -1344,16 +1344,19 @@ private struct NovelRowBookmarkButton: View {
     var body: some View {
         let bookmarked = store.isBookmarked(novel)
         Button {
+            BookmarkHaptics.commit(bookmarking: !bookmarked)
             Task {
+                do { try await store.toggleBookmark(novel: novel) } catch { BookmarkHaptics.failed() }
             }
         } label: {
             Image(systemName: "heart.fill")
                 .font(.system(size: 20))
                 .foregroundStyle(bookmarked ? Theme.v3Bookmarked : Theme.v3Text3)
+                .bookmarkBounce(bookmarked)
                 .frame(width: 36, height: 36)
                 .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.bookmark)
         .disabled(store.novelBookmarkBusy.contains(novel.id))
     }
 }

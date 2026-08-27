@@ -79,6 +79,7 @@
 		A1000000000000000000B117 /* DiscoverDestinations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F117 /* DiscoverDestinations.swift */; };
 		A1000000000000000000B048 /* WebArticleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F048 /* WebArticleView.swift */; };
 		A1000000000000000000B067 /* ProgressRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F067 /* ProgressRing.swift */; };
+		A1000000000000000000B0C1 /* BookmarkFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F0C1 /* BookmarkFeedback.swift */; };
 		A1000000000000000000B068 /* InteractionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F068 /* InteractionStore.swift */; };
 		A1000000000000000000B069 /* AppFonts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F069 /* AppFonts.swift */; };
 		A1000000000000000000B070 /* montserrat_medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F070 /* montserrat_medium.ttf */; };
@@ -214,6 +215,7 @@
 		A1000000000000000000F117 /* DiscoverDestinations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverDestinations.swift; sourceTree = "<group>"; };
 		A1000000000000000000F048 /* WebArticleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebArticleView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F067 /* ProgressRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressRing.swift; sourceTree = "<group>"; };
+		A1000000000000000000F0C1 /* BookmarkFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkFeedback.swift; sourceTree = "<group>"; };
 		A1000000000000000000F068 /* InteractionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InteractionStore.swift; sourceTree = "<group>"; };
 		A1000000000000000000F069 /* AppFonts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFonts.swift; sourceTree = "<group>"; };
 		A1000000000000000000F070 /* montserrat_medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = montserrat_medium.ttf; sourceTree = "<group>"; };
@@ -374,6 +376,7 @@
 				A1000000000000000000F108 /* SkeletonView.swift */,
 				A1000000000000000000F048 /* WebArticleView.swift */,
 				A1000000000000000000F067 /* ProgressRing.swift */,
+				A1000000000000000000F0C1 /* BookmarkFeedback.swift */,
 				A1000000000000000000F068 /* InteractionStore.swift */,
 				A1000000000000000000F069 /* AppFonts.swift */,
 				A1000000000000000000F070 /* montserrat_medium.ttf */,
@@ -814,6 +817,7 @@
 				A1000000000000000000B117 /* DiscoverDestinations.swift in Sources */,
 				A1000000000000000000B048 /* WebArticleView.swift in Sources */,
 				A1000000000000000000B067 /* ProgressRing.swift in Sources */,
+				A1000000000000000000B0C1 /* BookmarkFeedback.swift in Sources */,
 				A1000000000000000000B068 /* InteractionStore.swift in Sources */,
 				A1000000000000000000B069 /* AppFonts.swift in Sources */,
 				A1000000000000000000B049 /* MuteStore.swift in Sources */,

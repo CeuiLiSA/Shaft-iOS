@@ -185,16 +185,20 @@ private struct WaterfallBookmarkButton: View {
     var body: some View {
         let bookmarked = store.isBookmarked(illust)
         Button {
-            Task { try? await store.toggleBookmark(illust) }
+            BookmarkHaptics.commit(bookmarking: !bookmarked)
+            Task {
+                do { try await store.toggleBookmark(illust) } catch { BookmarkHaptics.failed() }
+            }
         } label: {
             Image(systemName: "heart.fill")
                 .font(.system(size: 22))
                 .foregroundStyle(bookmarked ? Theme.v3Bookmarked : .white)
+                .bookmarkBounce(bookmarked)
                 .shadow(color: .black.opacity(0.35), radius: 3)
                 .frame(width: 44, height: 44)
                 .contentShape(.rect)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.bookmark)
         .disabled(store.bookmarkBusy.contains(illust.id))
     }
 }
