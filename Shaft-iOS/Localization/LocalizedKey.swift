@@ -405,4 +405,8 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case chatErrorSecurity, chatErrorUnauthorized, chatErrorForbidden, chatErrorNotFound
     case chatErrorGone, chatErrorRateLimited, chatErrorRateLimitedWithDelay, chatErrorServiceUnavailable
     case chatErrorSerialization, chatErrorUnknown, chatWithHim
+
+    // MARK: FragmentCenter 漫画 / 小说 entry pages (RecmdMangaFeedFragment / FragmentNewNovel)
+    case centerRankingHeader, centerRecmdForYou, centerRecommendMangaTitle
+    case novelWordCountFmt, novelSeriesFmt
 }

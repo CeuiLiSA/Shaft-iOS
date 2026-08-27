@@ -643,9 +643,14 @@ struct SearchResultsView: View {
 
     enum Section: Hashable, CaseIterable { case illust, novel, user }
 
-    init(word: String) {
+    init(word: String, initialSection: String = "illust") {
         self.word = word
         _vm = State(wrappedValue: SearchResultsViewModel(word: word))
+        switch initialSection {
+        case "novel": _section = State(wrappedValue: .novel)
+        case "user":  _section = State(wrappedValue: .user)
+        default:      _section = State(wrappedValue: .illust)
+        }
     }
 
     /// Active dimensions on the tab currently in view, for the toolbar badge.
@@ -861,10 +866,10 @@ private struct SearchNovelList: View {
                     }
                 }
             } else {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: 0) {
                     ForEach(items) { item in
                         NavigationLink(value: item.destination) {
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: 0) {
                                 NovelRow(novel: item.novel)
                                 if let count = item.episodeCount {
                                     Text(l10n.t(
@@ -875,12 +880,12 @@ private struct SearchNovelList: View {
                                     ))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
-                                    .padding(.leading, 70)
+                                    .padding(.leading, 108)
+                                    .padding(.bottom, 8)
                                 }
                             }
                         }
                         .buttonStyle(.plain)
-                        Divider()
                     }
                     if hasMore, !items.isEmpty {
                         Color.clear
@@ -888,7 +893,6 @@ private struct SearchNovelList: View {
                             .onAppear { Task { await onLoadMore?() } }
                     }
                 }
-                .padding(.horizontal, 12)
                 .padding(.vertical, 8)
             }
         }

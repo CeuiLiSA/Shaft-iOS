@@ -19,6 +19,7 @@ final class InteractionStore {
     /// Authoritative per-id overrides. Written by local mutations and by fresh
     /// single-item server fetches; reads fall back to the model snapshot.
     private(set) var illustBookmarked: [Int64: Bool] = [:]
+    private(set) var novelBookmarked: [Int64: Bool] = [:]
     private(set) var userFollowed: [Int64: Bool] = [:]
     /// *How* a follow is set — "public" / "private". `is_followed` is only a
     /// bool, so the V3 profile pill reads this to say 「悄悄关注中」 instead of
@@ -30,6 +31,7 @@ final class InteractionStore {
     /// In-flight guards — one concurrent mutation per id; also drives the
     /// disabled state of bookmark/follow buttons.
     private(set) var bookmarkBusy: Set<Int64> = []
+    private(set) var novelBookmarkBusy: Set<Int64> = []
     private(set) var followBusy: Set<Int64> = []
 
     @ObservationIgnored private let api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
@@ -42,6 +44,10 @@ final class InteractionStore {
 
     func isBookmarked(id: Int64, fallback: Bool?) -> Bool {
         illustBookmarked[id] ?? fallback ?? false
+    }
+
+    func isBookmarked(_ novel: Novel) -> Bool {
+        novelBookmarked[novel.id] ?? novel.isBookmarked ?? false
     }
 
     func isFollowed(_ user: PixivUser) -> Bool {
@@ -74,6 +80,20 @@ final class InteractionStore {
             illustBookmarked[illust.id] = b
         }
         if let user = illust.user { ingest(user: user) }
+    }
+
+    /// The novel detail page mutates through its own API path; it reports the
+    /// outcome here so list-card hearts (and vice versa) stay in step.
+    func noteNovelBookmark(id: Int64, _ bookmarked: Bool) {
+        guard !novelBookmarkBusy.contains(id) else { return }
+        novelBookmarked[id] = bookmarked
+    }
+
+    func ingest(novel: Novel) {
+        if !novelBookmarkBusy.contains(novel.id), let b = novel.isBookmarked {
+            novelBookmarked[novel.id] = b
+        }
+        if let user = novel.user { ingest(user: user) }
     }
 
     func ingest(user: PixivUser) {
@@ -124,6 +144,47 @@ final class InteractionStore {
         // here, so no path bypasses the report and none double-reports. Fires only
         // on a real, successful mutation (busy-skip returns above; failure throws).
         Task { await ShaftEventReporter.shared.reportIllustBookmark(illust, id: id, added: target) }
+        return true
+    }
+
+    // MARK: Novel bookmark mutations (optimistic; revert + rethrow on failure)
+
+    /// Novel-card heart (upstream `NovelFeedFragment.toggleNovelLike`): flips the
+    /// color at the tap, reverts on failure.
+    func toggleBookmark(novel: Novel, restrict: String? = nil) async throws {
+        try await setNovelBookmarked(!isBookmarked(novel), id: novel.id, restrict: restrict, tags: [], novel: novel)
+    }
+
+    func bookmark(novelId: Int64, restrict: String, tags: [String], novel: Novel? = nil) async throws {
+        try await setNovelBookmarked(true, id: novelId, restrict: restrict, tags: tags, novel: novel)
+    }
+
+    @discardableResult
+    private func setNovelBookmarked(_ target: Bool, id: Int64, restrict: String?, tags: [String], novel: Novel?) async throws -> Bool {
+        guard !novelBookmarkBusy.contains(id) else { return false }
+        novelBookmarkBusy.insert(id)
+        defer { novelBookmarkBusy.remove(id) }
+        let previous = novelBookmarked[id]
+        novelBookmarked[id] = target
+        do {
+            if target {
+                let resolvedRestrict = restrict
+                    ?? (AppSettingsStore.shared.privateStar ? "private" : "public")
+                _ = try await api.bookmarkNovel(id, restrict: resolvedRestrict, tags: tags)
+            } else {
+                _ = try await api.unbookmarkNovel(id)
+            }
+        } catch {
+            if let previous {
+                novelBookmarked[id] = previous
+            } else {
+                novelBookmarked.removeValue(forKey: id)
+            }
+            throw error
+        }
+        if let novel {
+            Task { await ShaftEventReporter.shared.reportNovelBookmark(novel, added: target) }
+        }
         return true
     }
 

@@ -6,9 +6,14 @@ enum AppRoute: Hashable, Codable, Sendable {
     case illustDetail(Int64)
     case novelDetail(Int64)
     case userProfile(Int64)
-    case ranking(initialMode: String)
+    /// `kind` = "illust" / "manga" / "novel" — which ranking board opens
+    /// (upstream `RankActivity` `dataType` 插画/漫画/小说). Mode strings overlap
+    /// between illust and novel boards ("day"), so the kind must be explicit.
+    case ranking(initialMode: String, kind: String = "illust")
     case search
-    case searchResults(word: String)
+    /// `section` = "illust" / "novel" / "user" — the tab shown first (upstream
+    /// `SearchActivity` `Params.INDEX`).
+    case searchResults(word: String, section: String = "illust")
     case tagResults(tag: String)
     case relatedIllusts(illustId: Int64)
     case userIllusts(userId: Int64, type: String)

@@ -439,6 +439,20 @@ struct NovelResponse: Codable, Sendable {
     }
 }
 
+/// `/v1/novel/recommended?include_ranking_novels=true` — upstream
+/// `NovelRecommendResponse`: `NovelResponse` plus the first-page `ranking_novels`.
+struct NovelRecommendResponse: Codable, Sendable {
+    let novels: [Novel]
+    let rankingNovels: [Novel]?
+    let nextUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case novels
+        case rankingNovels = "ranking_novels"
+        case nextUrl = "next_url"
+    }
+}
+
 struct NovelDetailResponse: Codable, Sendable {
     let novel: Novel
 }

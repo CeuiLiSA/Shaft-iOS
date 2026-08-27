@@ -102,6 +102,7 @@ final class NovelDetailViewModel {
             xRestrict: n.xRestrict, novelAIType: n.novelAIType
         )
         novel = n
+        InteractionStore.shared.noteNovelBookmark(id: novelId, isBookmarked)
     }
 }
 

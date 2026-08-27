@@ -66,6 +66,7 @@
 		A1000000000000000000B036 /* RankingDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F036 /* RankingDetailView.swift */; };
 		A1000000000000000000B037 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F037 /* DiscoverView.swift */; };
 		A1000000000000000000B038 /* WhatsNewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F038 /* WhatsNewView.swift */; };
+		A1000000000000000000B118 /* CenterRecommendViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F118 /* CenterRecommendViews.swift */; };
 		A1000000000000000000B039 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F039 /* MoreView.swift */; };
 		A1000000000000000000B040 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F040 /* SettingsView.swift */; };
 		A1000000000000000000B041 /* AboutAndPlaceholders.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F041 /* AboutAndPlaceholders.swift */; };
@@ -200,6 +201,7 @@
 		A1000000000000000000F036 /* RankingDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankingDetailView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F037 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F038 /* WhatsNewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F118 /* CenterRecommendViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CenterRecommendViews.swift; sourceTree = "<group>"; };
 		A1000000000000000000F039 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F040 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F041 /* AboutAndPlaceholders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutAndPlaceholders.swift; sourceTree = "<group>"; };
@@ -445,6 +447,7 @@
 				A1000000000000000000F037 /* DiscoverView.swift */,
 				A1000000000000000000F047 /* LatestWorksView.swift */,
 				A1000000000000000000F117 /* DiscoverDestinations.swift */,
+				A1000000000000000000F118 /* CenterRecommendViews.swift */,
 			);
 			path = Discover;
 			sourceTree = "<group>";
@@ -796,6 +799,7 @@
 				A1000000000000000000B036 /* RankingDetailView.swift in Sources */,
 				A1000000000000000000B037 /* DiscoverView.swift in Sources */,
 				A1000000000000000000B038 /* WhatsNewView.swift in Sources */,
+				A1000000000000000000B118 /* CenterRecommendViews.swift in Sources */,
 				A1000000000000000000B039 /* MoreView.swift in Sources */,
 				A1000000000000000000B040 /* SettingsView.swift in Sources */,
 				A1000000000000000000B065 /* AppSettingsStore.swift in Sources */,

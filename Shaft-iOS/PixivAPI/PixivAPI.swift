@@ -79,6 +79,17 @@ actor PixivAPI {
         ])
     }
 
+    /// 1:1 with upstream `API.getRecommendedWorksWithRanking(type)` — the
+    /// first page carries `ranking_illusts` for the horizontal ranking preview
+    /// header (`RecmdIllustFeedFragment`). `type` is `illust` or `manga`.
+    func recommendedWorksWithRanking(type: String) async throws -> HomeIllustResponse {
+        try await get(path: "/v1/\(type)/recommended", query: [
+            "include_ranking_illusts": "true",
+            "include_privacy_policy": "true",
+            "filter": "for_ios",
+        ])
+    }
+
     func recommendedManga() async throws -> HomeIllustResponse {
         try await get(path: "/v1/manga/recommended", query: [
             "include_ranking_illusts": "false",
@@ -181,6 +192,17 @@ actor PixivAPI {
     func recommendedNovels() async throws -> NovelResponse {
         try await get(path: "/v1/novel/recommended", query: [
             "include_ranking_illusts": "false",
+        ])
+    }
+
+    /// 1:1 with upstream `API.getRecommendedNovelsWithRanking()` — first page
+    /// carries `ranking_novels` for the ranking preview header
+    /// (`RecmdNovelFeedFragment`).
+    func recommendedNovelsWithRanking() async throws -> NovelRecommendResponse {
+        try await get(path: "/v1/novel/recommended", query: [
+            "include_privacy_policy": "true",
+            "filter": "for_ios",
+            "include_ranking_novels": "true",
         ])
     }
 

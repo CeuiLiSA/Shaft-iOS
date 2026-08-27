@@ -251,17 +251,15 @@ struct WhatsNewView: View {
             } else if vm.novels.isEmpty, vm.novelsLoading {
                 NovelListSkeleton()
             } else {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: 0) {
                     ForEach(vm.novels) { novel in
                         NavigationLink(value: AppRoute.novelDetail(novel.id)) {
                             NovelRow(novel: novel)
                         }
                         .buttonStyle(.plain)
-                        Divider()
+                        .contextMenu { NovelCellContextMenuItems(novel: novel) }
                     }
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
             }
             if vm.novelsLoadingMore {
                 ProgressView().frame(maxWidth: .infinity).padding()

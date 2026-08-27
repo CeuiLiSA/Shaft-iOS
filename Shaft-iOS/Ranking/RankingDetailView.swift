@@ -19,7 +19,8 @@ final class RankingDetailViewModel {
 
     @ObservationIgnored private let api: PixivAPI
 
-    init(initialMode: String) {
+    init(initialMode: String, kind: Kind = .illust) {
+        self.kind = kind
         self.mode = initialMode
         self.api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
     }
@@ -162,8 +163,14 @@ struct RankingDetailView: View {
     @State private var showDatePicker = false
     @Environment(OnboardingStore.self) private var l10n
 
-    init(initialMode: String) {
-        _vm = State(wrappedValue: RankingDetailViewModel(initialMode: initialMode))
+    init(initialMode: String, kind: String = "illust") {
+        let k: RankingDetailViewModel.Kind
+        switch kind {
+        case "manga": k = .manga
+        case "novel": k = .novel
+        default:      k = .illust
+        }
+        _vm = State(wrappedValue: RankingDetailViewModel(initialMode: initialMode, kind: k))
     }
 
     private var modes: [String] {

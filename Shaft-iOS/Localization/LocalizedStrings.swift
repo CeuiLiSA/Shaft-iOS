@@ -7,6 +7,8 @@ enum LocalizedStrings {
 
     private static let table: [String: [LocalizedKey: String]] = [
         "en": [
+            .centerRankingHeader: "Popular", .centerRecmdForYou: "Recommend for you",
+            .centerRecommendMangaTitle: "Recommended Manga", .novelWordCountFmt: "%@ words", .novelSeriesFmt: "Series: %@",
             .chatDrawerEntry: "Chat Room",
             .chatRoomGlobalTitle: "Public Lounge",
             .chatPreviewYouPrefix: "You:",
@@ -733,6 +735,8 @@ enum LocalizedStrings {
             .nrMsgLoadFail: "Load failed",
         ],
         "zh-Hans": [
+            .centerRankingHeader: "排行榜", .centerRecmdForYou: "为你推荐",
+            .centerRecommendMangaTitle: "推荐漫画", .novelWordCountFmt: "%@字", .novelSeriesFmt: "系列：%@",
             .chatDrawerEntry: "聊天室",
             .chatRoomGlobalTitle: "公屏闲聊",
             .chatPreviewYouPrefix: "你:",
@@ -1456,6 +1460,8 @@ enum LocalizedStrings {
             .nrMsgLoadFail: "加载失败",
         ],
         "zh-Hant": [
+            .centerRankingHeader: "排行榜", .centerRecmdForYou: "為你推薦",
+            .centerRecommendMangaTitle: "推薦漫畫", .novelWordCountFmt: "%@ 字", .novelSeriesFmt: "系列：%@",
             .chatDrawerEntry: "聊天室",
             .chatRoomGlobalTitle: "公屏閒聊",
             .chatPreviewYouPrefix: "你:",
@@ -2079,6 +2085,8 @@ enum LocalizedStrings {
             .nrMsgLoadFail: "載入失敗",
         ],
         "ja": [
+            .centerRankingHeader: "ランキング", .centerRecmdForYou: "おすすめ",
+            .centerRecommendMangaTitle: "おすすめマンガ", .novelWordCountFmt: "%@ 文字", .novelSeriesFmt: "シリーズ：%@",
             .chatDrawerEntry: "チャットルーム",
             .chatRoomGlobalTitle: "公開ラウンジ",
             .chatPreviewYouPrefix: "自分:",
@@ -2602,6 +2610,8 @@ enum LocalizedStrings {
             .actionDelete: "削除",
         ],
         "ko": [
+            .centerRankingHeader: "순위표", .centerRecmdForYou: "추천 해 드릴 게 요.",
+            .centerRecommendMangaTitle: "추천 만화", .novelWordCountFmt: "%@자", .novelSeriesFmt: "시리즈: %@",
             .chatDrawerEntry: "채팅방",
             .chatRoomGlobalTitle: "공개 라운지",
             .chatPreviewYouPrefix: "나:",
@@ -3125,6 +3135,8 @@ enum LocalizedStrings {
             .actionDelete: "삭제",
         ],
         "ru": [
+            .centerRankingHeader: "Популярное", .centerRecmdForYou: "Рекомендации для вас",
+            .centerRecommendMangaTitle: "Рекомендуемая манга", .novelWordCountFmt: "%@ слов", .novelSeriesFmt: "Серия: %@",
             .chatDrawerEntry: "Чат",
             .chatRoomGlobalTitle: "Общий чат",
             .chatPreviewYouPrefix: "Вы:",
@@ -3649,6 +3661,8 @@ enum LocalizedStrings {
             .actionDelete: "Удалить",
         ],
         "tr": [
+            .centerRankingHeader: "Popüler", .centerRecmdForYou: "Senin için önerilenler",
+            .centerRecommendMangaTitle: "Önerilen Manga", .novelWordCountFmt: "%@ kelime", .novelSeriesFmt: "Seri: %@",
             .chatDrawerEntry: "Sohbet Odası",
             .chatRoomGlobalTitle: "Genel Sohbet",
             .chatPreviewYouPrefix: "Siz:",

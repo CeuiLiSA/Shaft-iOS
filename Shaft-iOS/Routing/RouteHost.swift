@@ -36,12 +36,12 @@ struct RouteHost: ViewModifier {
                 NovelDetailView(novelId: id)
             case .userProfile(let id):
                 UserProfileView(userId: id)
-            case .ranking(let mode):
-                RankingDetailView(initialMode: mode)
+            case .ranking(let mode, let kind):
+                RankingDetailView(initialMode: mode, kind: kind)
             case .search:
                 SearchView()
-            case .searchResults(let word):
-                SearchResultsView(word: word)
+            case .searchResults(let word, let section):
+                SearchResultsView(word: word, initialSection: section)
             case .tagResults(let tag):
                 SearchResultsView(word: tag)
             case .relatedIllusts(let id):

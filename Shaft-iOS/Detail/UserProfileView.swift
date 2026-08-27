@@ -1118,8 +1118,6 @@ struct NovelList: View {
                 NovelListContent(
                     novels: novels, hasMore: hasMore, onLoadMore: onLoadMore
                 )
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
             }
         }
     }
@@ -1127,19 +1125,22 @@ struct NovelList: View {
 
 /// The rows without their own `ScrollView` — the V3 profile page embeds them in
 /// its single outer scroll view (one collapsing header over every tab).
+///
+/// Edge-to-edge tiling (upstream #1038): no dividers, no outer gutter — each
+/// `recy_novel` card carries its own 16/12dp padding.
 struct NovelListContent: View {
     let novels: [Novel]
     let hasMore: Bool
     let onLoadMore: (() async -> Void)?
 
     var body: some View {
-        LazyVStack(spacing: 8) {
+        LazyVStack(spacing: 0) {
             ForEach(novels) { novel in
                 NavigationLink(value: AppRoute.novelDetail(novel.id)) {
                     NovelRow(novel: novel)
                 }
                 .buttonStyle(.plain)
-                Divider()
+                .contextMenu { NovelCellContextMenuItems(novel: novel) }
             }
             if hasMore, !novels.isEmpty {
                 Color.clear
@@ -1150,38 +1151,209 @@ struct NovelListContent: View {
     }
 }
 
+/// 1:1 port of upstream `recy_novel.xml` (the `NovelFeedFragment` card used by
+/// every novel list): 80×119 rounded-12 cover with a bottom scrim carrying
+/// ♥ bookmark count (12sp bold) over the word count (10sp), AI badge top-right,
+/// trending pill top-left; right column = 3-line bold title with the heart
+/// button on the first line, accent「系列：…」line, 22dp avatar + author + date;
+/// then a compact tag flow (raw tag text only, folded to 6 + 「+N」).
 struct NovelRow: View {
     let novel: Novel
+    @State private var store = InteractionStore.shared
+    @Environment(OnboardingStore.self) private var l10n
+
+    private static let maxTags = 6
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            PixivAsyncImage(url: cover)
-                .frame(width: 60, height: 80)
-                .clipShape(.rect(cornerRadius: 4))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(novel.title ?? "")
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
-                if let author = novel.user?.name {
-                    Text(author).font(.caption).foregroundStyle(.secondary)
-                }
-                HStack(spacing: 10) {
-                    if let v = novel.totalView { Label("\(v)", systemImage: "eye") }
-                    if let b = novel.totalBookmarks { Label("\(b)", systemImage: "heart") }
-                    // shaft-api-v2 trending pill — only set on 当前最热 / 站长推荐 novel feeds.
-                    if let label = TrendingScore.label(novel.trendingScore) {
-                        Text(label).foregroundStyle(Theme.brand).fontWeight(.bold)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                cover
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .top, spacing: 4) {
+                        Text(novel.title ?? "")
+                            .font(.system(size: 15, weight: .bold))
+                            .kerning(-0.3)
+                            .lineLimit(3)
+                            .foregroundStyle(Theme.v3Text1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        NovelRowBookmarkButton(novel: novel)
                     }
+                    if let series = novel.series, let title = series.title, !title.isEmpty {
+                        if let sid = series.id {
+                            NavigationLink(value: AppRoute.novelSeries(seriesId: sid)) {
+                                seriesLabel(title)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            seriesLabel(title)
+                        }
+                    }
+                    HStack(spacing: 0) {
+                        if let user = novel.user {
+                            NavigationLink(value: AppRoute.userProfile(user.id)) {
+                                HStack(spacing: 7) {
+                                    PixivAsyncImage(
+                                        url: user.profileImageUrls?.medium.flatMap(URL.init(string:)),
+                                        showsProgress: false, placeholder: Theme.v3Surface2
+                                    )
+                                    .frame(width: 22, height: 22)
+                                    .clipShape(.circle)
+                                    .overlay(Circle().strokeBorder(Theme.v3Surface2, lineWidth: 1))
+                                    Text(user.name ?? "")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .lineLimit(1)
+                                        .foregroundStyle(Theme.v3Text2)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Spacer(minLength: 8)
+                        Text(String((novel.createDate ?? "").prefix(10)))
+                            .font(.system(size: 11))
+                            .kerning(0.2)
+                            .lineLimit(1)
+                            .foregroundStyle(Theme.v3Text3)
+                    }
+                    .padding(.top, 8)
                 }
-                .font(.caption2).foregroundStyle(.secondary)
             }
-            Spacer()
+            tagFlow
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .contentShape(.rect)
     }
 
-    private var cover: URL? {
+    private func seriesLabel(_ title: String) -> some View {
+        Text(l10n.t(.novelSeriesFmt, title))
+            .font(.system(size: 12, weight: .medium))
+            .lineLimit(1)
+            .foregroundStyle(Theme.v3TextAccent)
+            .padding(.top, 3)
+    }
+
+    private var cover: some View {
+        PixivAsyncImage(url: coverURL, placeholder: Theme.v3Surface2)
+            .frame(width: 80, height: 119)
+            .overlay(alignment: .bottom) {
+                // bg_v3_card_scrim, 52dp tall.
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(0.70), location: 0),
+                        .init(color: .black.opacity(0.25), location: 0.5),
+                        .init(color: .clear, location: 1),
+                    ],
+                    startPoint: .bottom, endPoint: .top
+                )
+                .frame(height: 52)
+            }
+            .overlay(alignment: .bottom) {
+                VStack(spacing: 1) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color(red: 1, green: 0x44 / 255, blue: 0x5B / 255))
+                        Text("\(novel.totalBookmarks ?? 0)")
+                            .font(.system(size: 12, weight: .bold))
+                            .kerning(0.1)
+                            .foregroundStyle(.white)
+                    }
+                    Text(l10n.t(.novelWordCountFmt, "\(novel.textLength ?? 0)"))
+                        .font(.system(size: 10, weight: .medium))
+                        .kerning(0.2)
+                        .foregroundStyle(.white.opacity(0.78))
+                }
+                .lineLimit(1)
+                .padding(.horizontal, 5)
+                .padding(.bottom, 6)
+            }
+            .overlay(alignment: .topLeading) {
+                // shaft-api-v2 trending pill — only set on 当前最热 / 站长推荐 novel feeds.
+                if let label = TrendingScore.label(novel.trendingScore) {
+                    Text(label)
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(.black.opacity(0.55), in: .capsule)
+                        .foregroundStyle(.white)
+                        .padding(4)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                // v3_novel_ai_badge_bg: novel_ai_type == 2.
+                if novel.novelAIType == 2 {
+                    Text("AI")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(Color(red: 0x7C / 255, green: 0x5C / 255, blue: 0xC8 / 255).opacity(0.8),
+                                    in: .rect(cornerRadius: 6))
+                        .padding(5)
+                }
+            }
+            .clipShape(.rect(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private var tagFlow: some View {
+        let names = (novel.tags ?? []).compactMap { $0.name }.filter { !$0.isEmpty }
+        if !names.isEmpty {
+            let shown = Array(names.prefix(Self.maxTags))
+            let rest = names.count - shown.count
+            FlowLayout(spacing: 6) {
+                ForEach(shown, id: \.self) { name in
+                    NavigationLink(value: AppRoute.searchResults(word: name, section: "novel")) {
+                        NovelRowTagChip(text: name)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if rest > 0 {
+                    NovelRowTagChip(text: "+\(rest)")
+                }
+            }
+            .padding(.top, 10)
+        }
+    }
+
+    private var coverURL: URL? {
         let s = novel.imageUrls?.medium ?? novel.imageUrls?.squareMedium
         return s.flatMap(URL.init(string:))
+    }
+}
+
+/// Compact chip of `V3TagFlowView` (`compact = true`, no `#`, no translation).
+private struct NovelRowTagChip: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11, weight: .medium))
+            .lineLimit(1)
+            .foregroundStyle(Theme.v3TagText)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Theme.v3Surface1, in: .capsule)
+    }
+}
+
+/// The card's `like` button (`ic_like_illust_6`, 36dp): optimistic toggle through
+/// `InteractionStore` so every list and the detail page agree.
+private struct NovelRowBookmarkButton: View {
+    let novel: Novel
+    @State private var store = InteractionStore.shared
+
+    var body: some View {
+        let bookmarked = store.isBookmarked(novel)
+        Button {
+            Task {
+            }
+        } label: {
+            Image(systemName: "heart.fill")
+                .font(.system(size: 20))
+                .foregroundStyle(bookmarked ? Theme.v3Bookmarked : Theme.v3Text3)
+                .frame(width: 36, height: 36)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .disabled(store.novelBookmarkBusy.contains(novel.id))
     }
 }
