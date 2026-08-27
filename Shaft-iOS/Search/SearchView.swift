@@ -1,196 +1,652 @@
 import SwiftUI
+import UIKit
 import WebKit
 
+/// How the search box interprets what you typed — upstream `SearchTypeUtil`.
+/// Raw values are the Android indices; `.smart` (5) is the default and guesses
+/// URL → numeric ID (illust, then user) → keyword.
+enum SearchType: Int, CaseIterable, Identifiable {
+    case keyword = 0
+    case illustId = 1
+    case userId = 2
+    case novelId = 3
+    case url = 4
+    case smart = 5
+
+    static let `default` = SearchType.smart
+
+    var id: Int { rawValue }
+
+    var titleKey: LocalizedKey {
+        switch self {
+        case .keyword: return .searchTypeKeyword
+        case .illustId: return .searchTypeIllustId
+        case .userId: return .searchTypeUserId
+        case .novelId: return .searchTypeNovelId
+        case .url: return .searchTypeUrl
+        case .smart: return .searchTypeSmart
+        }
+    }
+
+    /// `SearchTypeUtil.getSuggestSearchType` — what a piece of clipboard text
+    /// most likely is. A bare number above 10,000,000 reads as an illust id,
+    /// smaller ones as a user id.
+    static func suggested(for content: String) -> SearchType {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .default }
+        if SearchInput.isValidURL(trimmed) { return .url }
+        if let regex = try? NSRegularExpression(pattern: #"(?:\b|\D)([1-9]\d{3,9})(?:\b|\D)"#),
+           let m = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)),
+           let r = Range(m.range(at: 1), in: trimmed),
+           let number = Int64(trimmed[r]) {
+            return number > 10_000_000 ? .illustId : .userId
+        }
+        return .default
+    }
+}
+
+/// Small input classifiers shared by the search box (`Common.isNumeric`,
+/// `URLUtil.isValidUrl`).
+enum SearchInput {
+    static func isNumeric(_ s: String) -> Bool {
+        !s.isEmpty && s.allSatisfy { $0.isASCII && $0.isNumber }
+    }
+
+    /// `URLUtil.isValidUrl`: an http(s)/pixiv scheme with a host.
+    static func isValidURL(_ s: String) -> Bool {
+        guard let url = URL(string: s), let scheme = url.scheme?.lowercased() else { return false }
+        switch scheme {
+        case "http", "https": return !(url.host ?? "").isEmpty
+        case "pixiv": return true
+        default: return false
+        }
+    }
+}
+
+/// Search landing page — 1:1 port of Pixiv-Shaft `FragmentSearch` /
+/// `fragment_search.xml`:
+///
+/// - header row: pill input (placeholder = current search type,
+///   trailing ✕ once there's text) + 「切换」 opening the search-type picker;
+/// - 置顶标签 (清空 / 查看全部) → 搜索历史 (清空) → 搜索发现 (first 15 hot tags as
+///   `tag/translated` chips), all `TagFlowLayout`-style text chips;
+/// - autocomplete overlay for the *last* space-separated word (keyword / smart
+///   types only, never for a bare number), tap → search that tag, long-press →
+///   replace the last word in the box;
+/// - keyword searches are written to history by the results page (upstream
+///   `SearchActivity`), ID / URL jumps are written here.
 struct SearchView: View {
     @State private var word: String = ""
-    @State private var suggestions: [AutoCompleteTag] = []
+    @State private var searchType: SearchType = .default
+    @State private var hasSwitchedSearchType = false
+    @State private var typePickerFromClipboard = false
+
+    @State private var hints: [AutoCompleteTag] = []
+    @State private var hintKeyword = ""
+    @State private var hintsVisible = false
+    @FocusState private var inputFocused: Bool
+
     @State private var trending: [TrendingTag] = []
     @State private var loadingTrending = false
     @State private var history = SearchHistoryStore.shared
     @State private var pinned = PinnedTagsStore.shared
+
+    /// The one confirmation dialog this page can show at a time — a single
+    /// modifier instead of five stacked ones, which SwiftUI does not reliably
+    /// honour on the same view.
+    @State private var dialog: SearchDialog?
+    @State private var toast: String?
+    @State private var toastTask: Task<Void, Never>?
+    @State private var resolvingSmartId = false
+
     @Environment(OnboardingStore.self) private var l10n
+    @Environment(\.pushRoute) private var pushRoute
 
     @ObservationIgnored private let api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
 
-    private let gridColumns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8),
-    ]
+    /// `Params.FRAGMENT_SEARCH_CLIPBOARD_VALUE` — upstream remembers the exact
+    /// clipboard string the user already answered the picker for. iOS can't
+    /// read the pasteboard without a system prompt, so we remember its
+    /// `changeCount` instead, which identifies the same contents just as well.
+    private static let confirmedClipboardKey = "fragment_search_clipboard_change_count"
 
     var body: some View {
         VStack(spacing: 0) {
-            searchBar
-            content
+            header
+            ZStack(alignment: .top) {
+                landing
+                if hintsVisible {
+                    hintList
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
         }
-        .navigationTitle(l10n.t(.searchTitle))
+        .background(Color(.systemBackground))
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) { toastOverlay }
+        .overlay { if resolvingSmartId { loadingOverlay } }
+        .confirmationDialog(
+            dialog.map(dialogTitle) ?? "", isPresented: dialogPresented,
+            titleVisibility: .visible, presenting: dialog
+        ) { dialog in
+            dialogButtons(dialog)
+        }
         .task { await loadTrendingIfNeeded() }
-        .task(id: word) {
-            try? await Task.sleep(nanoseconds: 250_000_000)
-            guard !word.isEmpty else { suggestions = []; return }
-            suggestions = (try? await api.autocompleteTags(prefix: word))?.tags ?? []
+        .task(id: autocompleteRequest) { await runAutocomplete() }
+        .onAppear { predictSearchType() }
+        .onChange(of: inputFocused) { _, focused in
+            if focused { showHintsIfAvailable() }
         }
     }
 
-    // MARK: Search bar
+    // MARK: Header (top_rela)
 
-    private var searchBar: some View {
-        HStack {
-            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField(l10n.t(.searchPlaceholder), text: $word)
-                .textInputAutocapitalization(.never)
-                .submitLabel(.search)
-            if !word.isEmpty {
-                Button { word = ""; suggestions = [] } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary)
+    private var header: some View {
+        HStack(spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color(.systemGray))
+                TextField(typeLabel(searchType, marked: false), text: $word)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.primary)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.search)
+                    .focused($inputFocused)
+                    .onSubmit(submit)
+                    .onTapGesture { inputFocused = true; showHintsIfAvailable() }
+                if !word.isEmpty {
+                    Button {
+                        word = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 17))
+                            .foregroundStyle(Color(.systemGray2))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
+            .padding(.leading, 12)
+            .padding(.trailing, 8)
+            .frame(height: 36)
+            .background(Color(.secondarySystemBackground), in: .capsule)
+
+            Button(l10n.t(.searchSwitchType)) {
+                typePickerFromClipboard = false
+                dialog = .typePicker
+            }
+            .font(.system(size: 14))
+            .foregroundStyle(Theme.brand)
         }
-        .padding(10)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 10))
-        .padding(.horizontal, 12).padding(.top, 8)
+        .padding(.leading, 16)
+        .padding(.trailing, 16)
+        .padding(.vertical, 12)
     }
 
-    // MARK: Content — empty (history + trending) vs typing (autocomplete)
-
-    @ViewBuilder private var content: some View {
-        let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            emptyState
-        } else {
-            suggestionList(trimmed: trimmed)
-        }
+    private func typeLabel(_ type: SearchType, marked: Bool = true) -> String {
+        let name = l10n.t(type.titleKey)
+        return marked && type == searchType ? "✓ \(name)" : name
     }
 
-    /// The landing surface: recent-search chips plus the trending-tags grid.
-    private var emptyState: some View {
+    // MARK: Landing (scroll_view)
+
+    private var landing: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                if !history.entries.isEmpty {
-                    historySection
-                }
-                trendingSection
+            VStack(alignment: .leading, spacing: 0) {
+                if !pinned.tags.isEmpty { pinnedSection }
+                if !history.entries.isEmpty { historySection }
+                discoverSection
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 14)
             .padding(.bottom, 24)
+        }
+        .scrollDismissesKeyboard(.immediately)
+        .contentShape(Rectangle())
+        .onTapGesture { hideHints() }
+    }
+
+    private var pinnedSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(l10n.t(.pinnedTagsTitle)) {
+                Button(l10n.t(.actionClear)) { dialog = .clearPinned }
+                Button(l10n.t(.actionViewAll)) { pushRoute(.pinnedTags) }
+            }
+            FlowLayout(spacing: 8) {
+                ForEach(pinned.tags) { tag in
+                    HistoryChip(text: tag.name, pinned: true, onDelete: nil)
+                        .onTapGesture { openKeyword(tag.name) }
+                        .onLongPressGesture { dialog = .pinnedAction(tag) }
+                }
+            }
+            .padding(.horizontal, 16)
         }
     }
 
     private var historySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(l10n.t(.searchRecent)).font(.headline)
-                Spacer()
-                Button(l10n.t(.actionClear)) { history.clear() }
-                    .font(.subheadline)
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(l10n.t(.searchHistoryTitle)) {
+                Button(l10n.t(.actionClear)) { dialog = .clearHistory }
             }
             FlowLayout(spacing: 8) {
-                ForEach(history.entries, id: \.self) { term in
-                    historyChip(term)
+                ForEach(history.entries) { entry in
+                    HistoryChip(text: entry.keyword, pinned: false) {
+                        history.remove(entry)
+                        showToast(l10n.t(.searchHistoryDeleted))
+                    }
+                    .onTapGesture { handleHistoryClick(entry) }
+                    .onLongPressGesture { dialog = .historyAction(entry) }
                 }
             }
+            .padding(.horizontal, 16)
         }
     }
 
-    private func historyChip(_ term: String) -> some View {
-        NavigationLink(value: AppRoute.searchResults(word: term)) {
-            HStack(spacing: 5) {
-                Image(systemName: "clock").font(.caption2).foregroundStyle(.secondary)
-                Text(term).font(.subheadline).lineLimit(1)
-            }
-            .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(Color(.secondarySystemBackground), in: .capsule)
-            .foregroundStyle(.primary)
-        }
-        .buttonStyle(.plain)
-        .simultaneousGesture(TapGesture().onEnded { history.record(term) })
-        .contextMenu {
-            Button(role: .destructive) { history.remove(term) } label: {
-                Label(l10n.t(.actionDelete), systemImage: "trash")
-            }
-        }
-    }
-
-    @ViewBuilder private var trendingSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(l10n.t(.subPopularTags)).font(.headline)
+    private var discoverSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader(l10n.t(.searchDiscoverTitle)) {}
             if trending.isEmpty && loadingTrending {
-                TagGridSkeleton(columns: 2, rows: 3, corner: 8)
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
             } else {
-                LazyVGrid(columns: gridColumns, spacing: 8) {
-                    ForEach(trending) { tag in
-                        NavigationLink(value: AppRoute.tagResults(tag: tag.tag ?? "")) {
-                            TagGridCell(tag: tag)
-                        }
-                        .buttonStyle(.plain)
-                        .simultaneousGesture(TapGesture().onEnded {
-                            if let t = tag.tag { history.record(t) }
-                        })
-                        .contextMenu { pinButton(name: tag.tag,
-                                                 translatedName: tag.translatedName,
-                                                 previewURL: tag.illust?.imageUrls?.squareMedium) }
-                    }
-                }
-            }
-        }
-    }
-
-    /// Typing surface: link shortcuts, the literal-search row, then keyword
-    /// suggestions (关键词联想) from `/v2/search/autocomplete`.
-    private func suggestionList(trimmed: String) -> some View {
-        List {
-            let shortcuts = PixivLinkParser.shortcuts(for: trimmed)
-            if !shortcuts.isEmpty {
-                Section(l10n.t(.searchOpenLink)) {
-                    ForEach(Array(shortcuts.enumerated()), id: \.offset) { _, s in
-                        NavigationLink(value: s.route) {
-                            Label(s.title, systemImage: s.systemImage)
-                        }
-                    }
-                }
-            }
-            NavigationLink(value: AppRoute.searchResults(word: trimmed)) {
-                Label(trimmed, systemImage: "magnifyingglass")
-            }
-            .simultaneousGesture(TapGesture().onEnded { history.record(trimmed) })
-            if !suggestions.isEmpty {
-                Section {
-                    ForEach(suggestions) { tag in
-                        NavigationLink(value: AppRoute.tagResults(tag: tag.name ?? "")) {
-                            HStack {
-                                Text(tag.name ?? "")
-                                if let t = tag.translatedName, !t.isEmpty {
-                                    Spacer()
-                                    Text(t).font(.caption).foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
+                FlowLayout(spacing: 8) {
+                    ForEach(Array(trending.prefix(15).enumerated()), id: \.offset) { _, tag in
+                        HotTagChip(text: hotTagLabel(tag))
+                            .onTapGesture {
+                                hideHints()
+                                openKeyword(tag.tag ?? "")
                             }
-                        }
-                        .simultaneousGesture(TapGesture().onEnded {
-                            if let n = tag.name { history.record(n) }
-                        })
-                        .contextMenu { pinButton(name: tag.name,
-                                                 translatedName: tag.translatedName,
-                                                 previewURL: nil) }
+                            .onLongPressGesture { UIPasteboard.general.string = tag.tag ?? "" }
                     }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+            }
+        }
+    }
+
+    private func hotTagLabel(_ tag: TrendingTag) -> String {
+        let name = tag.tag ?? ""
+        if let t = tag.translatedName, !t.isEmpty { return "\(name)/\(t)" }
+        return name
+    }
+
+    /// 14sp `second_text_color` title, `colorPrimary` 14sp actions on the right;
+    /// 24pt above, 8pt below (fragment_search.xml section headers).
+    private func sectionHeader<Actions: View>(
+        _ title: String, @ViewBuilder actions: () -> Actions
+    ) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.system(size: 14))
+                .foregroundStyle(SearchChipStyle.text)
+            Spacer()
+            actions()
+                .font(.system(size: 14))
+                .foregroundStyle(Theme.brand)
+                .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 24)
+        .padding(.bottom, 8)
+    }
+
+    // MARK: Hint list (hint_list)
+
+    private var hintList: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(hints) { tag in
+                    SearchHintRow(tag: tag, keyword: hintKeyword)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            hideHints()
+                            openKeyword(tag.name ?? "")
+                        }
+                        .onLongPressGesture { replaceLastWord(with: tag.name ?? "") }
                 }
             }
         }
-        .listStyle(.plain)
+        .background(Color(.systemBackground))
     }
 
-    /// Pin / unpin a tag from any search-surface long-press (1:1 with the
-    /// FragmentSearch pin path). Re-reads `pinned.isPinned` so the label flips.
-    @ViewBuilder
-    private func pinButton(name: String?, translatedName: String?, previewURL: String?) -> some View {
-        let isPinned = pinned.isPinned(name)
-        Button {
-            pinned.toggle(name: name, translatedName: translatedName, previewURL: previewURL)
-        } label: {
-            Label(isPinned ? l10n.t(.actionUnpinTag) : l10n.t(.actionPinTag),
-                  systemImage: isPinned ? "pin.slash" : "pin")
+    /// Long-press on a hint swaps the word being typed for the full tag and
+    /// leaves a trailing space so the next word starts clean.
+    private func replaceLastWord(with tagName: String) {
+        hideHints()
+        var keys = word.split(separator: " ").map(String.init).filter { !$0.isEmpty }
+        if keys.isEmpty {
+            keys = [tagName]
+        } else {
+            keys[keys.count - 1] = tagName
         }
+        word = keys.joined(separator: " ") + " "
+    }
+
+    // MARK: Autocomplete
+
+    /// The word the autocomplete request is keyed on, or nil when upstream's
+    /// `shouldAutocomplete` says no (empty, trailing space, wrong search type,
+    /// or a bare number in smart mode).
+    private var autocompleteRequest: String? {
+        guard !word.isEmpty, !word.hasSuffix(" ") else { return nil }
+        let allowed = searchType == .keyword
+            || (searchType == .smart && !SearchInput.isNumeric(word))
+        guard allowed else { return nil }
+        return word.split(separator: " ").last.map(String.init)
+    }
+
+    private func runAutocomplete() async {
+        guard let lastWord = autocompleteRequest, !lastWord.isEmpty else {
+            clearHints()
+            return
+        }
+        // SearchHintViewModel.DEBOUNCE_MS
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        guard !Task.isCancelled else { return }
+        do {
+            let list = try await api.autocompleteTags(prefix: lastWord).tags
+            guard !Task.isCancelled else { return }
+            hints = list
+            hintKeyword = lastWord
+            setHintsVisible(!list.isEmpty)
+        } catch {
+            guard !Task.isCancelled else { return }
+            setHintsVisible(false)
+        }
+    }
+
+    private func clearHints() {
+        hints = []
+        hintKeyword = ""
+        setHintsVisible(false)
+    }
+
+    private func hideHints() { setHintsVisible(false) }
+
+    private func showHintsIfAvailable() {
+        if !hints.isEmpty { setHintsVisible(true) }
+    }
+
+    private func setHintsVisible(_ visible: Bool) {
+        guard hintsVisible != visible else { return }
+        withAnimation(visible ? .easeOut(duration: 0.22) : .easeIn(duration: 0.16)) {
+            hintsVisible = visible
+        }
+    }
+
+    // MARK: Dispatch (dispatchClick)
+
+    private func submit() {
+        guard !word.isEmpty else {
+            showToast(l10n.t(.searchEmptyInput))
+            return
+        }
+        inputFocused = false
+        dispatch(word, type: searchType)
+    }
+
+    private func dispatch(_ keyword: String, type: SearchType) {
+        let kw = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch type {
+        case .keyword:
+            hideHints()
+            openKeyword(kw)
+        case .illustId:
+            guard SearchInput.isNumeric(kw), let id = Int64(kw) else {
+                showToast(l10n.t(.searchIdNumericOnly)); return
+            }
+            history.record(kw, kind: .illustId)
+            pushRoute(.illustDetail(id))
+        case .userId:
+            guard SearchInput.isNumeric(kw), let id = Int64(kw) else {
+                showToast(l10n.t(.searchIdNumericOnly)); return
+            }
+            history.record(kw, kind: .userId)
+            pushRoute(.userProfile(id))
+        case .novelId:
+            guard SearchInput.isNumeric(kw), let id = Int64(kw) else {
+                showToast(l10n.t(.searchIdNumericOnly)); return
+            }
+            history.record(kw, kind: .novelId)
+            pushRoute(.novelDetail(id))
+        case .url:
+            guard SearchInput.isValidURL(kw) else {
+                showToast(l10n.t(.searchInvalidUrl)); return
+            }
+            history.record(kw, kind: .url)
+            openURL(kw)
+        case .smart:
+            if SearchInput.isValidURL(kw) {
+                history.record(kw, kind: .url)
+                openURL(kw)
+            } else if SearchInput.isNumeric(kw), let id = Int64(kw) {
+                resolveSmartId(id, raw: kw)
+            } else {
+                hideHints()
+                openKeyword(kw)
+            }
+        }
+    }
+
+    /// Smart mode with a bare number: assume an illust id first; if pixiv says
+    /// no such work, fall back to treating it as a user id (upstream
+    /// `PixivOperate.getIllustByID` success / failure callbacks).
+    private func resolveSmartId(_ id: Int64, raw: String) {
+        guard !resolvingSmartId else { return }
+        resolvingSmartId = true
+        Task { @MainActor in
+            defer { resolvingSmartId = false }
+            do {
+                _ = try await api.illustDetail(id)
+                history.record(raw, kind: .illustId)
+                pushRoute(.illustDetail(id))
+            } catch {
+                history.record(raw, kind: .userId)
+                pushRoute(.userProfile(id))
+            }
+        }
+    }
+
+    /// `OutWakeActivity` — a pixiv link resolves to its in-app page; anything
+    /// else opens in the in-app web page.
+    private func openURL(_ raw: String) {
+        if let route = PixivLinkParser.shortcuts(for: raw).first?.route {
+            pushRoute(route)
+        } else {
+            pushRoute(.webArticle(url: raw))
+        }
+    }
+
+    private func openKeyword(_ keyword: String) {
+        let kw = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !kw.isEmpty else { return }
+        pushRoute(.searchResults(word: kw))
+    }
+
+    /// `handleHistoryClick` — replay the row the way it was originally searched.
+    private func handleHistoryClick(_ entry: SearchHistoryEntry) {
+        switch entry.kind {
+        case .keyword, .userKeyword:
+            hideHints()
+            openKeyword(entry.keyword)
+        case .illustId:
+            history.record(entry.keyword, kind: .illustId)
+            if let id = Int64(entry.keyword) { pushRoute(.illustDetail(id)) }
+        case .userId:
+            history.record(entry.keyword, kind: .userId)
+            if let id = Int64(entry.keyword) { pushRoute(.userProfile(id)) }
+        case .novelId:
+            history.record(entry.keyword, kind: .novelId)
+            if let id = Int64(entry.keyword) { pushRoute(.novelDetail(id)) }
+        case .url:
+            history.record(entry.keyword, kind: .url)
+            openURL(entry.keyword)
+        }
+    }
+
+    // MARK: Pin / unpin (showHistoryActionDialog)
+
+    /// Toggling `pinned` on a row moves it between the two sections.
+    private func pinFromHistory(_ entry: SearchHistoryEntry) {
+        pinned.pin(name: entry.keyword, translatedName: nil)
+        history.remove(entry)
+    }
+
+    private func unpinToHistory(_ tag: PinnedTag) {
+        pinned.unpin(tag.name)
+        history.record(tag.name, kind: .keyword)
+    }
+
+    // MARK: Dialogs
+
+    enum SearchDialog: Identifiable {
+        case typePicker
+        case clearHistory
+        case clearPinned
+        case historyAction(SearchHistoryEntry)
+        case pinnedAction(PinnedTag)
+
+        var id: String {
+            switch self {
+            case .typePicker: return "type"
+            case .clearHistory: return "clearHistory"
+            case .clearPinned: return "clearPinned"
+            case .historyAction(let e): return "history:\(e.id)"
+            case .pinnedAction(let t): return "pinned:\(t.id)"
+            }
+        }
+    }
+
+    private var dialogPresented: Binding<Bool> {
+        Binding(get: { dialog != nil }, set: { if !$0 { dialog = nil } })
+    }
+
+    private func dialogTitle(_ dialog: SearchDialog) -> String {
+        switch dialog {
+        case .typePicker:
+            return l10n.t(typePickerFromClipboard ? .searchChooseTypeClipboard : .searchChooseType)
+        case .clearHistory: return l10n.t(.searchClearHistoryMessage)
+        case .clearPinned: return l10n.t(.pinnedClearMessage)
+        case .historyAction(let entry): return entry.keyword
+        case .pinnedAction(let tag): return tag.name
+        }
+    }
+
+    @ViewBuilder
+    private func dialogButtons(_ dialog: SearchDialog) -> some View {
+        switch dialog {
+        case .typePicker:
+            ForEach(SearchType.allCases) { type in
+                Button(typeLabel(type)) { pickSearchType(type) }
+            }
+        case .clearHistory:
+            Button(l10n.t(.actionDelete), role: .destructive) {
+                history.clear()
+                showToast(l10n.t(.searchHistoryCleared))
+            }
+            Button(l10n.t(.actionCancel), role: .cancel) {}
+        case .clearPinned:
+            Button(l10n.t(.actionDelete), role: .destructive) {
+                pinned.clear()
+                showToast(l10n.t(.pinnedTagsCleared))
+            }
+            Button(l10n.t(.actionCancel), role: .cancel) {}
+        case .historyAction(let entry):
+            Button(l10n.t(.actionPinTag)) { pinFromHistory(entry) }
+            Button(l10n.t(.actionCopy)) { UIPasteboard.general.string = entry.keyword }
+            Button(l10n.t(.actionCancel), role: .cancel) {}
+        case .pinnedAction(let tag):
+            Button(l10n.t(.actionUnpinTag)) { unpinToHistory(tag) }
+            Button(l10n.t(.actionCopy)) { UIPasteboard.general.string = tag.name }
+            Button(l10n.t(.actionCancel), role: .cancel) {}
+        }
+    }
+
+    // MARK: Search type picker (popUpSearchTypeSwitcher / predictSearchType)
+
+    private func pickSearchType(_ type: SearchType) {
+        searchType = type
+        if typePickerFromClipboard {
+            UserDefaults.standard.set(UIPasteboard.general.changeCount,
+                                      forKey: Self.confirmedClipboardKey)
+            // Upstream pre-fills the box for anything but keyword / smart search.
+            if type != .keyword, type != .default,
+               let content = UIPasteboard.general.string?
+                   .trimmingCharacters(in: .whitespacesAndNewlines),
+               !content.isEmpty {
+                word = content
+            }
+        }
+    }
+
+    /// On appear, peek at the pasteboard (pattern detection only — no paste
+    /// prompt) and, if it looks like a URL or an ID, pre-select that search
+    /// type and ask the user to confirm. Once per page instance, never while
+    /// there's already text, and never twice for the same clipboard contents.
+    private func predictSearchType() {
+        guard !hasSwitchedSearchType, word.isEmpty else { return }
+        let pasteboard = UIPasteboard.general
+        guard pasteboard.hasStrings || pasteboard.hasURLs else { return }
+        let confirmed = UserDefaults.standard.integer(forKey: Self.confirmedClipboardKey)
+        guard pasteboard.changeCount != confirmed else { return }
+        Task { @MainActor in
+            let patterns: Set<PartialKeyPath<UIPasteboard.DetectedValues>> = [
+                \.probableWebURL, \.number,
+            ]
+            guard let found = try? await pasteboard.detectedPatterns(for: patterns),
+                  !found.isEmpty,
+                  !hasSwitchedSearchType, word.isEmpty else { return }
+            // Pattern detection can't tell an illust id from a user id
+            // (upstream splits at 10,000,000) and reading the text here would
+            // raise the system paste prompt before the user agreed to
+            // anything — so a bare number is offered as an illust id and the
+            // picker lets them correct it.
+            let suggested: SearchType = found.contains(\.probableWebURL) ? .url : .illustId
+            guard suggested != searchType else { return }
+            searchType = suggested
+            hasSwitchedSearchType = true
+            typePickerFromClipboard = true
+            dialog = .typePicker
+        }
+    }
+
+    // MARK: Toast / loading
+
+    private func showToast(_ message: String) {
+        toastTask?.cancel()
+        withAnimation { toast = message }
+        toastTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            withAnimation { toast = nil }
+        }
+    }
+
+    @ViewBuilder private var toastOverlay: some View {
+        if let toast {
+            Text(toast)
+                .font(.subheadline)
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.regularMaterial, in: .capsule)
+                .shadow(color: .black.opacity(0.14), radius: 10, y: 3)
+                .padding(.bottom, 24)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    private var loadingOverlay: some View {
+        VStack(spacing: 10) {
+            ProgressView().tint(.white)
+            Text(l10n.t(.searchLoading))
+                .font(.subheadline)
+                .foregroundStyle(.white)
+        }
+        .padding(24)
+        .background(Color.black.opacity(0.72), in: .rect(cornerRadius: 12))
     }
 
     // MARK: Loading
@@ -200,6 +656,112 @@ struct SearchView: View {
         loadingTrending = true
         defer { loadingTrending = false }
         trending = (try? await api.trendingTags())?.trendTags ?? []
+    }
+}
+
+// MARK: - Chips
+
+/// `normal_bg` (#f4f4f4 / #434343, 3dp corners) + `second_text_color`
+/// (#333333 / #8E8E8E) — the palette of the search page's text chips.
+enum SearchChipStyle {
+    static let fill = Color(light: 0xF4F4F4, dark: 0x434343)
+    static let text = Color(light: 0x333333, dark: 0x8E8E8E)
+    static let corner: CGFloat = 3
+}
+
+/// `recy_single_line_text_with_delete`: 8dp padding, pin icon leading for
+/// pinned rows, ✕ trailing (deletes) for recent rows.
+private struct HistoryChip: View {
+    let text: String
+    let pinned: Bool
+    let onDelete: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if pinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(SearchChipStyle.text)
+                    .frame(width: 16, height: 16)
+            }
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundStyle(SearchChipStyle.text)
+                .lineLimit(1)
+            if !pinned, let onDelete {
+                Button(action: onDelete) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(SearchChipStyle.text)
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(8)
+        .background(SearchChipStyle.fill, in: .rect(cornerRadius: SearchChipStyle.corner))
+        .contentShape(Rectangle())
+    }
+}
+
+/// `recy_single_line_text`: 12dp horizontal / 8dp vertical, 13sp.
+private struct HotTagChip: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 13))
+            .foregroundStyle(SearchChipStyle.text)
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(SearchChipStyle.fill, in: .rect(cornerRadius: SearchChipStyle.corner))
+            .contentShape(Rectangle())
+    }
+}
+
+/// `recy_search_hint`: tag name (typed part tinted `colorPrimary`) on the left,
+/// `译：<translated>` on the right when it differs, 1dp inset divider below.
+private struct SearchHintRow: View {
+    let tag: AutoCompleteTag
+    let keyword: String
+    @Environment(OnboardingStore.self) private var l10n
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text(highlighted)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let t = tag.translatedName, !t.isEmpty, t != tag.name {
+                    Text(l10n.t(.searchHintTranslatedFmt, t))
+                        .font(.system(size: 15))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            Divider().padding(.horizontal, 12)
+        }
+    }
+
+    private var highlighted: AttributedString {
+        let name = tag.name ?? ""
+        var attributed = AttributedString(name)
+        guard !keyword.isEmpty else { return attributed }
+        var searchRange = name.startIndex..<name.endIndex
+        while let found = name.range(of: keyword, options: [.caseInsensitive], range: searchRange) {
+            if let lower = AttributedString.Index(found.lowerBound, within: attributed),
+               let upper = AttributedString.Index(found.upperBound, within: attributed) {
+                attributed[lower..<upper].foregroundColor = Theme.brand
+            }
+            searchRange = found.upperBound..<name.endIndex
+        }
+        return attributed
     }
 }
 
@@ -638,6 +1200,7 @@ struct SearchResultsView: View {
     @State private var showFilter = false
     @State private var showWebLogin = false
     @State private var showUserFilterHint = false
+    @State private var historyRecorded = false
     @State private var quotaNotices = BorrowedQuotaNoticeStore.shared
     @Environment(OnboardingStore.self) private var l10n
 
@@ -797,7 +1360,16 @@ struct SearchResultsView: View {
         }) {
             PixivWebLoginSheet()
         }
-        .task { await vm.loadIllustIfNeeded() }
+        .task {
+            // Upstream SearchActivity is the single writer of keyword history:
+            // every entry (chip, hint, hot tag, typed) lands here first. Once
+            // per page — `.task` re-runs when we pop back from a detail page.
+            if !historyRecorded {
+                historyRecorded = true
+                SearchHistoryStore.shared.record(word, kind: .keyword)
+            }
+            await vm.loadIllustIfNeeded()
+        }
         .onChange(of: section) { _, value in
             Task { @MainActor in
                 switch value {

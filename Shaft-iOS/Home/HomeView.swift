@@ -41,6 +41,7 @@ struct HomeView: View {
                     }
                 }
                 .registerRoutes(auth: auth)
+                .environment(\.pushRoute, RoutePusher { path.wrappedValue.append($0) })
         }
         .tabItem {
             Label(title(for: tab), systemImage: tab.systemImage)

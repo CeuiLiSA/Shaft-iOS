@@ -390,6 +390,13 @@ enum LocalizedKey: String, CaseIterable, Sendable {
 
     // Pinned tags (1:1 port of pixiv/ui/pinned/)
     case pinnedTagsTitle, actionPinTag, actionUnpinTag, pinnedClearMessage
+    // Search landing (1:1 port of FragmentSearch / fragment_search.xml)
+    case searchTypeKeyword, searchTypeIllustId, searchTypeUserId, searchTypeNovelId, searchTypeUrl, searchTypeSmart
+    case searchSwitchType, searchHistoryTitle, searchDiscoverTitle
+    case searchChooseType, searchChooseTypeClipboard
+    case searchEmptyInput, searchIdNumericOnly, searchInvalidUrl, searchLoading
+    case searchClearHistoryMessage, searchHistoryCleared, searchHistoryDeleted, pinnedTagsCleared
+    case searchHintTranslatedFmt, actionViewAll, actionCopy, dialogTitleHint
 
     // View-history backup — local JSON export/import (pixiv/ui/history/BrowseHistoryBackup)
     case actionExport, actionImport
