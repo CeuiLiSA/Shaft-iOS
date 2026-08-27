@@ -856,6 +856,10 @@ struct ChatThreadView: View {
         .background(Theme.v3Bg)
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
+        // Opaque bar: the flipped list scrolls beneath it with the edge effect
+        // off (see `messageScrollView`), so the bar must cover it itself.
+        .toolbarBackground(Theme.v3Bg, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .overlay(alignment: .bottom) { toastOverlay }
         .task {
             vm.configureL10n({ l10n.t($0) }, languageTag: l10n.activeTag)
@@ -994,6 +998,14 @@ struct ChatThreadView: View {
     }
 
     private var messageList: some View {
+        // The safe-area inset that would normally land on this scroll view's top
+        // edge (the navigation bar) — zero whenever `connectionBanner` sits above.
+        GeometryReader { geo in
+            messageScrollView(topInset: geo.safeAreaInsets.top)
+        }
+    }
+
+    private func messageScrollView(topInset: CGFloat) -> some View {
         ScrollViewReader { proxy in
             ScrollView {
                 // `chat_fragment_demo_list.xml`: recycler paddingTop/Bottom = 8dp.
@@ -1029,6 +1041,17 @@ struct ChatThreadView: View {
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
+            // Flipped, so the automatic safe-area inset for the navigation bar
+            // would surface at the *visual bottom* (a phantom gap under the newest
+            // row) while the oldest visible row slid under the bar. Opt out and
+            // re-add the same inset at the scroll-space bottom, which after the
+            // flip is exactly the strip beneath the bar.
+            .ignoresSafeArea(.container, edges: .top)
+            .contentMargins(.bottom, topInset, for: .scrollContent)
+            // iOS 26's Liquid Glass scroll-edge blur is computed in scroll space
+            // too, so on a flipped list it blurred the whole viewport and left the
+            // strip under the bar crisp. The bar gets an opaque background instead.
+            .flippedListEdgeEffectDisabled()
             .scaleEffect(x: 1, y: -1, anchor: .center)
             .onScrollGeometryChange(for: CGFloat.self) {
                 // Flipped space: offset 0 is the newest message.
@@ -1819,5 +1842,17 @@ private enum ChatTime {
 
     private static func relative(days: Int) -> String {
         relativeFormatter.localizedString(from: DateComponents(day: days)).localizedCapitalized
+    }
+}
+
+private extension View {
+    /// Turns off the iOS 26 scroll-edge effect on every edge; a no-op on iOS 18.
+    @ViewBuilder
+    func flippedListEdgeEffectDisabled() -> some View {
+        if #available(iOS 26, *) {
+            scrollEdgeEffectStyle(nil, for: .all)
+        } else {
+            self
+        }
     }
 }
