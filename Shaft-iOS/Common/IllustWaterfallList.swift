@@ -16,8 +16,7 @@ extension Illust {
 /// Reusable two-column waterfall illust list with built-in loading / error /
 /// pull-to-refresh / load-more wiring. Each cell pushes the full `Illust`
 /// (value-based navigation → instant detail render) onto the nearest navigation
-/// stack and exposes a context menu with share,
-/// copy link, open in browser, and mute artist.
+/// stack and exposes the upstream card long-press menu (`IllustCardMenuItems`).
 struct IllustWaterfallList: View {
     let illusts: [Illust]
     let isLoading: Bool
@@ -30,9 +29,6 @@ struct IllustWaterfallList: View {
     let prefiltered: Bool
 
     @State private var mute = MuteStore.shared
-    @State private var watchLater = WatchLaterStore.shared
-    @State private var bulkSeed: BulkSelectionSeed?
-    @State private var slideshowSeed: SlideshowSeed?
     @Environment(OnboardingStore.self) private var l10n
 
     init(
@@ -77,27 +73,7 @@ struct IllustWaterfallList: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            Button {
-                                slideshowSeed = SlideshowBuilder.seed(from: visible, tapped: illust)
-                            } label: {
-                                Label(l10n.t(.slideshowPlay), systemImage: "play.rectangle.on.rectangle")
-                            }
-                            Button {
-                                watchLater.toggle(illust)
-                            } label: {
-                                let saved = watchLater.contains(illust.id)
-                                Label(
-                                    l10n.t(saved ? .watchLaterRemove : .watchLaterAdd),
-                                    systemImage: saved ? "minus.circle" : "clock.badge.checkmark"
-                                )
-                            }
-                            Button {
-                                bulkSeed = BulkSelectionSeed(illusts: visible)
-                            } label: {
-                                Label(l10n.t(.dlBulkEntry), systemImage: "checklist")
-                            }
-                            Divider()
-                            IllustCellContextMenuItems(illust: illust)
+                            IllustCardMenuItems(illust: illust) { visible }
                         }
                     }
                     .padding(.horizontal, 8)
@@ -113,12 +89,7 @@ struct IllustWaterfallList: View {
             .padding(.vertical, 8)
         }
         .refreshable { await onRefresh() }
-        .fullScreenCover(item: $bulkSeed) { seed in
-            BulkSelectView(illusts: seed.illusts)
-        }
-        .fullScreenCover(item: $slideshowSeed) { seed in
-            SlideshowView(seed: seed)
-        }
+        .cardMenuHost()
     }
 }
 
@@ -126,10 +97,18 @@ struct IllustWaterfallList: View {
 /// author label, page-count badge top-right, bookmark heart bottom-right.
 struct IllustWaterfallCell: View {
     let illust: Illust
+    @State private var mute = MuteStore.shared
 
     var body: some View {
         PixivAsyncImage(url: imageURL)
             .aspectRatio(displayAspect, contentMode: .fit)
+            // "屏蔽此作品": the card stays in place under a blur; a tap lifts
+            // the mute instead of opening the work (upstream `unmuteOr`).
+            .overlay {
+                if mute.isIllustMuted(illust.id) {
+                    CardSpoilerMask { mute.setIllustMuted(illust.id, false) }
+                }
+            }
             .clipShape(.rect(cornerRadius: 6))
             .overlay(alignment: .topTrailing) {
                 if (illust.pageCount ?? 1) > 1 {

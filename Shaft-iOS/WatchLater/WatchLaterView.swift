@@ -14,11 +14,16 @@ struct WatchLaterView: View {
     @State private var store = WatchLaterStore.shared
     @State private var slideshowSeed: SlideshowSeed?
     @State private var showClearConfirm = false
+    @State private var section: Section = .illust
     @Environment(OnboardingStore.self) private var l10n
+
+    private enum Section: Hashable { case illust, novel }
 
     var body: some View {
         Group {
-            if store.items.isEmpty {
+            if section == .novel {
+                novelList
+            } else if store.items.isEmpty {
                 ContentUnavailableView(l10n.t(.watchLaterEmpty), systemImage: "clock.badge.checkmark")
             } else {
                 // Local list: never loading, no errors, no pagination.
@@ -39,27 +44,46 @@ struct WatchLaterView: View {
         }
         .navigationTitle(l10n.t(.watchLaterTitle))
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            // Upstream keeps novels in a second list (`isNovelInWatchLater`).
+            Picker("", selection: $section) {
+                Text(l10n.t(.dynTypeIllustManga)).tag(Section.illust)
+                Text(l10n.t(.dynTypeNovel)).tag(Section.novel)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(.bar)
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button {
-                        // "播放全部": shuffle the whole saved list (upstream
-                        // `SlideshowLauncher.launchFromIllustsBeans`, random = true).
-                        if let first = store.items.first {
-                            slideshowSeed = SlideshowBuilder.seed(from: store.items, tapped: first)
+                    if section == .novel {
+                        Button(role: .destructive) {
+                            showClearConfirm = true
+                        } label: {
+                            Label(l10n.t(.watchLaterClear), systemImage: "trash")
                         }
-                    } label: {
-                        Label(l10n.t(.watchLaterPlayAll), systemImage: "play.rectangle.on.rectangle")
-                    }
-                    Button(role: .destructive) {
-                        showClearConfirm = true
-                    } label: {
-                        Label(l10n.t(.watchLaterClear), systemImage: "trash")
+                    } else {
+                        Button {
+                            // "播放全部": shuffle the whole saved list (upstream
+                            // `SlideshowLauncher.launchFromIllustsBeans`, random = true).
+                            if let first = store.items.first {
+                                slideshowSeed = SlideshowBuilder.seed(from: store.items, tapped: first)
+                            }
+                        } label: {
+                            Label(l10n.t(.watchLaterPlayAll), systemImage: "play.rectangle.on.rectangle")
+                        }
+                        Button(role: .destructive) {
+                            showClearConfirm = true
+                        } label: {
+                            Label(l10n.t(.watchLaterClear), systemImage: "trash")
+                        }
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
-                .disabled(store.items.isEmpty)
+                .disabled(section == .novel ? store.novelItems.isEmpty : store.items.isEmpty)
             }
         }
         .confirmationDialog(
@@ -67,9 +91,22 @@ struct WatchLaterView: View {
             isPresented: $showClearConfirm,
             titleVisibility: .visible
         ) {
-            Button(l10n.t(.watchLaterClearOk), role: .destructive) { store.clear() }
+            Button(l10n.t(.watchLaterClearOk), role: .destructive) {
+                if section == .novel { store.clearNovels() } else { store.clear() }
+            }
             Button(l10n.t(.actionCancel), role: .cancel) {}
         }
         .fullScreenCover(item: $slideshowSeed) { SlideshowView(seed: $0) }
+    }
+
+    @ViewBuilder
+    private var novelList: some View {
+        if store.novelItems.isEmpty {
+            ContentUnavailableView(l10n.t(.watchLaterEmpty), systemImage: "clock.badge.checkmark")
+        } else {
+            ScrollView {
+                NovelListContent(novels: store.novelItems, hasMore: false, onLoadMore: nil)
+            }
+        }
     }
 }

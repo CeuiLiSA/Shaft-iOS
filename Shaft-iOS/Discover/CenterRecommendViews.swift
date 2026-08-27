@@ -386,12 +386,13 @@ private struct RankNovelHeroStrip: View {
                         RankNovelHeroCard(novel: novel)
                     }
                     .buttonStyle(.plain)
-                    .contextMenu { NovelCellContextMenuItems(novel: novel) }
+                    .novelCardMenu(novel: novel) { novels }
                 }
             }
             .padding(.horizontal, 8)
         }
         .scrollIndicators(.hidden)
+        .cardMenuHost()
     }
 }
 

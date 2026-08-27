@@ -257,9 +257,10 @@ struct WhatsNewView: View {
                             NovelRow(novel: novel)
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { NovelCellContextMenuItems(novel: novel) }
+                        .novelCardMenu(novel: novel) { vm.novels }
                     }
                 }
+                .cardMenuHost()
             }
             if vm.novelsLoadingMore {
                 ProgressView().frame(maxWidth: .infinity).padding()

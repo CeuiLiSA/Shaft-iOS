@@ -379,6 +379,14 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     // Slideshow (1:1 port of pixiv/ui/slideshow/)
     case slideshowPlay
 
+    // Card long-press menus (IllustCardMenu / NovelCardMenu, issue #974)
+    case cardMuteWork, cardUnmuteWork, cardViewComments, cardDownloadWork, bulkActionsEntry
+    case novelBulkTitle, novelBulkSummaryFmt, dlBulkProgressFmt
+    case bulkBookmarkAddFmt, bulkBookmarkRemoveFmt, bulkBookmarkNothing, bulkBookmarkConfirmGo
+    case bulkBookmarkAddConfirmFmt, bulkBookmarkRemoveConfirmFmt, bulkBookmarkDoneFmt, bulkBookmarkSomeFailedFmt
+    case batchDownloadAllOk, batchDownloadSomeFailedFmt
+    case watchLaterAdded, watchLaterRemoved
+
     // Prime / featured tags (1:1 port of pixiv/ui/prime/)
     case primeTagsTitle
 

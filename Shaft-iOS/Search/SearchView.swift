@@ -1458,6 +1458,7 @@ private struct SearchNovelList: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .novelCardMenu(novel: item.novel) { items.map(\.novel) }
                     }
                     if hasMore, !items.isEmpty {
                         Color.clear
@@ -1468,6 +1469,7 @@ private struct SearchNovelList: View {
                 .padding(.vertical, 8)
             }
         }
+        .cardMenuHost()
     }
 }
 

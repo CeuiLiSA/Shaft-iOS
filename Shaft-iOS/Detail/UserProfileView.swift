@@ -1140,7 +1140,7 @@ struct NovelListContent: View {
                     NovelRow(novel: novel)
                 }
                 .buttonStyle(.plain)
-                .contextMenu { NovelCellContextMenuItems(novel: novel) }
+                .novelCardMenu(novel: novel) { novels }
             }
             if hasMore, !novels.isEmpty {
                 Color.clear
@@ -1148,6 +1148,7 @@ struct NovelListContent: View {
                     .onAppear { Task { await onLoadMore?() } }
             }
         }
+        .cardMenuHost()
     }
 }
 
@@ -1160,6 +1161,7 @@ struct NovelListContent: View {
 struct NovelRow: View {
     let novel: Novel
     @State private var store = InteractionStore.shared
+    @State private var mute = MuteStore.shared
     @Environment(OnboardingStore.self) private var l10n
 
     private static let maxTags = 6
@@ -1222,6 +1224,13 @@ struct NovelRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .contentShape(.rect)
+        // "屏蔽此作品" (`NovelMuteStore`): the card stays in place under a blur;
+        // a tap lifts the mute instead of opening the work (upstream `unmuteOr`).
+        .overlay {
+            if mute.isNovelMuted(novel.id) {
+                CardSpoilerMask { mute.setNovelMuted(novel.id, false) }
+            }
+        }
     }
 
     private func seriesLabel(_ title: String) -> some View {

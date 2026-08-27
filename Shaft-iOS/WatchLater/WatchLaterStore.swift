@@ -16,15 +16,17 @@ import Observation
 /// - LocalBroadcast → this `@Observable` singleton: any view reading `items`
 ///   re-renders automatically, so there is no NotificationCenter hop to make.
 ///
-/// Watch Later holds illust/manga works only (not novels or users), exactly like
-/// upstream (`EntityType.ILLUST`). It is user-curated (manual add/remove), so —
-/// like upstream — there is no size cap.
+/// Watch Later holds illust/manga works (`items`) and — since upstream issue
+/// #974 added `addNovelToWatchLater` — novels (`novelItems`) as two separate
+/// lists. It is user-curated (manual add/remove), so — like upstream — there is
+/// no size cap.
 @MainActor
 @Observable
 final class WatchLaterStore {
     static let shared = WatchLaterStore()
 
     private let key = "watch_later_v1"
+    private let novelKey = "watch_later_novels_v1"
     private let defaults = UserDefaults.standard
 
     /// Saved works, most-recently-added first (upstream orders by `updatedTime DESC`).
@@ -34,9 +36,16 @@ final class WatchLaterStore {
     /// `_watchLaterIllustIds`; card long-press menus check this each time they open.
     @ObservationIgnored private var ids: Set<Int64> = []
 
+    /// Saved novels, most-recently-added first (`isNovelInWatchLater` /
+    /// `addNovelToWatchLater` / `removeNovelFromWatchLater` upstream).
+    private(set) var novelItems: [Novel] = []
+    @ObservationIgnored private var novelIds: Set<Int64> = []
+
     private init() {
         items = load()
         ids = Set(items.map(\.id))
+        novelItems = loadNovels()
+        novelIds = Set(novelItems.map(\.id))
     }
 
     /// Whether a work is already saved — O(1), drives the card long-press menu
@@ -76,6 +85,40 @@ final class WatchLaterStore {
         save()
     }
 
+    // MARK: Novels
+
+    func containsNovel(_ id: Int64) -> Bool { novelIds.contains(id) }
+
+    func addNovel(_ novel: Novel) {
+        novelItems.removeAll { $0.id == novel.id }
+        novelItems.insert(novel, at: 0)
+        novelIds.insert(novel.id)
+        saveNovels()
+    }
+
+    func removeNovel(_ id: Int64) {
+        novelItems.removeAll { $0.id == id }
+        novelIds.remove(id)
+        saveNovels()
+    }
+
+    /// Novel-card long-press toggle. Returns the new membership (true = now saved).
+    @discardableResult
+    func toggleNovel(_ novel: Novel) -> Bool {
+        if containsNovel(novel.id) {
+            removeNovel(novel.id)
+            return false
+        }
+        addNovel(novel)
+        return true
+    }
+
+    func clearNovels() {
+        novelItems.removeAll()
+        novelIds.removeAll()
+        saveNovels()
+    }
+
     // MARK: Persistence
 
     private func load() -> [Illust] {
@@ -85,7 +128,28 @@ final class WatchLaterStore {
         return decoded
     }
 
+    private func loadNovels() -> [Novel] {
+        guard let data = defaults.data(forKey: novelKey),
+              let decoded = try? JSONDecoder().decode([Novel].self, from: data)
+        else { return [] }
+        return decoded
+    }
+
     @ObservationIgnored private var saveTask: Task<Void, Never>?
+    @ObservationIgnored private var saveNovelsTask: Task<Void, Never>?
+
+    private func saveNovels() {
+        saveNovelsTask?.cancel()
+        let snapshot = novelItems
+        let key = novelKey
+        saveNovelsTask = Task.detached(priority: .utility) {
+            try? await Task.sleep(for: .milliseconds(300))
+            guard !Task.isCancelled else { return }
+            if let data = try? JSONEncoder().encode(snapshot) {
+                UserDefaults.standard.set(data, forKey: key)
+            }
+        }
+    }
 
     /// Coalesced, off-main persistence — same pattern as `HistoryStore`: adds fire
     /// from a context-menu tap while the menu/navigation animation is running, so
