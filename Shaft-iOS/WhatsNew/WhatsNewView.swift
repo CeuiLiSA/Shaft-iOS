@@ -228,8 +228,10 @@ struct WhatsNewView: View {
                         IllustWaterfallCell(illust: illust)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu { IllustCardMenuItems(illust: illust) { visible } }
                 }
                 .padding(8)
+                .cardMenuHost()
             } else {
                 // Timeline: single-column big cards (recy_timeline_illust), no extra decoration
                 LazyVStack(spacing: 0) {

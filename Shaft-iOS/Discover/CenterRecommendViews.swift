@@ -92,7 +92,7 @@ struct MangaRecommendView: View {
                             IllustWaterfallCell(illust: illust)
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { IllustCellContextMenuItems(illust: illust) }
+                        .contextMenu { IllustCardMenuItems(illust: illust) { visible } }
                     }
                     .padding(.horizontal, 8)
                     .padding(.top, 8)
@@ -110,6 +110,7 @@ struct MangaRecommendView: View {
         }
         .background(Theme.v3Bg)
         .refreshable { await vm.load() }
+        .cardMenuHost()
         .navigationTitle(l10n.t(.centerRecommendMangaTitle))
         .navigationBarTitleDisplayMode(.inline)
         .task { await vm.loadIfNeeded() }
@@ -332,12 +333,14 @@ private struct RankIllustHeroStrip: View {
                         RankIllustHeroCard(illust: illust)
                     }
                     .buttonStyle(.plain)
-                    .contextMenu { IllustCellContextMenuItems(illust: illust) }
+                    // Rank strip: bulk / slideshow scope to this strip, not the feed below.
+                    .contextMenu { IllustCardMenuItems(illust: illust) { illusts } }
                 }
             }
             .padding(.horizontal, 8)
         }
         .scrollIndicators(.hidden)
+        .cardMenuHost()
     }
 }
 

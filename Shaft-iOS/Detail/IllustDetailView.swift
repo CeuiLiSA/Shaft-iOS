@@ -1729,9 +1729,10 @@ private struct V3RelatedSection: View {
                             IllustWaterfallCell(illust: item)
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { IllustCellContextMenuItems(illust: item) }
+                        .contextMenu { IllustCardMenuItems(illust: item) { visible } }
                     }
                     .padding(.horizontal, 8)
+                    .cardMenuHost()
 
                     // `section_v3_loading_more.xml`: a 120dp footer that also
                     // triggers the next related page (the feed's `loadMore`).

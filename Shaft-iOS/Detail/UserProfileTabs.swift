@@ -534,10 +534,6 @@ struct V3InlineIllustGrid: View {
     let onLoadMore: () async -> Void
 
     @State private var mute = MuteStore.shared
-    @State private var watchLater = WatchLaterStore.shared
-    @State private var bulkSeed: BulkSelectionSeed?
-    @State private var slideshowSeed: SlideshowSeed?
-    @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
         VStack(spacing: 0) {
@@ -551,29 +547,7 @@ struct V3InlineIllustGrid: View {
                     IllustWaterfallCell(illust: illust)
                 }
                 .buttonStyle(.plain)
-                .contextMenu {
-                    Button {
-                        slideshowSeed = SlideshowBuilder.seed(from: illusts, tapped: illust)
-                    } label: {
-                        Label(l10n.t(.slideshowPlay), systemImage: "play.rectangle.on.rectangle")
-                    }
-                    Button {
-                        watchLater.toggle(illust)
-                    } label: {
-                        let saved = watchLater.contains(illust.id)
-                        Label(
-                            l10n.t(saved ? .watchLaterRemove : .watchLaterAdd),
-                            systemImage: saved ? "minus.circle" : "clock.badge.checkmark"
-                        )
-                    }
-                    Button {
-                        bulkSeed = BulkSelectionSeed(illusts: illusts)
-                    } label: {
-                        Label(l10n.t(.dlBulkEntry), systemImage: "checklist")
-                    }
-                    Divider()
-                    IllustCellContextMenuItems(illust: illust)
-                }
+                .contextMenu { IllustCardMenuItems(illust: illust) { illusts } }
             }
             .padding(.horizontal, 8)
             .padding(.top, 8)
@@ -584,12 +558,7 @@ struct V3InlineIllustGrid: View {
                     .onAppear { Task { await onLoadMore() } }
             }
         }
-        .fullScreenCover(item: $bulkSeed) { seed in
-            BulkSelectView(illusts: seed.illusts)
-        }
-        .fullScreenCover(item: $slideshowSeed) { seed in
-            SlideshowView(seed: seed)
-        }
+        .cardMenuHost()
     }
 }
 

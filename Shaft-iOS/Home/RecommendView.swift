@@ -180,6 +180,7 @@ struct RecommendedWorksView: View {
                             IllustWaterfallCell(illust: illust)
                         }
                         .buttonStyle(.plain)
+                        .contextMenu { IllustCardMenuItems(illust: illust) { visible } }
                     }
                     .padding(.horizontal, 8)
                 } else if let err = vm.recommendedError {
@@ -200,6 +201,7 @@ struct RecommendedWorksView: View {
             .padding(.vertical, 12)
         }
         .refreshable { await vm.loadRecommend() }
+        .cardMenuHost()
         .task { await vm.loadRecommendIfNeeded() }
     }
 }
