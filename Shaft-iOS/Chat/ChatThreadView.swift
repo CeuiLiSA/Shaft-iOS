@@ -1012,6 +1012,7 @@ struct ChatThreadView: View {
                 // Flipped, so the visual bottom padding is this stack's top one.
                 LazyVStack(spacing: 0) {
                     Color.clear.frame(height: 8)
+                        .background(FlippedScrollEdgeEffectKiller())
                     ForEach(reversedRows) { row in
                         ChatBubbleRow(
                             row: row,
@@ -1853,6 +1854,34 @@ private extension View {
             scrollEdgeEffectStyle(nil, for: .all)
         } else {
             self
+        }
+    }
+}
+
+/// iOS 26 attaches a `UIScrollEdgeEffect` to the hosting `UIScrollView` for the
+/// navigation bar. Its blur mask is computed in the scroll view's own
+/// coordinate space, so on our flipped list it covers the whole viewport instead
+/// of the strip under the bar. The SwiftUI `scrollEdgeEffectStyle(nil)` modifier
+/// doesn't reach that UIKit object, so this probe walks up to the enclosing
+/// scroll view and hides the effects directly. No-op on iOS 18.
+private struct FlippedScrollEdgeEffectKiller: UIViewRepresentable {
+    func makeUIView(context: Context) -> Probe { Probe() }
+    func updateUIView(_ view: Probe, context: Context) { view.apply() }
+
+    final class Probe: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            apply()
+        }
+        func apply() {
+            guard #available(iOS 26, *) else { return }
+            var v: UIView? = superview
+            while let cur = v, !(cur is UIScrollView) { v = cur.superview }
+            guard let scroll = v as? UIScrollView else { return }
+            scroll.topEdgeEffect.isHidden = true
+            scroll.bottomEdgeEffect.isHidden = true
+            scroll.leftEdgeEffect.isHidden = true
+            scroll.rightEdgeEffect.isHidden = true
         }
     }
 }
