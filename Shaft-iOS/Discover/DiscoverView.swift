@@ -166,6 +166,12 @@ struct DiscoverView: View {
                 chip(.yearRank, "calendar", .yearRank)
                 chip(.tagRank, "tag.fill", .tagRank)
                 chip(.wallpaperRank, "photo.fill", .wallpaperRank)
+                chip(.seriesRank, "list.bullet.rectangle", .seriesRank)
+                chip(.monthRank, "sparkles.rectangle.stack", .monthRank)
+                chip(.novelLengthRank, "book.fill", .novelLengthRank)
+                chip(.sfwRank, "checkmark.circle.fill", .sfwRank)
+                chip(.trendingArtists, "flame.fill", .trendingArtists)
+                chip(.ugoiraRank, "play.fill", .ugoiraRank)
                 chip(.followingNovels, "bookmark.fill", .followingNovels)
                 chip(.discoveryFeed, "safari.fill", .discoveryFeed)
                 Button {

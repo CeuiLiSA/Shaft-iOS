@@ -72,6 +72,13 @@ enum AppRoute: Hashable, Codable, Sendable {
     case yearRank
     case tagRank
     case wallpaperRank
+    /// 2026-08-28 新增(与 Android fragment_new_center 同序)
+    case seriesRank
+    case monthRank
+    case novelLengthRank
+    case sfwRank                         // 全年龄榜 = bookmarkRank + restrict=sfw
+    case trendingArtists
+    case ugoiraRank
     case discoveryFeed
     // 聊天室 (shaft-api-v2 chat)
     /// Conversation list — the 聊天室 drawer entry.

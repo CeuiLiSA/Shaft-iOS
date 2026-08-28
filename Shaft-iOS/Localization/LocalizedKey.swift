@@ -128,6 +128,21 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case discoverWalkThrough          // type_walk_through 画廊
     case artistRank, artistAvgRank, viewRank, pixivComic
     case bookmarkRank, aiRank, yearRank, tagRank, wallpaperRank
+    // 2026-08-28 新增的 shaft-api-v2 榜单入口(与 Android fragment_new_center 同序)
+    case seriesRank, monthRank, novelLengthRank, sfwRank, trendingArtists, ugoiraRank
+    // 榜单页标题(Android *_rank_title)
+    case artistRankTitle, artistAvgRankTitle, viewRankTitle, bookmarkRankTitle, aiRankTitle
+    case yearRankTitle, tagRankTitle, wallpaperRankTitle, seriesRankTitle, monthRankTitle
+    case novelLengthRankTitle, sfwRankTitle, trendingArtistsTitle, ugoiraRankTitle
+    // 榜单页内文案
+    case wallpaperScreenDesktop, wallpaperScreenPhone
+    case trendingWindowDay, trendingWindowWeek, trendingWindowMonth
+    case trendingFollowersDay, trendingFollowersWeek, trendingFollowersMonth   // "%@ 人关注"
+    case novelLengthLong, novelLengthMedium, novelLengthShort
+    case monthRankPick, monthRankLoadFailed, tagRankPick, tagRankLoadFailed, yearRankPick, yearRankLoadFailed
+    case rankIncompleteNotice, seriesUpdatedAt, seriesTotalBookmarks, seriesEpisodeCount   // "%@话"
+    case artistRankWorks   // "%@ 作品 · 总收藏 %@" / avg 变体见 artistRankAvgWorks
+    case artistRankAvgWorks
     case followingNovels              // string_196 关注者的小说
     case followingNovelsPageTitle     // string_197 关注者的最新小说
     case discoveryFeed                // string_discovery 发现

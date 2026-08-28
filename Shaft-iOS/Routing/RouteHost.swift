@@ -154,6 +154,18 @@ struct RouteHost: ViewModifier {
                 DiscoverPendingView(titleKey: .tagRank)
             case .wallpaperRank:
                 DiscoverPendingView(titleKey: .wallpaperRank)
+            case .seriesRank:
+                DiscoverPendingView(titleKey: .seriesRank)
+            case .monthRank:
+                DiscoverPendingView(titleKey: .monthRank)
+            case .novelLengthRank:
+                DiscoverPendingView(titleKey: .novelLengthRank)
+            case .sfwRank:
+                DiscoverPendingView(titleKey: .sfwRank)
+            case .trendingArtists:
+                DiscoverPendingView(titleKey: .trendingArtists)
+            case .ugoiraRank:
+                DiscoverPendingView(titleKey: .ugoiraRank)
             case .discoveryFeed:
                 DiscoverPendingView(titleKey: .discoveryFeed)
             case .chatRoomList:
