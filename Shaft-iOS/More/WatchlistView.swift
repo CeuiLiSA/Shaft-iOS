@@ -98,38 +98,42 @@ private struct WatchlistPage: View {
     var body: some View {
         List {
             ForEach(vm.items) { item in
-                if item.isMasked {
-                    // Deleted / restricted series come back masked — show the
-                    // server's mask text, no navigation.
-                    Text(item.maskText ?? "")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else {
-                    WatchlistRow(item: item, isManga: vm.isManga)
-                        .swipeActions(edge: .trailing) {
+                // Masked (deleted / restricted) entries render the same card
+                // with only the server's mask text — no navigation, no delete.
+                WatchlistRow(item: item, isManga: vm.isManga)
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    // 12 between cards = upstream `LinearItemDecoration(12dp)`.
+                    .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                    .swipeActions(edge: .trailing) {
+                        if !item.isMasked {
                             Button(role: .destructive) {
                                 Task { await vm.remove(item) }
                             } label: {
                                 Label(l10n.t(.actionDelete), systemImage: "trash")
                             }
                         }
-                }
+                    }
             }
             if vm.nextUrl != nil, !vm.items.isEmpty {
                 Color.clear
                     .frame(height: 40)
                     .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                     .onAppear { Task { await vm.loadMore() } }
             }
         }
         .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Theme.v3Bg)
         .overlay {
             if vm.isLoading && vm.items.isEmpty {
-                RowSkeletonList { MediaRowSkeleton(coverWidth: 72, coverHeight: 96) }
+                RowSkeletonList { MediaRowSkeleton(coverWidth: 84, coverHeight: 112) }
             } else if vm.items.isEmpty, let err = vm.errorMessage {
                 InlineError(message: err) { Task { await vm.load() } }.padding()
             } else if vm.items.isEmpty && !vm.isLoading {
-                ContentUnavailableView(l10n.t(.nothingHere), systemImage: "sparkles.tv")
+                // `watchlist_empty`: an empty watchlist is the normal case, not 「居然啥也没有」.
+                ContentUnavailableView(l10n.t(.watchlistEmpty), systemImage: "sparkles.tv")
             }
         }
         .refreshable { await vm.load() }
@@ -141,43 +145,63 @@ private struct WatchlistPage: View {
     }
 }
 
+/// Shared V3 series card (`WatchlistFeed.kt` renderers). Card tap → series page
+/// for both kinds; the pill is 「查看最新话」→ series page for manga, but
+/// 「阅读最新话」→ the latest *work* (`latest_content_id`) for novels.
+/// Avatar / author name → artist profile. Masked entries do nothing.
 private struct WatchlistRow: View {
     let item: WatchlistItem
     let isManga: Bool
     @Environment(OnboardingStore.self) private var l10n
+    @Environment(\.pushRoute) private var pushRoute
 
     var body: some View {
-        NavigationLink(value: seriesRoute) {
-            HStack(alignment: .top, spacing: 12) {
-                PixivAsyncImage(url: item.url.flatMap(URL.init(string:)))
-                    .frame(width: 72, height: 96)
-                    .clipShape(.rect(cornerRadius: 6))
-                    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 6))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(item.title ?? "")
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(2)
-                    if let name = item.user?.name {
-                        Text(name).font(.caption).foregroundStyle(.secondary)
-                    }
-                    if let count = item.publishedContentCount {
-                        Text(l10n.t(.episodesFmt, "\(count)"))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    if let date = item.lastPublishedContentDatetime {
-                        Text(String(date.prefix(10)))
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, 4)
+        SeriesCard(
+            model: cardModel,
+            onAuthorTap: item.isMasked ? nil : { openAuthor() },
+            onAction: item.isMasked ? nil : { openLatest() }
+        )
+        .onTapGesture { openSeries() }
+    }
+
+    /// `WatchlistSeries.toCardModel`: ISO datetime → date part only (safe prefix).
+    private var cardModel: SeriesCardModel {
+        if item.isMasked {
+            return SeriesCardModel(
+                title: "", coverUrl: nil, countText: "", subtitle: "", subtitleAccent: false,
+                authorName: "", authorAvatarUrl: nil, maskText: item.maskText
+            )
+        }
+        let date = item.lastPublishedContentDatetime.map { String($0.prefix(10)) } ?? ""
+        return SeriesCardModel(
+            title: item.title ?? "",
+            coverUrl: item.url,
+            countText: l10n.t(.seriesEpisodeCount, "\(item.publishedContentCount ?? 0)"),
+            subtitle: date.isEmpty ? "" : l10n.t(.seriesUpdatedAt, date),
+            subtitleAccent: false,
+            authorName: item.user?.name ?? "",
+            authorAvatarUrl: item.user?.profileImageUrls?.medium,
+            actionText: l10n.t(isManga ? .watchlistViewLatest : .watchlistReadLatest)
+        )
+    }
+
+    private func openSeries() {
+        guard !item.isMasked else { return }
+        pushRoute(isManga ? .illustSeries(seriesId: item.id) : .novelSeries(seriesId: item.id))
+    }
+
+    private func openLatest() {
+        if isManga {
+            openSeries()
+        } else if let latest = item.latestContentId {
+            // Upstream `PixivOperate.getNovelByID(latest_content_id)`; a missing id is
+            // a server edge case — silently ignored rather than NPE'd like legacy.
+            pushRoute(.novelDetail(latest))
         }
     }
 
-    private var seriesRoute: AppRoute {
-        isManga ? .illustSeries(seriesId: item.id) : .novelSeries(seriesId: item.id)
+    private func openAuthor() {
+        guard let uid = item.user?.id, uid != 0 else { return }
+        pushRoute(.userProfile(uid))
     }
 }

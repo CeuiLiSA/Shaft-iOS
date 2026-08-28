@@ -141,31 +141,31 @@ struct RouteHost: ViewModifier {
             // Discover "其他分类" entries whose upstream pages (shaft-api-v2 榜单 /
             // pixiv 漫画 / 算法发现流) are not ported yet — placeholder until then.
             case .artistRank(let mode):
-                DiscoverPendingView(titleKey: mode == "avg" ? .artistAvgRank : .artistRank)
+                ArtistRankView(mode: mode)
             case .viewRank:
-                DiscoverPendingView(titleKey: .viewRank)
+                ViewRankView()
             case .pixivComic:
                 DiscoverPendingView(titleKey: .pixivComic)
             case .bookmarkRank(let aiOnly):
-                DiscoverPendingView(titleKey: aiOnly ? .aiRank : .bookmarkRank)
+                BookmarkRankView(ai: aiOnly ? "only" : nil)
             case .yearRank:
-                DiscoverPendingView(titleKey: .yearRank)
+                YearRankView()
             case .tagRank:
-                DiscoverPendingView(titleKey: .tagRank)
+                TagRankView()
             case .wallpaperRank:
-                DiscoverPendingView(titleKey: .wallpaperRank)
+                WallpaperRankView()
             case .seriesRank:
-                DiscoverPendingView(titleKey: .seriesRank)
+                SeriesRankView()
             case .monthRank:
-                DiscoverPendingView(titleKey: .monthRank)
+                MonthRankView()
             case .novelLengthRank:
-                DiscoverPendingView(titleKey: .novelLengthRank)
+                NovelLengthRankView()
             case .sfwRank:
-                DiscoverPendingView(titleKey: .sfwRank)
+                BookmarkRankView(restrict: "sfw")
             case .trendingArtists:
-                DiscoverPendingView(titleKey: .trendingArtists)
+                TrendingArtistsView()
             case .ugoiraRank:
-                DiscoverPendingView(titleKey: .ugoiraRank)
+                UgoiraRankView()
             case .discoveryFeed:
                 DiscoverPendingView(titleKey: .discoveryFeed)
             case .chatRoomList:

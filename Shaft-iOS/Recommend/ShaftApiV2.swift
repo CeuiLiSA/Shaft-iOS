@@ -68,7 +68,7 @@ enum ShaftApiError: Error { case http(Int), badURL, decode }
 actor ShaftApiV2Client {
     static let shared = ShaftApiV2Client()
 
-    private let base = ShaftEventsConfig.baseURL
+    let base = ShaftEventsConfig.baseURL
     private let session: URLSession
 
     init() {
@@ -141,13 +141,13 @@ actor ShaftApiV2Client {
 
     // MARK: transport
 
-    private func getData(path: String, query: [URLQueryItem]) async throws -> Data {
+    func getData(path: String, query: [URLQueryItem]) async throws -> Data {
         var comps = URLComponents(url: base.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
         comps.queryItems = query
         guard let url = comps.url else { throw ShaftApiError.badURL }
         return try await getData(url: url)
     }
-    private func getData(url: URL) async throws -> Data {
+    func getData(url: URL) async throws -> Data {
         var req = URLRequest(url: url)
         req.timeoutInterval = 15
         let (data, resp) = try await session.data(for: req)
@@ -162,12 +162,12 @@ actor ShaftApiV2Client {
     /// JSON numbers usually arrive as `NSNumber`, but a backend may serialize a
     /// 64-bit id as a string to preserve precision — accept both so ids/scores
     /// are never silently dropped.
-    private static func int64(_ v: Any?) -> Int64? {
+    static func int64(_ v: Any?) -> Int64? {
         if let n = v as? NSNumber { return n.int64Value }
         if let s = v as? String { return Int64(s) }
         return nil
     }
-    private static func double(_ v: Any?) -> Double? {
+    static func double(_ v: Any?) -> Double? {
         if let n = v as? NSNumber { return n.doubleValue }
         if let s = v as? String { return Double(s) }
         return nil

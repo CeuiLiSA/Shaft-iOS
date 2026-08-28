@@ -34,12 +34,18 @@
 		A1000000000000000000B106 /* QPACK.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F106 /* QPACK.swift */; };
 		A1000000000000000000B107 /* Http3Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F107 /* Http3Client.swift */; };
 		A1000000000000000000B108 /* SkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F108 /* SkeletonView.swift */; };
+		A1000000000000000000B1C1 /* SeriesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1C1 /* SeriesCard.swift */; };
+		A1000000000000000000B1C2 /* ArtistRankViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1C2 /* ArtistRankViews.swift */; };
+		A1000000000000000000B1C3 /* SeriesRankViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1C3 /* SeriesRankViews.swift */; };
 		A1000000000000000000B109 /* WatchLaterStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F109 /* WatchLaterStore.swift */; };
 		A1000000000000000000B110 /* WatchLaterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F110 /* WatchLaterView.swift */; };
 		A1000000000000000000B111 /* ShaftApiV2.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F111 /* ShaftApiV2.swift */; };
+		A1000000000000000000B1A1 /* ShaftApiV2Rank.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1A1 /* ShaftApiV2Rank.swift */; };
 		A1000000000000000000B112 /* ShaftEventReporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F112 /* ShaftEventReporter.swift */; };
 		A1000000000000000000B113 /* SensitiveContentGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F113 /* SensitiveContentGate.swift */; };
 		A1000000000000000000B114 /* TrendingFeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F114 /* TrendingFeedView.swift */; };
+		A1000000000000000000B1B1 /* RankWorksViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1B1 /* RankWorksViews.swift */; };
+		A1000000000000000000B1B2 /* RankPickerViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1B2 /* RankPickerViews.swift */; };
 		A1000000000000000000B115 /* EventHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F115 /* EventHistoryView.swift */; };
 		A1000000000000000000B116 /* BorrowedSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F116 /* BorrowedSearch.swift */; };
 		A1000000000000000000B023 /* PlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F023 /* PlaceholderView.swift */; };
@@ -174,12 +180,18 @@
 		A1000000000000000000F106 /* QPACK.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QPACK.swift; sourceTree = "<group>"; };
 		A1000000000000000000F107 /* Http3Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Http3Client.swift; sourceTree = "<group>"; };
 		A1000000000000000000F108 /* SkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkeletonView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1C1 /* SeriesCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesCard.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1C2 /* ArtistRankViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistRankViews.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1C3 /* SeriesRankViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesRankViews.swift; sourceTree = "<group>"; };
 		A1000000000000000000F109 /* WatchLaterStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLaterStore.swift; sourceTree = "<group>"; };
 		A1000000000000000000F110 /* WatchLaterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLaterView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F111 /* ShaftApiV2.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShaftApiV2.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1A1 /* ShaftApiV2Rank.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShaftApiV2Rank.swift; sourceTree = "<group>"; };
 		A1000000000000000000F112 /* ShaftEventReporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShaftEventReporter.swift; sourceTree = "<group>"; };
 		A1000000000000000000F113 /* SensitiveContentGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitiveContentGate.swift; sourceTree = "<group>"; };
 		A1000000000000000000F114 /* TrendingFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendingFeedView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1B1 /* RankWorksViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankWorksViews.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1B2 /* RankPickerViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RankPickerViews.swift; sourceTree = "<group>"; };
 		A1000000000000000000F115 /* EventHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventHistoryView.swift; sourceTree = "<group>"; };
 		A1000000000000000000F116 /* BorrowedSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorrowedSearch.swift; sourceTree = "<group>"; };
 		A1000000000000000000F023 /* PlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceholderView.swift; sourceTree = "<group>"; };
@@ -383,6 +395,7 @@
 				A1000000000000000000F914 /* CardMenuHost.swift */,
 				A1000000000000000000F027 /* IllustWaterfallList.swift */,
 				A1000000000000000000F108 /* SkeletonView.swift */,
+				A1000000000000000000F1C1 /* SeriesCard.swift */,
 				A1000000000000000000F048 /* WebArticleView.swift */,
 				A1000000000000000000F067 /* ProgressRing.swift */,
 				A1000000000000000000F0C1 /* BookmarkFeedback.swift */,
@@ -561,10 +574,15 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000F111 /* ShaftApiV2.swift */,
+				A1000000000000000000F1A1 /* ShaftApiV2Rank.swift */,
 				A1000000000000000000F112 /* ShaftEventReporter.swift */,
 				A1000000000000000000F113 /* SensitiveContentGate.swift */,
 				A1000000000000000000F114 /* TrendingFeedView.swift */,
+				A1000000000000000000F1B1 /* RankWorksViews.swift */,
+				A1000000000000000000F1B2 /* RankPickerViews.swift */,
 				A1000000000000000000F115 /* EventHistoryView.swift */,
+				A1000000000000000000F1C2 /* ArtistRankViews.swift */,
+				A1000000000000000000F1C3 /* SeriesRankViews.swift */,
 			);
 			path = Recommend;
 			sourceTree = "<group>";
@@ -785,12 +803,18 @@
 				A1000000000000000000B106 /* QPACK.swift in Sources */,
 				A1000000000000000000B107 /* Http3Client.swift in Sources */,
 				A1000000000000000000B108 /* SkeletonView.swift in Sources */,
+				A1000000000000000000B1C1 /* SeriesCard.swift in Sources */,
+				A1000000000000000000B1C2 /* ArtistRankViews.swift in Sources */,
+				A1000000000000000000B1C3 /* SeriesRankViews.swift in Sources */,
 				A1000000000000000000B109 /* WatchLaterStore.swift in Sources */,
 				A1000000000000000000B110 /* WatchLaterView.swift in Sources */,
 				A1000000000000000000B111 /* ShaftApiV2.swift in Sources */,
+				A1000000000000000000B1A1 /* ShaftApiV2Rank.swift in Sources */,
 				A1000000000000000000B112 /* ShaftEventReporter.swift in Sources */,
 				A1000000000000000000B113 /* SensitiveContentGate.swift in Sources */,
 				A1000000000000000000B114 /* TrendingFeedView.swift in Sources */,
+				A1000000000000000000B1B1 /* RankWorksViews.swift in Sources */,
+				A1000000000000000000B1B2 /* RankPickerViews.swift in Sources */,
 				A1000000000000000000B115 /* EventHistoryView.swift in Sources */,
 				A1000000000000000000B116 /* BorrowedSearch.swift in Sources */,
 				A1000000000000000000B023 /* PlaceholderView.swift in Sources */,

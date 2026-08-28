@@ -228,6 +228,8 @@ enum LocalizedKey: String, CaseIterable, Sendable {
 
     // Watchlist (追更)
     case watchlistTitle, watchlistAdd, watchlistAdded, episodesFmt
+    /// Series-card pill 「查看最新话」(manga) / 「阅读最新话」(novel) + `watchlist_empty`.
+    case watchlistViewLatest, watchlistReadLatest, watchlistEmpty
 
     // Watch Later (稍后再看) — 1:1 port of pixiv/ui/watchlater/ (local list)
     case watchLaterTitle, watchLaterAdd, watchLaterRemove
