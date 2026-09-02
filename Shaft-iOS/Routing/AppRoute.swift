@@ -23,8 +23,15 @@ enum AppRoute: Hashable, Codable, Sendable {
     /// A user's illust/manga/novel list opened at an arbitrary page offset —
     /// the 「跳转到…」 entry (upstream `UserIllustJumpHelper`).
     case userWorksJump(userId: Int64, type: String, offset: Int, targetDate: String?)
-    case userBookmarks(userId: Int64)
-    case userNovelBookmarks(userId: Int64)
+    /// `classic == true` forces the server-order list even when the local bookmark
+    /// mirror is complete (the 「原始收藏列表」 escape hatch inside the library page —
+    /// upstream `Params.FLAG` on `MY_ILLUST_COLLECTION`).
+    case userBookmarks(userId: Int64, classic: Bool = false)
+    case userNovelBookmarks(userId: Int64, classic: Bool = false)
+    /// 收藏库 — the local bookmark-mirror browser (upstream `TemplateRoute.BOOKMARK_LIBRARY`).
+    /// `contentType` is `MirrorContentType.code` (0 illust / 1 novel), `restrict`
+    /// "public" / "private" picks which shelf opens first.
+    case bookmarkLibrary(contentType: Int, restrict: String)
     case userNovels(userId: Int64)
     case illustSeries(seriesId: Int64)
     case novelSeries(seriesId: Int64)

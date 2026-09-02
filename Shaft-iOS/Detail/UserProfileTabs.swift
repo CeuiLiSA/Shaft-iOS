@@ -338,6 +338,10 @@ struct UserV3CollectionTab: View {
         // Lazy like upstream: the segment's list only requests when the tab is
         // actually shown (never during the ViewPager's neighbour prefetch).
         .task(id: segment) {
+            // 打开**自己**的收藏 tab = 开启这个书架的本地镜像（只在真的显示时，不在预取时）。
+            trackBookmarkShelfVisit(
+                userId: illustFeed.userId, restrict: "public", contentType: segment == 0 ? .illust : .novel
+            )
             if segment == 0 { await illustFeed.loadIfNeeded() }
             else { await novelFeed.loadIfNeeded() }
         }

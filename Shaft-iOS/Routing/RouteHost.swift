@@ -5,6 +5,7 @@ import SwiftUI
 /// pushed onto its `path` resolves to the right view.
 struct RouteHost: ViewModifier {
     let auth: AuthViewModel
+    @State private var mirror = BookmarkMirrorObserved.shared
 
     func body(content: Content) -> some View {
         content
@@ -52,10 +53,27 @@ struct RouteHost: ViewModifier {
                 UserIllustTagView(userId: userId, tag: tag, category: category)
             case .userWorksJump(let userId, let type, let offset, let targetDate):
                 UserWorksJumpListView(userId: userId, type: type, offset: offset, targetDate: targetDate)
-            case .userBookmarks(let userId):
-                UserBookmarksView(userId: userId)
-            case .userNovelBookmarks(let userId):
-                UserNovelBookmarksView(userId: userId)
+            // 「我的插画收藏」有两种落点：本地镜像已经完整同步过一次 → 直接进本地库
+            //（能倒序、能按标签/作者/年份筛，而服务端接口给不了这些）；还没同步完 → 原始列表。
+            // `classic` 是本地库自己的「原始收藏列表」入口发来的，必须原样给老页面，
+            // 否则用户从库里点进去会被立刻重定向回来，两个页面互相踢皮球。
+            case .userBookmarks(let userId, let classic):
+                if !classic, userId == BookmarkMirrorService.loggedInUid(), mirror.isMirrorReady(contentType: .illust) {
+                    BookmarkLibraryView(contentType: .illust, restrict: .public)
+                } else {
+                    UserBookmarksView(userId: userId)
+                }
+            case .userNovelBookmarks(let userId, let classic):
+                if !classic, userId == BookmarkMirrorService.loggedInUid(), mirror.isMirrorReady(contentType: .novel) {
+                    BookmarkLibraryView(contentType: .novel, restrict: .public)
+                } else {
+                    UserNovelBookmarksView(userId: userId)
+                }
+            case .bookmarkLibrary(let contentType, let restrict):
+                BookmarkLibraryView(
+                    contentType: MirrorContentType.of(contentType) ?? .illust,
+                    restrict: MirrorRestrict.ofApiValue(restrict)
+                )
             case .userNovels(let userId):
                 UserNovelsView(userId: userId)
             case .illustSeries(let seriesId):

@@ -111,6 +111,11 @@ struct Illust: Codable, Hashable, Sendable, Identifiable {
     let xRestrict: Int?
     /// 0/1 = human, 2 = AI-generated. Drives search "only AI" / "exclude AI" filtering.
     let illustAIType: Int?
+    /// pixiv marks deleted / mypixiv-only works `visible=false` with most fields
+    /// blanked — the bookmark mirror keeps them and offers a 「已失效」 filter.
+    var visible: Bool? = nil
+    var isMuted: Bool? = nil
+    var sanityLevel: Int? = nil
 
     /// Non-persisted decoration (NOT in the pixiv payload / not Codable): the
     /// shaft-api-v2 trending score / bookmark count, rendered as a "▲ N" pill on
@@ -133,6 +138,9 @@ struct Illust: Codable, Hashable, Sendable, Identifiable {
         case series
         case xRestrict = "x_restrict"
         case illustAIType = "illust_ai_type"
+        case visible
+        case isMuted = "is_muted"
+        case sanityLevel = "sanity_level"
     }
 }
 
@@ -344,6 +352,9 @@ struct Novel: Codable, Hashable, Sendable, Identifiable {
     let xRestrict: Int?
     /// 0/1 = human, 2 = AI-generated. Drives search "only AI" / "exclude AI" filtering.
     let novelAIType: Int?
+    /// See `Illust.visible` — kept for the bookmark mirror's 「已失效」 filter.
+    var visible: Bool? = nil
+    var isMuted: Bool? = nil
 
     /// Non-persisted trending-score decoration — see `Illust.trendingScore`.
     var trendingScore: Double? = nil
@@ -361,6 +372,8 @@ struct Novel: Codable, Hashable, Sendable, Identifiable {
         case series
         case xRestrict = "x_restrict"
         case novelAIType = "novel_ai_type"
+        case visible
+        case isMuted = "is_muted"
     }
 }
 

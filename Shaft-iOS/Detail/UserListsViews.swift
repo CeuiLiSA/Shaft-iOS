@@ -104,9 +104,15 @@ private final class UserBookmarksVM {
 struct UserBookmarksView: View {
     let userId: Int64
     @State private var vm: UserBookmarksVM
+    @Environment(\.pushRoute) private var pushRoute
+    @Environment(OnboardingStore.self) private var l10n
+
+    /// 算一次就够：body 每次重算都去查钥匙串没有意义。
+    private let isOwn: Bool
 
     init(userId: Int64) {
         self.userId = userId
+        self.isOwn = userId == BookmarkMirrorService.loggedInUid()
         _vm = State(wrappedValue: UserBookmarksVM(userId: userId))
     }
 
@@ -119,6 +125,25 @@ struct UserBookmarksView: View {
             hasMore: vm.nextUrl != nil
         )
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // 「按条件浏览收藏」：本页唯一能做倒序 / 按标签 / 按作者 / 按年份筛的入口
+            //（pixiv 的收藏接口只能从新到旧顺着翻）。只对自己的收藏出现。
+            if isOwn {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            pushRoute(.bookmarkLibrary(contentType: MirrorContentType.illust.code, restrict: "public"))
+                        } label: {
+                            Label(l10n.t(.bookmarkLibraryMenuEntry), systemImage: "line.3.horizontal.decrease.circle")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
+        }
+        // 打开**自己**的收藏页 = 开启这个书架的本地镜像（见 `trackBookmarkShelfVisit`）。
+        .onAppear { trackBookmarkShelfVisit(userId: userId, restrict: "public", contentType: .illust) }
         .task { await vm.loadIfNeeded() }
     }
 }
@@ -565,9 +590,13 @@ struct UserNovelBookmarksView: View {
     let userId: Int64
     @State private var vm: UserNovelBookmarksVM
     @Environment(OnboardingStore.self) private var l10n
+    @Environment(\.pushRoute) private var pushRoute
+
+    private let isOwn: Bool
 
     init(userId: Int64) {
         self.userId = userId
+        self.isOwn = userId == BookmarkMirrorService.loggedInUid()
         _vm = State(wrappedValue: UserNovelBookmarksVM(userId: userId))
     }
 
@@ -586,6 +615,22 @@ struct UserNovelBookmarksView: View {
         }
         .navigationTitle(l10n.t(.navNovelBookmarks))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if isOwn {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            pushRoute(.bookmarkLibrary(contentType: MirrorContentType.novel.code, restrict: "public"))
+                        } label: {
+                            Label(l10n.t(.bookmarkLibraryMenuEntry), systemImage: "line.3.horizontal.decrease.circle")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
+        }
+        .onAppear { trackBookmarkShelfVisit(userId: userId, restrict: "public", contentType: .novel) }
         .task { await vm.loadIfNeeded() }
     }
 }

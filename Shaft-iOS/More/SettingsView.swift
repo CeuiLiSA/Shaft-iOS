@@ -121,6 +121,7 @@ private enum SettingsCatalog {
         .init(id: "privateFollow", category: .bookmarks, title: .stPrivateFollow, keywords: "private follow 私密 关注 悄悄关注"),
         .init(id: "hideBookmarkButton", category: .bookmarks, title: .stHideStarButton, keywords: "hide bookmark button 隐藏 收藏 按钮"),
         .init(id: "invalidBookmarks", category: .bookmarks, title: .stFilterInvalidBookmarks, keywords: "invalid deleted bookmark 失效 无效 收藏"),
+        .init(id: "bookmarkMirror", category: .bookmarks, title: .settingsBookmarkMirror, keywords: "bookmark mirror library local offline 收藏库 镜像 本地 筛选"),
         .init(id: "selectAllTags", category: .bookmarks, title: .stSelectAllTags, keywords: "select all tags 全选 标签 收藏"),
         .init(id: "relatedAfterBookmark", category: .bookmarks, title: .stShowRelatedWhenStar, keywords: "related recommendation 相关 推荐 收藏"),
         .init(id: "followAfterBookmark", category: .bookmarks, title: .stAutoFollowAfterStar, keywords: "auto follow bookmark 自动关注 收藏"),
@@ -672,6 +673,12 @@ private struct SettingsCategoryView: View {
             Toggle(l10n.t(.stPrivateFollow), isOn: $st.privateFollow).settingRow("privateFollow", highlightID)
             Toggle(l10n.t(.stHideStarButton), isOn: $st.hideStarButtonAtMyCollection).settingRow("hideBookmarkButton", highlightID)
             Toggle(l10n.t(.stFilterInvalidBookmarks), isOn: $st.filterInvalidBookmarks).settingRow("invalidBookmarks", highlightID)
+            // 收藏库本地镜像。开回来时主动踢一脚引擎，用户不用等下一个空闲心跳。
+            Toggle(l10n.t(.settingsBookmarkMirror), isOn: $st.bookmarkMirrorEnabled)
+                .settingRow("bookmarkMirror", highlightID)
+                .onChange(of: st.bookmarkMirrorEnabled) { _, enabled in
+                    if enabled { BookmarkMirrorService.shared.kick("settings toggled on") }
+                }
             Toggle(l10n.t(.stSelectAllTags), isOn: $st.starWithTagSelectAll).settingRow("selectAllTags", highlightID)
             Toggle(l10n.t(.stShowRelatedWhenStar), isOn: $st.showRelatedWhenStar).settingRow("relatedAfterBookmark", highlightID)
             Toggle(l10n.t(.stAutoFollowAfterStar), isOn: $st.autoFollowAfterStar).settingRow("followAfterBookmark", highlightID)

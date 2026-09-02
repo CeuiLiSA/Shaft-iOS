@@ -78,6 +78,9 @@ final class AppSettingsStore {
     var showNovelCardTags = true { didSet { save(showNovelCardTags, "st_showNovelCardTags") } }
     var collapseNovelCardTags = true { didSet { save(collapseNovelCardTags, "st_collapseNovelCardTags") } }
     var hideStarButtonAtMyCollection = false { didSet { save(hideStarButtonAtMyCollection, "st_hideStarButtonAtMyCollection") } }
+    /// 收藏库本地镜像（upstream `Settings.bookmarkMirrorEnabled`，默认开）。关掉是立即生效的：
+    /// 引擎每次 tick 都现读这个开关（正在飞的那一页会跑完，之后不再发新请求）。
+    var bookmarkMirrorEnabled = true { didSet { save(bookmarkMirrorEnabled, "st_bookmarkMirrorEnabled") } }
     var starWithTagSelectAll = false { didSet { save(starWithTagSelectAll, "st_starWithTagSelectAll") } }
     var keepStatusBarWhenViewImage = false { didSet { save(keepStatusBarWhenViewImage, "st_keepStatusBarWhenViewImage") } }
     var synonymDictEnabled = false { didSet { save(synonymDictEnabled, "st_synonymDictEnabled") } }
@@ -146,6 +149,7 @@ final class AppSettingsStore {
         showNovelCardTags = bool("st_showNovelCardTags", true)
         collapseNovelCardTags = bool("st_collapseNovelCardTags", true)
         hideStarButtonAtMyCollection = bool("st_hideStarButtonAtMyCollection", false)
+        bookmarkMirrorEnabled = bool("st_bookmarkMirrorEnabled", true)
         starWithTagSelectAll = bool("st_starWithTagSelectAll", false)
         keepStatusBarWhenViewImage = bool("st_keepStatusBarWhenViewImage", false)
         synonymDictEnabled = bool("st_synonymDictEnabled", false)

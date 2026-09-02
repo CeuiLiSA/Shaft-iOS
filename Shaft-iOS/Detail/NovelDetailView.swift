@@ -61,12 +61,14 @@ final class NovelDetailViewModel {
                 _ = try await api.unbookmarkNovel(novelId)
                 update(isBookmarked: false)
                 Task { await ShaftEventReporter.shared.reportNovelBookmark(cur, added: false) }
+                Task { await BookmarkMirrorService.shared.onUnbookmarked(contentType: .novel, targetId: novelId) }
             } else {
                 let resolvedRestrict = restrict
                     ?? (AppSettingsStore.shared.privateStar ? "private" : "public")
                 _ = try await api.bookmarkNovel(novelId, restrict: resolvedRestrict)
                 update(isBookmarked: true)
                 Task { await ShaftEventReporter.shared.reportNovelBookmark(cur, added: true) }
+                syncMirror(cur, restrict: resolvedRestrict)
             }
         } catch {
             BookmarkHaptics.failed()
@@ -86,9 +88,22 @@ final class NovelDetailViewModel {
         do {
             _ = try await api.bookmarkNovel(novelId, restrict: restrict, tags: tags)
             update(isBookmarked: true)
-            if let n = novel { Task { await ShaftEventReporter.shared.reportNovelBookmark(n, added: true) } }
+            if let n = novel {
+                Task { await ShaftEventReporter.shared.reportNovelBookmark(n, added: true) }
+                syncMirror(n, restrict: restrict)
+            }
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// 已被服务端确认的收藏同步进收藏镜像表（本页绕过 InteractionStore 直接打接口，
+    /// 所以镜像也要在这里接一次）。
+    private func syncMirror(_ n: Novel, restrict: String) {
+        Task {
+            await BookmarkMirrorService.shared.onNovelBookmarked(
+                BookmarkMirrorMapper.withBookmarked(n, true), restrict: MirrorRestrict.ofApiValue(restrict)
+            )
         }
     }
 
@@ -100,7 +115,8 @@ final class NovelDetailViewModel {
             textLength: n.textLength, isBookmarked: isBookmarked,
             totalBookmarks: n.totalBookmarks, totalView: n.totalView,
             createDate: n.createDate, series: n.series,
-            xRestrict: n.xRestrict, novelAIType: n.novelAIType
+            xRestrict: n.xRestrict, novelAIType: n.novelAIType,
+            visible: n.visible, isMuted: n.isMuted
         )
         novel = n
         InteractionStore.shared.noteNovelBookmark(id: novelId, isBookmarked)

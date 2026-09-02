@@ -441,4 +441,27 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     // MARK: FragmentCenter 漫画 / 小说 entry pages (RecmdMangaFeedFragment / FragmentNewNovel)
     case centerRankingHeader, centerRecmdForYou, centerRecommendMangaTitle
     case novelWordCountFmt, novelSeriesFmt
+
+    // MARK: 收藏库 / 收藏镜像 (1:1 with Android bookmark_library_* / bookmark_mirror_* / bookmark_chip_* / bookmark_sort_* / bookmark_filter_*)
+    case settingsBookmarkMirror, bookmarkLibraryMenuEntry, bookmarkLibraryOpenClassic, bookmarkMirrorReadyTitle
+    case bookmarkMirrorReadyMessage, bookmarkMirrorReadyAction, bookmarkLibraryTitle, bookmarkLibraryNovelTitle
+    case bookmarkLibrarySearchHint, bookmarkLibraryEmpty, bookmarkLibraryEmptySyncing, bookmarkLibraryEmptyFiltered
+    case bookmarkLibrarySyncing, bookmarkLibrarySyncOffline, bookmarkLibrarySyncQueued, bookmarkLibrarySyncCooldown
+    case bookmarkLibraryRebuild, bookmarkLibraryFilterTitle, bookmarkLibraryFilterReset, bookmarkLibraryFilterApply
+    case bookmarkLibraryFilterApplyPending, bookmarkChipOldestFirst, bookmarkChipRandom, bookmarkChipFilter
+    case bookmarkChipFilterCount, bookmarkChipClear, bookmarkSortBookmarkNewest, bookmarkSortBookmarkOldest
+    case bookmarkSortCreatedNewest, bookmarkSortCreatedOldest, bookmarkSortPopularDesc, bookmarkSortPopularAsc
+    case bookmarkSortViewsDesc, bookmarkSortPagesDesc, bookmarkSortLengthDesc, bookmarkSortLengthAsc
+    case bookmarkSortTitleAsc, bookmarkSortRandom, bookmarkFilterAny, bookmarkFilterSectionSort
+    case bookmarkFilterSectionType, bookmarkFilterSectionShape, bookmarkFilterSectionAge, bookmarkFilterSectionAI
+    case bookmarkFilterSectionPages, bookmarkFilterSectionState, bookmarkFilterSectionLength, bookmarkFilterLengthMin
+    case bookmarkFilterSectionPopularity, bookmarkFilterSectionYear, bookmarkFilterSectionSeries, bookmarkFilterSectionTags
+    case bookmarkFilterSectionAuthor, bookmarkFilterTypeIllust, bookmarkFilterTypeManga, bookmarkFilterTypeUgoira
+    case bookmarkFilterShapeLandscape, bookmarkFilterShapePortrait, bookmarkFilterShapeSquare, bookmarkFilterAgeAll
+    case bookmarkFilterAgeR18, bookmarkFilterAgeR18G, bookmarkFilterAIExclude, bookmarkFilterAIOnly
+    case bookmarkFilterPagesSingle, bookmarkFilterPagesMulti, bookmarkFilterStateValid, bookmarkFilterStateInvalid
+    case bookmarkFilterPopularityMin, bookmarkFilterYearItem, bookmarkFilterSeriesOnly, bookmarkFilterTagHint
+    case bookmarkFilterTagSearchHint, bookmarkFilterTagModeAll, bookmarkFilterTagModeAny, bookmarkFilterTagEmpty
+    case bookmarkFilterAuthorEmpty, bookmarkShelfPublicIllust, bookmarkShelfPrivateIllust, bookmarkShelfPublicNovel
+    case bookmarkShelfPrivateNovel
 }

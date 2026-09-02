@@ -34,6 +34,17 @@
 		A1000000000000000000B106 /* QPACK.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F106 /* QPACK.swift */; };
 		A1000000000000000000B107 /* Http3Client.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F107 /* Http3Client.swift */; };
 		A1000000000000000000B108 /* SkeletonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F108 /* SkeletonView.swift */; };
+		A1000000000000000000B1D1 /* BookmarkShelf.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1D1 /* BookmarkShelf.swift */; };
+		A1000000000000000000B1D2 /* BookmarkMirrorMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1D2 /* BookmarkMirrorMapper.swift */; };
+		A1000000000000000000B1D3 /* BookmarkMirrorQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1D3 /* BookmarkMirrorQuery.swift */; };
+		A1000000000000000000B1D4 /* BookmarkMirrorDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1D4 /* BookmarkMirrorDatabase.swift */; };
+		A1000000000000000000B1D5 /* BookmarkShelfFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1D5 /* BookmarkShelfFetcher.swift */; };
+		A1000000000000000000B1D6 /* BookmarkMirrorService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1D6 /* BookmarkMirrorService.swift */; };
+		A1000000000000000000B1D7 /* BookmarkMirrorReadyBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1D7 /* BookmarkMirrorReadyBanner.swift */; };
+		A1000000000000000000B1D8 /* BookmarkLibraryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1D8 /* BookmarkLibraryViewModel.swift */; };
+		A1000000000000000000B1D9 /* BookmarkLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1D9 /* BookmarkLibraryView.swift */; };
+		A1000000000000000000B1DA /* BookmarkFilterSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1DA /* BookmarkFilterSheet.swift */; };
+		A1000000000000000000B1E1 /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1E1 /* NetworkMonitor.swift */; };
 		A1000000000000000000B1C1 /* SeriesCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1C1 /* SeriesCard.swift */; };
 		A1000000000000000000B1C2 /* ArtistRankViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1C2 /* ArtistRankViews.swift */; };
 		A1000000000000000000B1C3 /* SeriesRankViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F1C3 /* SeriesRankViews.swift */; };
@@ -180,6 +191,17 @@
 		A1000000000000000000F106 /* QPACK.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QPACK.swift; sourceTree = "<group>"; };
 		A1000000000000000000F107 /* Http3Client.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Http3Client.swift; sourceTree = "<group>"; };
 		A1000000000000000000F108 /* SkeletonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkeletonView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1D1 /* BookmarkShelf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkShelf.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1D2 /* BookmarkMirrorMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMirrorMapper.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1D3 /* BookmarkMirrorQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMirrorQuery.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1D4 /* BookmarkMirrorDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMirrorDatabase.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1D5 /* BookmarkShelfFetcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkShelfFetcher.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1D6 /* BookmarkMirrorService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMirrorService.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1D7 /* BookmarkMirrorReadyBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkMirrorReadyBanner.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1D8 /* BookmarkLibraryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkLibraryViewModel.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1D9 /* BookmarkLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkLibraryView.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1DA /* BookmarkFilterSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarkFilterSheet.swift; sourceTree = "<group>"; };
+		A1000000000000000000F1E1 /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		A1000000000000000000F1C1 /* SeriesCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesCard.swift; sourceTree = "<group>"; };
 		A1000000000000000000F1C2 /* ArtistRankViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArtistRankViews.swift; sourceTree = "<group>"; };
 		A1000000000000000000F1C3 /* SeriesRankViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeriesRankViews.swift; sourceTree = "<group>"; };
@@ -346,6 +368,7 @@
 				A1000000000000000000G024 /* Prime */,
 				A1000000000000000000G025 /* WatchLater */,
 				A1000000000000000000G026 /* Recommend */,
+				A1000000000000000000G028 /* BookmarkLibrary */,
 				A1000000000000000000F003 /* Assets.xcassets */,
 				A1000000000000000000G004 /* Preview Content */,
 			);
@@ -395,6 +418,7 @@
 				A1000000000000000000F914 /* CardMenuHost.swift */,
 				A1000000000000000000F027 /* IllustWaterfallList.swift */,
 				A1000000000000000000F108 /* SkeletonView.swift */,
+				A1000000000000000000F1E1 /* NetworkMonitor.swift */,
 				A1000000000000000000F1C1 /* SeriesCard.swift */,
 				A1000000000000000000F048 /* WebArticleView.swift */,
 				A1000000000000000000F067 /* ProgressRing.swift */,
@@ -559,6 +583,23 @@
 				A1000000000000000000F100 /* pixiv_prime */,
 			);
 			path = Prime;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000G028 /* BookmarkLibrary */ = {
+			isa = PBXGroup;
+			children = (
+				A1000000000000000000F1D1 /* BookmarkShelf.swift */,
+				A1000000000000000000F1D2 /* BookmarkMirrorMapper.swift */,
+				A1000000000000000000F1D3 /* BookmarkMirrorQuery.swift */,
+				A1000000000000000000F1D4 /* BookmarkMirrorDatabase.swift */,
+				A1000000000000000000F1D5 /* BookmarkShelfFetcher.swift */,
+				A1000000000000000000F1D6 /* BookmarkMirrorService.swift */,
+				A1000000000000000000F1D7 /* BookmarkMirrorReadyBanner.swift */,
+				A1000000000000000000F1D8 /* BookmarkLibraryViewModel.swift */,
+				A1000000000000000000F1D9 /* BookmarkLibraryView.swift */,
+				A1000000000000000000F1DA /* BookmarkFilterSheet.swift */,
+			);
+			path = BookmarkLibrary;
 			sourceTree = "<group>";
 		};
 		A1000000000000000000G025 /* WatchLater */ = {
@@ -803,6 +844,17 @@
 				A1000000000000000000B106 /* QPACK.swift in Sources */,
 				A1000000000000000000B107 /* Http3Client.swift in Sources */,
 				A1000000000000000000B108 /* SkeletonView.swift in Sources */,
+				A1000000000000000000B1D1 /* BookmarkShelf.swift in Sources */,
+				A1000000000000000000B1D2 /* BookmarkMirrorMapper.swift in Sources */,
+				A1000000000000000000B1D3 /* BookmarkMirrorQuery.swift in Sources */,
+				A1000000000000000000B1D4 /* BookmarkMirrorDatabase.swift in Sources */,
+				A1000000000000000000B1D5 /* BookmarkShelfFetcher.swift in Sources */,
+				A1000000000000000000B1D6 /* BookmarkMirrorService.swift in Sources */,
+				A1000000000000000000B1D7 /* BookmarkMirrorReadyBanner.swift in Sources */,
+				A1000000000000000000B1D8 /* BookmarkLibraryViewModel.swift in Sources */,
+				A1000000000000000000B1D9 /* BookmarkLibraryView.swift in Sources */,
+				A1000000000000000000B1DA /* BookmarkFilterSheet.swift in Sources */,
+				A1000000000000000000B1E1 /* NetworkMonitor.swift in Sources */,
 				A1000000000000000000B1C1 /* SeriesCard.swift in Sources */,
 				A1000000000000000000B1C2 /* ArtistRankViews.swift in Sources */,
 				A1000000000000000000B1C3 /* SeriesRankViews.swift in Sources */,

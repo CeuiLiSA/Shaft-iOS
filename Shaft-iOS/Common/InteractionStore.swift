@@ -124,10 +124,10 @@ final class InteractionStore {
         defer { bookmarkBusy.remove(id) }
         let previous = illustBookmarked[id]
         illustBookmarked[id] = target
+        let resolvedRestrict = restrict
+            ?? (AppSettingsStore.shared.privateStar ? "private" : "public")
         do {
             if target {
-                let resolvedRestrict = restrict
-                    ?? (AppSettingsStore.shared.privateStar ? "private" : "public")
                 _ = try await api.bookmarkIllust(id, restrict: resolvedRestrict, tags: tags)
             } else {
                 _ = try await api.unbookmarkIllust(id)
@@ -144,7 +144,25 @@ final class InteractionStore {
         // here, so no path bypasses the report and none double-reports. Fires only
         // on a real, successful mutation (busy-skip returns above; failure throws).
         Task { await ShaftEventReporter.shared.reportIllustBookmark(illust, id: id, added: target) }
+        // 把这次已被服务端确认的收藏 / 取消收藏同步进收藏镜像表（upstream
+        // `PixivActionQueue.syncBookmarkMirror`）：收藏需要一份带 is_bookmarked=true 的 bean
+        // 才能入库（镜像行里存的是完整 JSON）；没有 bean 时放弃这一条 —— 缺的那条会在下一次
+        // 增量维护里被表头扫到。取消不需要 bean，按 id 跨公开/悄悄两个书架删。
+        syncBookmarkMirror(illust: illust, id: id, added: target, restrict: resolvedRestrict)
         return true
+    }
+
+    private func syncBookmarkMirror(illust: Illust?, id: Int64, added: Bool, restrict: String) {
+        Task {
+            if added {
+                guard let illust else { return }
+                await BookmarkMirrorService.shared.onIllustBookmarked(
+                    BookmarkMirrorMapper.withBookmarked(illust, true), restrict: MirrorRestrict.ofApiValue(restrict)
+                )
+            } else {
+                await BookmarkMirrorService.shared.onUnbookmarked(contentType: .illust, targetId: id)
+            }
+        }
     }
 
     // MARK: Novel bookmark mutations (optimistic; revert + rethrow on failure)
@@ -166,10 +184,10 @@ final class InteractionStore {
         defer { novelBookmarkBusy.remove(id) }
         let previous = novelBookmarked[id]
         novelBookmarked[id] = target
+        let resolvedRestrict = restrict
+            ?? (AppSettingsStore.shared.privateStar ? "private" : "public")
         do {
             if target {
-                let resolvedRestrict = restrict
-                    ?? (AppSettingsStore.shared.privateStar ? "private" : "public")
                 _ = try await api.bookmarkNovel(id, restrict: resolvedRestrict, tags: tags)
             } else {
                 _ = try await api.unbookmarkNovel(id)
@@ -184,6 +202,16 @@ final class InteractionStore {
         }
         if let novel {
             Task { await ShaftEventReporter.shared.reportNovelBookmark(novel, added: target) }
+        }
+        Task {
+            if target {
+                guard let novel else { return }
+                await BookmarkMirrorService.shared.onNovelBookmarked(
+                    BookmarkMirrorMapper.withBookmarked(novel, true), restrict: MirrorRestrict.ofApiValue(resolvedRestrict)
+                )
+            } else {
+                await BookmarkMirrorService.shared.onUnbookmarked(contentType: .novel, targetId: id)
+            }
         }
         return true
     }
