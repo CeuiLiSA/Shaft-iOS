@@ -15,6 +15,18 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXBuildFile section */
+		D3C46192FB90706A8F0A869F /* StickerTests.swift */ = {isa = PBXBuildFile; fileRef = E8D5A2E74D8C63DA2DFFC85E; };
+		77DFBC336C0918E8F92DB333 /* StickerRenderTests.swift */ = {isa = PBXBuildFile; fileRef = D9E91AEB0C7A0916B3A7BAC7; };
+		AC5D9CAF0E275B894CB591DB /* StickerFixtures */ = {isa = PBXBuildFile; fileRef = 5107DF465D5237C560E06D1D; };
+		8721425C4E1AE3EB49D2DA20 /* StickerMessageContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B5AC9129DB77A756BA680E4; };
+		0EDA89DDD8434C0F32D4BD59 /* sticker-strings.json in Resources */ = {isa = PBXBuildFile; fileRef = 5DEACABE0CAF16E41ED8AF2E; };
+		60A8707BDC2193411371B1AC /* StickerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 352D069E39624EB52ADD2994; };
+		8DAD22A554E0CC685B5FD04C /* StickerRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D29F589116B354157A61D8; };
+		59623F1E00B675A29B086AFC /* StickerPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 245D427CA4865EF5F8932540; };
+		45FEA0537EBE3D8668588B7C /* StickerImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4D357C17F2BD19CC2BC821; };
+		E4F1A9BD9118D1F8A5719DEA /* StickerCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B6006F8C0C00F4A382C9745; };
+		DEB26C9FD6DAB53334067495 /* StickerCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54C8C4A4FE7A29F2977BEEDD; };
+		4BED1AA222442421E55CC6D7 /* StickerArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF45D27D744B8E7F6D6CDF03; };
 		352006898A7A9C876D799232 /* PlazaUITests.swift */ = {isa = PBXBuildFile; fileRef = B56861FB866B08D7A102A29B; };
 		CED7F99A19BA076297B02BF6 /* PlazaTests.swift */ = {isa = PBXBuildFile; fileRef = F181B040AD60D8998EF9C4FA; };
 		C72C29D7D73334F1DC62F4A0 /* PlazaRenderTests.swift */ = {isa = PBXBuildFile; fileRef = E240653DEE669FB9EFBE71B2; };
@@ -207,6 +219,18 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E8D5A2E74D8C63DA2DFFC85E /* StickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/StickerTests.swift"; sourceTree = "<group>"; };
+		D9E91AEB0C7A0916B3A7BAC7 /* StickerRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/StickerRenderTests.swift"; sourceTree = "<group>"; };
+		5107DF465D5237C560E06D1D /* StickerFixtures */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "Shaft-iOSTests/StickerFixtures"; sourceTree = "<group>"; };
+		5B5AC9129DB77A756BA680E4 /* StickerMessageContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sticker/StickerMessageContent.swift"; sourceTree = "<group>"; };
+		5DEACABE0CAF16E41ED8AF2E /* sticker-strings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "Sticker/sticker-strings.json"; sourceTree = "<group>"; };
+		352D069E39624EB52ADD2994 /* StickerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sticker/StickerStore.swift"; sourceTree = "<group>"; };
+		E9D29F589116B354157A61D8 /* StickerRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sticker/StickerRepository.swift"; sourceTree = "<group>"; };
+		245D427CA4865EF5F8932540 /* StickerPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sticker/StickerPicker.swift"; sourceTree = "<group>"; };
+		EC4D357C17F2BD19CC2BC821 /* StickerImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sticker/StickerImage.swift"; sourceTree = "<group>"; };
+		5B6006F8C0C00F4A382C9745 /* StickerCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sticker/StickerCopy.swift"; sourceTree = "<group>"; };
+		54C8C4A4FE7A29F2977BEEDD /* StickerCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sticker/StickerCatalog.swift"; sourceTree = "<group>"; };
+		FF45D27D744B8E7F6D6CDF03 /* StickerArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sticker/StickerArchive.swift"; sourceTree = "<group>"; };
 		B56861FB866B08D7A102A29B /* PlazaUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSUITests/PlazaUITests.swift"; sourceTree = "<group>"; };
 		F181B040AD60D8998EF9C4FA /* PlazaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/PlazaTests.swift"; sourceTree = "<group>"; };
 		E240653DEE669FB9EFBE71B2 /* PlazaRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/PlazaRenderTests.swift"; sourceTree = "<group>"; };
@@ -417,6 +441,9 @@
 		A1000000000000000000G001 = {
 			isa = PBXGroup;
 			children = (
+				E8D5A2E74D8C63DA2DFFC85E /* StickerTests.swift */,
+				D9E91AEB0C7A0916B3A7BAC7 /* StickerRenderTests.swift */,
+				5107DF465D5237C560E06D1D /* StickerFixtures */,
 				B56861FB866B08D7A102A29B /* PlazaUITests.swift */,
 				F181B040AD60D8998EF9C4FA /* PlazaTests.swift */,
 				E240653DEE669FB9EFBE71B2 /* PlazaRenderTests.swift */,
@@ -432,6 +459,15 @@
 		A1000000000000000000G002 /* Shaft-iOS */ = {
 			isa = PBXGroup;
 			children = (
+				5B5AC9129DB77A756BA680E4 /* StickerMessageContent.swift */,
+				5DEACABE0CAF16E41ED8AF2E /* sticker-strings.json */,
+				352D069E39624EB52ADD2994 /* StickerStore.swift */,
+				E9D29F589116B354157A61D8 /* StickerRepository.swift */,
+				245D427CA4865EF5F8932540 /* StickerPicker.swift */,
+				EC4D357C17F2BD19CC2BC821 /* StickerImage.swift */,
+				5B6006F8C0C00F4A382C9745 /* StickerCopy.swift */,
+				54C8C4A4FE7A29F2977BEEDD /* StickerCatalog.swift */,
+				FF45D27D744B8E7F6D6CDF03 /* StickerArchive.swift */,
 				AA39987D77FC23F5EFF56344 /* plaza-strings.json */,
 				D7F27BD4E369448FF2399CB1 /* PlazaView.swift */,
 				A9D9A0E4377DC7BB5BA5C964 /* PlazaStyle.swift */,
@@ -890,6 +926,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0EDA89DDD8434C0F32D4BD59 /* sticker-strings.json */,
 				3C42E3E85BD9CC29243C20D6 /* plaza-strings.json */,
 				B40AE4713749FB7DEC276F88 /* PlazaAssets.xcassets */,
 				7ECA60654DC5C16B477836CD /* discover-social-strings.json in Resources */,
@@ -907,7 +944,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B27815D00228916F461D5CBD = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (3D5D8C1E343AD8CED6714DDA,); runOnlyForDeploymentPostprocessing = 0; };
+		B27815D00228916F461D5CBD = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (AC5D9CAF0E275B894CB591DB,3D5D8C1E343AD8CED6714DDA,); runOnlyForDeploymentPostprocessing = 0; };
 		BF4585776E9313E8AF6592DD = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
@@ -916,6 +953,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8721425C4E1AE3EB49D2DA20 /* StickerMessageContent.swift */,
+				60A8707BDC2193411371B1AC /* StickerStore.swift */,
+				8DAD22A554E0CC685B5FD04C /* StickerRepository.swift */,
+				59623F1E00B675A29B086AFC /* StickerPicker.swift */,
+				45FEA0537EBE3D8668588B7C /* StickerImage.swift */,
+				E4F1A9BD9118D1F8A5719DEA /* StickerCopy.swift */,
+				DEB26C9FD6DAB53334067495 /* StickerCatalog.swift */,
+				4BED1AA222442421E55CC6D7 /* StickerArchive.swift */,
 				90E61ECB23FDF0F8DA27BE95 /* PlazaView.swift */,
 				AF33E8FA0FF2D152893A9F54 /* PlazaStyle.swift */,
 				442ED9BA0911E8A963CD824F /* PlazaStore.swift */,
@@ -1087,7 +1132,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		715CEB466C368648489445F5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (CED7F99A19BA076297B02BF6,C72C29D7D73334F1DC62F4A0,914987C45FFEA7183388C86A,); runOnlyForDeploymentPostprocessing = 0; };
+		715CEB466C368648489445F5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D3C46192FB90706A8F0A869F,77DFBC336C0918E8F92DB333,CED7F99A19BA076297B02BF6,C72C29D7D73334F1DC62F4A0,914987C45FFEA7183388C86A,); runOnlyForDeploymentPostprocessing = 0; };
 		2D339A82CA9C4D373BA23634 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (352006898A7A9C876D799232,B669B1D8C99FD8302912B05C,4FCEBBEE279B651725FF8E35,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 

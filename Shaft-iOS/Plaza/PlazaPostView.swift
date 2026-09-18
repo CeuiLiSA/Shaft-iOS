@@ -46,7 +46,8 @@ struct PlazaPostView: View {
                         ?? PlazaReaction(emoji: "sticker:\(sticker.id)", count: 0, selected: false, stickerId: sticker.id)
                     await store.react(post, reaction)
                 }
-            }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+            }.presentationDetents([.height(420)]).presentationDragIndicator(.visible)
+                .presentationCornerRadius(28).presentationBackground(Theme.v3MenuBg)
         }
     }
 

@@ -482,7 +482,7 @@ private final class ChatThreadViewModel {
     /// The return value is "the frame entered the outgoing buffer", **not** an
     /// end-to-end ACK — the echo is the ACK.
     @discardableResult
-    func sendText(_ text: String, illustId: Int64? = nil) async -> Bool {
+    func sendText(_ text: String, illustId: Int64? = nil, stickerId: String? = nil) async -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, roomError == nil else { return false }
         // doc §12: cap client-side rather than round-tripping a
@@ -505,7 +505,8 @@ private final class ChatThreadViewModel {
             text: trimmed,
             illustId: illustId,
             ts: Int64(Date().timeIntervalSince1970 * 1000),
-            state: .sending
+            state: .sending,
+            stickerId: stickerId
         )
 
         windowSize += 1
@@ -514,7 +515,7 @@ private final class ChatThreadViewModel {
         if pageState == .empty { pageState = .content }
 
         let accepted = ShaftChatGateway.shared.send(
-            toUid: peerUid, clientMsgId: clientMsgId, text: trimmed, illustId: illustId
+            toUid: peerUid, clientMsgId: clientMsgId, text: trimmed, illustId: illustId, stickerId: stickerId
         )
         if !accepted {
             await ChatMessageStore.shared.markState(room: room, localKey: clientMsgId, state: .failed)
@@ -816,6 +817,8 @@ struct ChatThreadView: View {
     @State private var vm: ChatThreadViewModel
     @State private var draft = ""
     @State private var showEmojiPanel = false
+    @State private var stickerPosition = StickerPickerPosition()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var keyboardHeight: CGFloat = 0
     @State private var listWidth: CGFloat = 0
     @State private var isAtBottom = true
@@ -847,13 +850,20 @@ struct ChatThreadView: View {
             messageArea
             inputBar
             if showEmojiPanel {
-                ChatEmojiPanel(height: panelHeight) { emoji in
-                    draft.append(emoji)
+                StickerPicker(inline: true, position: stickerPosition) { sticker in
+                    guard isStickerSendEnabled else { return }
+                    Task {
+                        scrollToBottomOnNextUpdate = true
+                        if !(await vm.sendText(StickerCopy(tag: l10n.activeTag).text("message"), stickerId: sticker.id)) {
+                            vm.showToast(vm.sendFailedText)
+                        }
+                    }
                 }
-                .transition(.move(edge: .bottom))
+                .frame(height: panelHeight)
             }
         }
         .background(Theme.v3Bg)
+        .background(alignment: .bottom) { Theme.v3MenuBg.frame(height: 1).ignoresSafeArea(edges: .bottom) }
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         // Opaque bar: the flipped list scrolls beneath it with the edge effect
@@ -882,7 +892,7 @@ struct ChatThreadView: View {
         }
         .onChange(of: inputFocused) { _, focused in
             // Keyboard and panel are mutually exclusive (BottomPanelCoordinator).
-            if focused, showEmojiPanel { withAnimation(.easeOut(duration: 0.2)) { showEmojiPanel = false } }
+            if focused, showEmojiPanel { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { showEmojiPanel = false } }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
             guard let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
@@ -994,6 +1004,10 @@ struct ChatThreadView: View {
             if newMsgCount > 0 { newMessagesPill }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .simultaneousGesture(TapGesture().onEnded {
+            inputFocused = false
+            showEmojiPanel = false
+        })
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { listWidth = $0 }
     }
 
@@ -1228,7 +1242,7 @@ struct ChatThreadView: View {
     /// `chat_fragment_demo_list.xml`'s `input_bar`: emoji toggle (40dp) +
     /// 22dp-radius filled field + 40dp filled send button, on `v3_menu_bg`.
     private var inputBar: some View {
-        HStack(alignment: .bottom, spacing: 0) {
+        HStack(alignment: .center, spacing: 0) {
             Button {
                 toggleEmojiPanel()
             } label: {
@@ -1283,6 +1297,12 @@ struct ChatThreadView: View {
     }
 
     /// doc §12: connected + has text + not rate-limited + room open.
+    private var isStickerSendEnabled: Bool {
+        guard !isComposerLocked, !vm.rateLimitCoolDown else { return false }
+        guard case .connected = ShaftChatGateway.shared.state else { return false }
+        return true
+    }
+
     private var isSendEnabled: Bool {
         guard !isComposerLocked, !vm.rateLimitCoolDown else { return false }
         guard case .connected = ShaftChatGateway.shared.state else { return false }
@@ -1309,11 +1329,11 @@ struct ChatThreadView: View {
 
     private func toggleEmojiPanel() {
         if showEmojiPanel {
-            withAnimation(.easeOut(duration: 0.2)) { showEmojiPanel = false }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { showEmojiPanel = false }
             inputFocused = true
         } else {
             inputFocused = false
-            withAnimation(.easeOut(duration: 0.2)) { showEmojiPanel = true }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { showEmojiPanel = true }
         }
     }
 
@@ -1431,6 +1451,7 @@ private struct ChatBubbleRow: View {
             Spacer(minLength: gutter)
             VStack(alignment: .trailing, spacing: 0) {
                 bubble
+                if message.stickerId == nil {
                 HStack(spacing: 3) {
                     if message.state == .failed {
                         Image(systemName: "exclamationmark.circle.fill")
@@ -1443,6 +1464,7 @@ private struct ChatBubbleRow: View {
                 }
                 .padding(.top, 3)
                 .padding(.trailing, 4)
+                }
             }
             avatarSlot(url: selfAvatarURL, useMonogram: false)
                 .padding(.leading, ChatMetrics.avatarGap)
@@ -1471,11 +1493,13 @@ private struct ChatBubbleRow: View {
                         .padding(.bottom, 3)
                 }
                 bubble
+                if message.stickerId == nil {
                 Text(ChatTime.clock(message.ts))
                     .font(.system(size: ChatMetrics.timeSize))
                     .foregroundStyle(Theme.v3Text3)
                     .padding(.leading, 4)
                     .padding(.top, 3)
+                }
             }
             .padding(.leading, ChatMetrics.avatarGap)
             Spacer(minLength: gutter)
@@ -1496,7 +1520,9 @@ private struct ChatBubbleRow: View {
         .textSelection(.disabled)
 
         Group {
-            if isJumbo {
+            if let stickerId = message.stickerId {
+                StickerMessageContent(id: stickerId, time: ChatTime.clock(message.ts), failed: message.state == .failed)
+            } else if isJumbo {
                 // 1–3 bare emoji render jumbo & bubble-less (iMessage/Telegram).
                 content
             } else if isMine {
@@ -1659,53 +1685,6 @@ private struct ChatMessageActionsSheet: View {
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Emoji panel
 // ─────────────────────────────────────────────────────────────────────────────
-
-/// Port of `EmojiPanelView`: an 8-column grid of 44pt cells at 26pt, 8pt inset,
-/// sized to stand in for the soft keyboard.
-private struct ChatEmojiPanel: View {
-    let height: CGFloat
-    let onPick: (String) -> Void
-
-    private static let columns = Array(
-        repeating: GridItem(.flexible(), spacing: 0), count: 8
-    )
-
-    var body: some View {
-        ScrollView {
-            LazyVGrid(columns: Self.columns, spacing: 0) {
-                ForEach(Self.emojis, id: \.self) { emoji in
-                    Button {
-                        onPick(emoji)
-                    } label: {
-                        Text(emoji)
-                            .font(.system(size: 26))
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(8)
-        }
-        .frame(height: height)
-        .background(Theme.v3MenuBg)
-    }
-
-    /// `EmojiPanelView.EMOJIS`, verbatim and in order.
-    static let emojis: [String] = [
-        "😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂",
-        "🙂", "😊", "😇", "🥰", "😍", "🤩", "😘", "😗",
-        "😋", "😛", "😜", "🤪", "😝", "🤑", "🤗", "🤭",
-        "🤫", "🤔", "😐", "😑", "😶", "😏", "😒", "🙄",
-        "😬", "😮‍💨", "🤥", "😌", "😔", "😪", "🤤", "😴",
-        "😷", "🤒", "🤕", "🤢", "🤮", "🥵", "🥶", "🥴",
-        "😵", "🤯", "🤠", "🥳", "🥺", "😢", "😭", "😤",
-        "😠", "😡", "🤬", "💀", "💩", "🤡", "👹", "👻",
-        "👍", "👎", "👏", "🙏", "🤝", "💪", "✌️", "🤞",
-        "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍",
-        "🔥", "⭐", "🌈", "☀️", "🌙", "🎉", "🎊", "✨",
-    ]
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MARK: - Text helpers

@@ -1,0 +1,93 @@
+{
+  "zh-Hans": {
+    "sticker_title": "贴纸",
+    "sticker_close": "关闭",
+    "sticker_retry": "重试",
+    "sticker_customized": "精选",
+    "sticker_static": "表情",
+    "sticker_animation": "动态",
+    "sticker_checking": "正在检查贴纸资源…",
+    "sticker_downloading": "正在下载贴纸：%1$d%%",
+    "sticker_extracting": "正在校验并解压贴纸…",
+    "sticker_failed": "贴纸准备失败：%1$s",
+    "sticker_message": "[贴纸]"
+  },
+  "zh-Hant": {
+    "sticker_title": "貼紙",
+    "sticker_close": "關閉",
+    "sticker_retry": "重試",
+    "sticker_customized": "精選",
+    "sticker_static": "表情",
+    "sticker_animation": "動態",
+    "sticker_checking": "正在檢查貼紙資源…",
+    "sticker_downloading": "正在下載貼紙：%1$d%%",
+    "sticker_extracting": "正在驗證並解壓縮貼紙…",
+    "sticker_failed": "貼紙準備失敗：%1$s",
+    "sticker_message": "[貼紙]"
+  },
+  "en": {
+    "sticker_title": "Stickers",
+    "sticker_close": "Close",
+    "sticker_retry": "Retry",
+    "sticker_customized": "Featured",
+    "sticker_static": "Emoji",
+    "sticker_animation": "Animated",
+    "sticker_checking": "Checking sticker resources…",
+    "sticker_downloading": "Downloading stickers: %1$d%%",
+    "sticker_extracting": "Verifying and extracting stickers…",
+    "sticker_failed": "Could not prepare stickers: %1$s",
+    "sticker_message": "[Sticker]"
+  },
+  "ja": {
+    "sticker_title": "スタンプ",
+    "sticker_close": "閉じる",
+    "sticker_retry": "再試行",
+    "sticker_customized": "おすすめ",
+    "sticker_static": "絵文字",
+    "sticker_animation": "アニメーション",
+    "sticker_checking": "スタンプを確認中…",
+    "sticker_downloading": "スタンプをダウンロード中：%1$d%%",
+    "sticker_extracting": "スタンプを検証・展開中…",
+    "sticker_failed": "スタンプを準備できませんでした：%1$s",
+    "sticker_message": "[スタンプ]"
+  },
+  "ko": {
+    "sticker_title": "스티커",
+    "sticker_close": "닫기",
+    "sticker_retry": "다시 시도",
+    "sticker_customized": "추천",
+    "sticker_static": "이모지",
+    "sticker_animation": "움직이는 스티커",
+    "sticker_checking": "스티커 확인 중…",
+    "sticker_downloading": "스티커 다운로드 중: %1$d%%",
+    "sticker_extracting": "스티커 확인 및 압축 해제 중…",
+    "sticker_failed": "스티커 준비 실패: %1$s",
+    "sticker_message": "[스티커]"
+  },
+  "ru": {
+    "sticker_title": "Стикеры",
+    "sticker_close": "Закрыть",
+    "sticker_retry": "Повторить",
+    "sticker_customized": "Избранное",
+    "sticker_static": "Эмодзи",
+    "sticker_animation": "Анимация",
+    "sticker_checking": "Проверка стикеров…",
+    "sticker_downloading": "Загрузка стикеров: %1$d%%",
+    "sticker_extracting": "Проверка и распаковка стикеров…",
+    "sticker_failed": "Не удалось подготовить стикеры: %1$s",
+    "sticker_message": "[Стикер]"
+  },
+  "tr": {
+    "sticker_title": "Çıkartmalar",
+    "sticker_close": "Kapat",
+    "sticker_retry": "Yeniden dene",
+    "sticker_customized": "Öne çıkanlar",
+    "sticker_static": "Emoji",
+    "sticker_animation": "Hareketli",
+    "sticker_checking": "Çıkartmalar kontrol ediliyor…",
+    "sticker_downloading": "Çıkartmalar indiriliyor: %1$d%%",
+    "sticker_extracting": "Çıkartmalar doğrulanıyor ve açılıyor…",
+    "sticker_failed": "Çıkartmalar hazırlanamadı: %1$s",
+    "sticker_message": "[Çıkartma]"
+  }
+}

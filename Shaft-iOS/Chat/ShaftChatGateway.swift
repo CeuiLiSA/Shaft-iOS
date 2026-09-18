@@ -228,11 +228,11 @@ final class ShaftChatGateway {
     /// The caller owns the 2048-UTF-16-unit cap and generates a fresh
     /// `clientMsgId` per call; this method only rejects empty text.
     @discardableResult
-    func send(toUid: Int64?, clientMsgId: String, text: String, illustId: Int64? = nil) -> Bool {
+    func send(toUid: Int64?, clientMsgId: String, text: String, illustId: Int64? = nil, stickerId: String? = nil) -> Bool {
         guard !text.isEmpty else { return false }
         let frame = toUid == nil
-            ? ChatFrameEncoder.msgGlobal(clientMsgId: clientMsgId, text: text, illustId: illustId)
-            : ChatFrameEncoder.msg1v1(toUid: toUid!, clientMsgId: clientMsgId, text: text, illustId: illustId)
+            ? ChatFrameEncoder.msgGlobal(clientMsgId: clientMsgId, text: text, illustId: illustId, stickerId: stickerId)
+            : ChatFrameEncoder.msg1v1(toUid: toUid!, clientMsgId: clientMsgId, text: text, illustId: illustId, stickerId: stickerId)
         let ok = rawSend(frame)
         if ok {
             ChatLog.info("⇡ msg sent to=\(toUid.map(String.init) ?? "global") cmid=\(clientMsgId) text=\(text.prefix(80))")

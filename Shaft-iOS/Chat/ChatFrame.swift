@@ -68,6 +68,7 @@ struct ChatMsgFrame: Sendable, Equatable {
     let text: String?
     let illustId: Int64?
     let ts: Int64
+    var stickerId: String? = nil
 }
 
 // MARK: - Decoding
@@ -116,7 +117,8 @@ enum ChatFrameDecoder {
                 clientMsgId: obj.chatString("client_msg_id"),
                 text: obj.chatString("text"),
                 illustId: obj.chatInt64("illust_id"),
-                ts: ts
+                ts: ts,
+                stickerId: obj.chatString("sticker_id")
             ))
 
         case "err":
@@ -202,10 +204,11 @@ private extension [String: Any] {
 enum ChatFrameEncoder {
 
     /// `{"kind":"msg","room":"global","client_msg_id":…,"text":…,"illust_id":…?}`
-    static func msgGlobal(clientMsgId: String, text: String, illustId: Int64? = nil) -> String {
+    static func msgGlobal(clientMsgId: String, text: String, illustId: Int64? = nil, stickerId: String? = nil) -> String {
         var body: [String: Any] = ["kind": "msg", "room": "global",
                                    "client_msg_id": clientMsgId, "text": text]
         if let illustId { body["illust_id"] = illustId }
+        if let stickerId { body["sticker_id"] = stickerId }
         return encode(body)
     }
 
@@ -218,10 +221,11 @@ enum ChatFrameEncoder {
     /// `to_uid` goes out as a JSON number literal (never a quoted or
     /// space-padded string) — the server does no coercion and answers
     /// `bad_to_uid` for anything else.
-    static func msg1v1(toUid: Int64, clientMsgId: String, text: String, illustId: Int64? = nil) -> String {
+    static func msg1v1(toUid: Int64, clientMsgId: String, text: String, illustId: Int64? = nil, stickerId: String? = nil) -> String {
         var body: [String: Any] = ["kind": "msg", "to_uid": toUid,
                                    "client_msg_id": clientMsgId, "text": text]
         if let illustId { body["illust_id"] = illustId }
+        if let stickerId { body["sticker_id"] = stickerId }
         return encode(body)
     }
 

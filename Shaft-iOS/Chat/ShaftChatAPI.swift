@@ -20,6 +20,7 @@ struct ChatHistoryItem: Decodable, Sendable {
     let display_name: String?
     let text: String?
     let illust_id: Int64?
+    let sticker_id: String?
     let ts: Int64
 }
 

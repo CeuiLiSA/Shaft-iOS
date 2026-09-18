@@ -46,6 +46,7 @@ struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
     var illustId: Int64?
     var ts: Int64
     var state: ChatSendState
+    var stickerId: String? = nil
 
     var id: String { localKey }
 
@@ -69,7 +70,8 @@ struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
             text: item.text ?? "",
             illustId: item.illust_id,
             ts: item.ts,
-            state: .delivered
+            state: .delivered,
+            stickerId: item.sticker_id
         )
     }
 
@@ -91,7 +93,8 @@ struct ChatMessage: Identifiable, Hashable, Codable, Sendable {
             text: frame.text ?? "",
             illustId: frame.illustId,
             ts: frame.ts,
-            state: .delivered
+            state: .delivered,
+            stickerId: frame.stickerId
         )
     }
 }

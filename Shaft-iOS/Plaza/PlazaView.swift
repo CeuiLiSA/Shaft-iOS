@@ -120,6 +120,8 @@ struct PlazaDetailView: View {
     @State private var selected: Int64?
     @State private var policy = false
     @State private var stickers = false
+    @State private var stickerPosition = StickerPickerPosition()
+    @State private var stickerKeyboardHeight: CGFloat = 270
     @FocusState private var focused: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(OnboardingStore.self) private var language
@@ -184,6 +186,11 @@ struct PlazaDetailView: View {
         .onChange(of: store.structureRevision) { _, _ in Task { await load(force: true) } }
         .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await load(force: false) } } }
         .onChange(of: focused) { _, value in if value { stickers = false } }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
+            guard focused, let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+            let inset = (UIApplication.shared.connectedScenes.first as? UIWindowScene)?.windows.first(where: \.isKeyWindow)?.safeAreaInsets.bottom ?? 0
+            stickerKeyboardHeight = max(180, frame.height - inset)
+        }
         .alert(copy.text("policy_title"), isPresented: $policy) {
             Button(copy.text("cancel"), role: .cancel) {}
             Button(copy.text("policy_accept")) {
@@ -213,8 +220,14 @@ struct PlazaDetailView: View {
                 PlazaText(value: copy.error(error), size: 13, color: Theme.v3Danger).padding(.horizontal, 16).padding(.top, 8)
             }
             HStack(spacing: 0) {
-                Button { focused = false; stickers.toggle() } label: {
-                    PlazaIcon(glyph: .emoji).frame(width: 40, height: 40)
+                Button {
+                    if stickers { stickers = false; focused = true }
+                    else { focused = false; stickers = true }
+                } label: {
+                    Group {
+                        if stickers { Image(systemName: "keyboard").font(.system(size: 22)) }
+                        else { PlazaIcon(glyph: .emoji) }
+                    }.frame(width: 40, height: 40)
                 }.accessibilityLabel(copy.text("sticker_title"))
                 TextField(copy.text("comment_hint"), text: Binding(get: { composer.draft.text }, set: { value in composer.edit { $0.text = value } }), axis: .vertical)
                     .font(.custom("Montserrat-Regular", size: 15)).lineLimit(1...4).focused($focused)
@@ -229,13 +242,14 @@ struct PlazaDetailView: View {
                 }.disabled(!composer.canSend || store.busy).accessibilityLabel(copy.text("send"))
             }.padding(.horizontal, 12).padding(.vertical, 10).disabled(composer.sending)
             if stickers {
-                PlazaStickerPicker(inline: true) { sticker in
+                PlazaStickerPicker(inline: true, position: stickerPosition) { sticker in
+                    guard !composer.sending else { return }
                     if let post {
                         let reaction = post.reactions?.first { $0.stickerId == sticker.id }
                             ?? PlazaReaction(emoji: "sticker:\(sticker.id)", count: 0, selected: false, stickerId: sticker.id)
                         Task { await store.react(post, reaction) }
                     }
-                }.frame(height: 270)
+                }.frame(height: stickerKeyboardHeight)
             }
         }.frame(maxWidth: 720).frame(maxWidth: .infinity)
             .background(Theme.v3MenuBg.ignoresSafeArea(edges: .bottom))
