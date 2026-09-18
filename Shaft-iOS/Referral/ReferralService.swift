@@ -46,18 +46,21 @@ actor ReferralSession {
             throw ReferralFailure(code: "login_required")
         }
         if let flight = flights[uid] { return try await flight.value }
-        let flight = Task { try await self.obtain(uid: uid, rejected: rejected) }
+        let stored = memory[uid] ?? readCredentials(uid).flatMap { try? JSONDecoder().decode(Stored.self, from: $0) }
+        // A cached read must not become a shared flight: a concurrent 401 retry
+        // would join it and receive the exact access token it just rejected.
+        if let value = stored, value.tokens.access_expires_at > referralNow() + 60_000,
+           value.tokens.access_token != rejected, value.refreshAttempt == nil {
+            return value.tokens.access_token
+        }
+        let flight = Task { try await self.obtain(uid: uid, stored: stored) }
         flights[uid] = flight
         defer { flights[uid] = nil }
         return try await flight.value
     }
 
-    private func obtain(uid: Int64, rejected: String?) async throws -> String {
-        var stored = memory[uid] ?? readCredentials(uid).flatMap { try? JSONDecoder().decode(Stored.self, from: $0) }
-        if let value = stored, value.tokens.access_expires_at > referralNow() + 60_000,
-           value.tokens.access_token != rejected, value.refreshAttempt == nil {
-            return value.tokens.access_token
-        }
+    private func obtain(uid: Int64, stored initial: Stored?) async throws -> String {
+        var stored = initial
         if var value = stored {
             value.refreshAttempt = value.refreshAttempt ?? UUID().uuidString
             try save(value, uid: uid) // Persist before rotating, so interrupted retries reuse this ID.
@@ -350,18 +353,47 @@ actor ReferralActivityReporter {
 final class ReferralLinkStore {
     static let shared = ReferralLinkStore()
     private static let key = "referral_pending_invite"
-    var pendingCode: String? = UserDefaults.standard.string(forKey: key)
+    private let defaults: UserDefaults
+    private(set) var pendingCode: String?
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        pendingCode = defaults.string(forKey: Self.key)
+    }
     func receive(_ url: URL) {
         guard url.scheme?.lowercased() == "shaftintent", url.host?.lowercased() == "referral",
               let raw = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "code" })?.value,
               let code = parseReferralCode(raw) else { return }
-        UserDefaults.standard.set(code, forKey: Self.key)
+        defaults.set(code, forKey: Self.key)
         pendingCode = code
     }
     func consume() -> String? {
         guard let code = pendingCode else { return nil }
         pendingCode = nil
-        UserDefaults.standard.removeObject(forKey: Self.key)
+        defaults.removeObject(forKey: Self.key)
         return parseReferralCode(code)
+    }
+}
+
+/// Matches Android's one check per page and last-eight codes per account.
+/// Clipboard access stays lazy: only the eligible referral page may request it.
+struct ReferralBindingPrompt {
+    private let defaults: UserDefaults
+    private var checkedUID: Int64?
+    init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+
+    mutating func suggestion(snapshot: ReferralSnapshot, loading: Bool, uid: Int64,
+                             initialCode: String?, clipboard: () -> String?) -> String? {
+        guard !loading, uid > 0, checkedUID != uid, snapshot.enabled == true,
+              snapshot.inviterUID == nil, let invite = snapshot.task(.invite), invite.enabled != false else { return nil }
+        checkedUID = uid
+        let fromLink = parseReferralCode(initialCode)
+        guard let code = fromLink ?? parseReferralCode(clipboard()), code != snapshot.code else { return nil }
+        if fromLink == nil {
+            let key = "referral_asked_bind_codes_\(uid)"
+            let asked = defaults.stringArray(forKey: key) ?? []
+            guard !asked.contains(code) else { return nil }
+            defaults.set(Array(([code] + asked).prefix(8)), forKey: key)
+        }
+        return code
     }
 }

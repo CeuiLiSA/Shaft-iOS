@@ -63,6 +63,9 @@ struct ReferralPreviewScreen: View {
     private let width: CGFloat?
     private let large: Bool
     private let initialSheet: ReferralSheetSelection?
+    private let initialCode: String?
+    private let clipboard: String?
+    private let prompt: ReferralBindingPrompt
     @State private var model: ReferralModel
     init() {
         let args = ProcessInfo.processInfo.arguments
@@ -71,6 +74,11 @@ struct ReferralPreviewScreen: View {
         language = option("--referral-language") ?? "zh-Hans"
         dark = args.contains("--referral-dark")
         large = args.contains("--referral-large")
+        initialCode = option("--referral-code")
+        clipboard = option("--referral-clipboard")
+        let defaults = UserDefaults(suiteName: "com.shaft.ShaftiOS.referral-preview")!
+        if args.contains("--referral-reset-prompts") { defaults.removePersistentDomain(forName: "com.shaft.ShaftiOS.referral-preview") }
+        prompt = ReferralBindingPrompt(defaults: defaults)
         width = option("--referral-width").flatMap(Double.init).map { CGFloat($0) }
         initialSheet = option("--referral-sheet").flatMap(ReferralSheetKind.init(rawValue:)).map {
             ReferralSheetSelection(kind: $0, task: ReferralTask(rawValue: option("--referral-task") ?? "invite") ?? .invite, cardID: 100)
@@ -79,7 +87,7 @@ struct ReferralPreviewScreen: View {
     }
     var body: some View {
         NavigationStack {
-            ReferralPlanView(initialSheet: initialSheet, model: model)
+            ReferralPlanView(initialCode: initialCode, initialSheet: initialSheet, readClipboard: { clipboard }, bindingPrompt: prompt, model: model)
                 .frame(maxWidth: width ?? .infinity)
                 .frame(maxWidth: .infinity)
         }

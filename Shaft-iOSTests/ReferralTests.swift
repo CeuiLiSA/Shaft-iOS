@@ -165,6 +165,26 @@ final class ReferralTests: XCTestCase {
         XCTAssertEqual(requests.count, 1)
     }
 
+    func testRejectedTokenCannotBeReusedByConcurrentCachedReaders() async throws {
+        for _ in 0..<40 {
+            let storage = LockedValue<Data?>(try storedAuthTokens())
+            let http = AuthHTTPStub([.response(200, try authTokens(access: "renewed-access"))])
+            let session = authSession(storage: storage, http: http)
+            let rejectedResults = try await withThrowingTaskGroup(of: (Bool, String).self) { group in
+                for index in 0..<8 {
+                    group.addTask {
+                        let rejected = !index.isMultiple(of: 2)
+                        return (rejected, try await session.token(uid: 42, rejected: rejected ? "old-access" : nil))
+                    }
+                }
+                var results: [String] = []
+                for try await (rejected, token) in group where rejected { results.append(token) }
+                return results
+            }
+            XCTAssertTrue(rejectedResults.allSatisfy { $0 == "renewed-access" }, "A 401 retry must never receive the token it rejected")
+        }
+    }
+
     func testForegroundActivityDoesNotSwallowBookmarkAndResetsAtShanghaiMidnight() async {
         let date = LockedValue(Date(timeIntervalSince1970: 1_000 * 86400 - 8 * 3600 - 1))
         let sent = LockedValue<[Bool]>([])
@@ -204,6 +224,82 @@ final class ReferralTests: XCTestCase {
         await reporter.bookmark(uid: 42)
         XCTAssertEqual(sent.read(), 0)
     }
+
+    @MainActor func testClipboardBindingPromptIsOncePerPageAndPerAccount() {
+        withReferralDefaults { defaults in
+            let snapshot = ReferralSnapshot(enabled: true, code: "K7M2QX4P", tasks: [.init(key: "invite", enabled: true)])
+            var first = ReferralBindingPrompt(defaults: defaults)
+            var reads = 0
+            let clipboard = { reads += 1; return "https://pixshaft.com/i/ABCD2345" }
+            XCTAssertEqual(first.suggestion(snapshot: snapshot, loading: false, uid: 42, initialCode: nil, clipboard: clipboard), "ABCD2345")
+            XCTAssertNil(first.suggestion(snapshot: snapshot, loading: false, uid: 42, initialCode: nil, clipboard: clipboard))
+            XCTAssertEqual(reads, 1)
+            var reopened = ReferralBindingPrompt(defaults: defaults)
+            XCTAssertNil(reopened.suggestion(snapshot: snapshot, loading: false, uid: 42, initialCode: nil, clipboard: clipboard))
+            XCTAssertEqual(reopened.suggestion(snapshot: snapshot, loading: false, uid: 99, initialCode: nil, clipboard: clipboard), "ABCD2345")
+            // An explicit link is a fresh user intent even after a clipboard prompt.
+            var linked = ReferralBindingPrompt(defaults: defaults)
+            XCTAssertEqual(linked.suggestion(snapshot: snapshot, loading: false, uid: 42, initialCode: "ABCD2345", clipboard: {
+                XCTFail("A valid deep link must not read the clipboard"); return nil
+            }), "ABCD2345")
+        }
+    }
+
+    @MainActor func testBindingPromptWaitsForEligibilityAndRejectsOwnCode() {
+        withReferralDefaults { defaults in
+            var prompt = ReferralBindingPrompt(defaults: defaults)
+            var snapshot = ReferralSnapshot(enabled: true, code: "K7M2QX4P", tasks: [.init(key: "invite", enabled: true)])
+            let noRead: () -> String? = { XCTFail("Ineligible state must not read clipboard"); return "ABCD2345" }
+            XCTAssertNil(prompt.suggestion(snapshot: snapshot, loading: true, uid: 42, initialCode: nil, clipboard: noRead))
+            snapshot.enabled = false
+            XCTAssertNil(prompt.suggestion(snapshot: snapshot, loading: false, uid: 42, initialCode: nil, clipboard: noRead))
+            snapshot.enabled = true; snapshot.boundTo = .init(inviterUid: 99)
+            XCTAssertNil(prompt.suggestion(snapshot: snapshot, loading: false, uid: 42, initialCode: nil, clipboard: noRead))
+            snapshot.boundTo = nil; snapshot.tasks?[0].enabled = false
+            XCTAssertNil(prompt.suggestion(snapshot: snapshot, loading: false, uid: 42, initialCode: nil, clipboard: noRead))
+            snapshot.tasks?[0].enabled = true
+            XCTAssertNil(prompt.suggestion(snapshot: snapshot, loading: false, uid: 0, initialCode: nil, clipboard: noRead))
+            XCTAssertNil(prompt.suggestion(snapshot: snapshot, loading: false, uid: 42, initialCode: "K7M2QX4P", clipboard: noRead))
+            var selfClipboard = ReferralBindingPrompt(defaults: defaults)
+            XCTAssertNil(selfClipboard.suggestion(snapshot: snapshot, loading: false, uid: 42, initialCode: nil, clipboard: { "K7M2QX4P" }))
+        }
+    }
+
+    @MainActor func testClipboardPromptHistoryHasSameEightCodeLimitAsAndroid() {
+        withReferralDefaults { defaults in
+            let snapshot = ReferralSnapshot(enabled: true, tasks: [.init(key: "invite", enabled: true)])
+            let codes = ["ABCDEFGH", "ABCDEFGJ", "ABCDEFGK", "ABCDEFGM", "ABCDEFGN", "ABCDEFGP", "ABCDEFGQ", "ABCDEFGR", "ABCDEFGS"]
+            for code in codes {
+                var prompt = ReferralBindingPrompt(defaults: defaults)
+                XCTAssertEqual(prompt.suggestion(snapshot: snapshot, loading: false, uid: 42, initialCode: nil, clipboard: { code }), code)
+            }
+            var again = ReferralBindingPrompt(defaults: defaults)
+            XCTAssertNil(again.suggestion(snapshot: snapshot, loading: false, uid: 42, initialCode: nil, clipboard: { codes.last }))
+            var evicted = ReferralBindingPrompt(defaults: defaults)
+            XCTAssertEqual(evicted.suggestion(snapshot: snapshot, loading: false, uid: 42, initialCode: nil, clipboard: { codes.first }), codes.first)
+        }
+    }
+
+    @MainActor func testPendingInviteSurvivesLoginAndInvalidLinksDoNotReplaceIt() {
+        withReferralDefaults { defaults in
+            let beforeLogin = ReferralLinkStore(defaults: defaults)
+            beforeLogin.receive(URL(string: "shaftintent://referral?code=abcd2345")!)
+            for raw in ["https://referral?code=ABCDEFGH", "shaftintent://other?code=ABCDEFGH", "shaftintent://referral?code=invalid"] {
+                beforeLogin.receive(URL(string: raw)!)
+            }
+            let afterLogin = ReferralLinkStore(defaults: defaults)
+            XCTAssertEqual(afterLogin.consume(), "ABCD2345")
+            XCTAssertNil(afterLogin.consume())
+            XCTAssertNil(ReferralLinkStore(defaults: defaults).pendingCode)
+        }
+    }
+}
+
+@MainActor private func withReferralDefaults(_ body: (UserDefaults) -> Void) {
+    let suite = "referral-tests-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    body(defaults)
 }
 
 private final class LockedValue<Value>: @unchecked Sendable {

@@ -84,4 +84,42 @@ final class ReferralUITests: XCTestCase {
         capture("russian-320-top")
         app.swipeUp(velocity: .slow); capture("russian-320-wallet")
     }
+
+    func testClipboardPromptDeduplicationAndExplicitInviteBinding() {
+        app.launchArguments = ["--referral-preview", "--referral-clipboard=ABCD2345", "--referral-reset-prompts"]
+        app.launch()
+        let code = app.textFields["邀请码"]
+        XCTAssertTrue(code.waitForExistence(timeout: 15))
+        XCTAssertEqual(code.value as? String, "ABCD2345")
+        app.buttons["关闭"].tap()
+        launch("--referral-clipboard=ABCD2345")
+        XCTAssertFalse(code.exists)
+        app.launchArguments = ["--referral-preview", "--referral-code=ABCD2345"]
+        app.launch()
+        XCTAssertTrue(code.waitForExistence(timeout: 15))
+        app.buttons["绑定邀请人"].tap()
+        XCTAssertTrue(app.staticTexts["接受邀请成功"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["你已绑定邀请人（UID 99）。"].exists)
+        app.buttons["知道了"].tap()
+        for _ in 0..<8 { app.swipeUp(velocity: .fast) }
+        XCTAssertFalse(app.buttons["我被邀请了"].exists)
+        XCTAssertTrue(app.staticTexts["你已绑定邀请人（UID 99）。"].exists)
+    }
+
+    func testSubmissionCompletesAndTaskBecomesPending() {
+        launch("--referral-scenario=rejected")
+        findButton("补充内容：发布 App 推荐帖").tap()
+        findButton("提交内容链接").tap()
+        let url = app.textFields["内容链接"]
+        XCTAssertTrue(url.waitForExistence(timeout: 5))
+        url.tap(); url.typeText("https://example.com/referral-review")
+        let description = app.textFields["内容说明"]
+        description.tap(); description.typeText("Original App review with download instructions and reward disclosure.")
+        findButton("内容为本人原创，已附 App 下载入口，并注明参与活动可获体验卡。").tap()
+        findButton("提交审核").tap()
+        XCTAssertTrue(app.staticTexts["已提交"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        app.buttons["知道了"].tap()
+        XCTAssertTrue(findButton("查看审核：发布 App 推荐帖").exists)
+    }
 }

@@ -13,6 +13,8 @@ struct ReferralSheetSelection: Identifiable {
 struct ReferralPlanView: View {
     var initialCode: String?
     var initialSheet: ReferralSheetSelection?
+    var readClipboard: () -> String? = { UIPasteboard.general.string }
+    @State var bindingPrompt = ReferralBindingPrompt()
     @State var model = ReferralModel()
     @Environment(OnboardingStore.self) private var l10n
     @Environment(\.dismiss) private var dismiss
@@ -22,7 +24,6 @@ struct ReferralPlanView: View {
     @State private var darkOverride: Bool?
     @State private var filter: ReferralFilter = .all
     @State private var sheet: ReferralSheetSelection?
-    @State private var asked = false
     @State private var now = referralNow()
     @ScaledMetric(relativeTo: .body) private var fontScale: CGFloat = 1
     private var c: ReferralPalette { ReferralPalette(dark: darkOverride ?? (colorScheme == .dark)) }
@@ -70,7 +71,9 @@ struct ReferralPlanView: View {
         .onChange(of: phase) { _, value in
             if value == .active { now = referralNow(); Task { await model.refresh(); suggestBinding() } }
         }
+        .onChange(of: model.loading) { _, _ in suggestBinding() }
         .onChange(of: model.snapshot.code) { _, _ in suggestBinding() }
+        .onChange(of: sheet?.id) { _, value in if value == nil { suggestBinding() } }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: sheet?.id)
         .accessibilityIdentifier("referral-page")
     }
@@ -382,9 +385,11 @@ struct ReferralPlanView: View {
         }.frame(maxWidth: .infinity).multilineTextAlignment(.center).referralCard(c, horizontal: 24, vertical: 36)
     }
     private func suggestBinding() {
-        guard !asked, !model.loading, s.enabled == true, s.inviterUID == nil, s.task(.invite)?.enabled != false else { return }
-        asked = true
-        guard let code = parseReferralCode(initialCode), code != s.code else { return }
+        guard sheet == nil, let code = bindingPrompt.suggestion(
+            snapshot: s, loading: model.loading,
+            uid: s.uid ?? KeychainTokenStore.shared.load()?.user?.id ?? 0,
+            initialCode: initialCode, clipboard: readClipboard
+        ) else { return }
         sheet = ReferralSheetSelection(kind: .bind, code: code)
     }
 }
