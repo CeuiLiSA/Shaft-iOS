@@ -15,6 +15,24 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXBuildFile section */
+		352006898A7A9C876D799232 /* PlazaUITests.swift */ = {isa = PBXBuildFile; fileRef = B56861FB866B08D7A102A29B; };
+		CED7F99A19BA076297B02BF6 /* PlazaTests.swift */ = {isa = PBXBuildFile; fileRef = F181B040AD60D8998EF9C4FA; };
+		C72C29D7D73334F1DC62F4A0 /* PlazaRenderTests.swift */ = {isa = PBXBuildFile; fileRef = E240653DEE669FB9EFBE71B2; };
+		3D5D8C1E343AD8CED6714DDA /* PlazaFixtures */ = {isa = PBXBuildFile; fileRef = E65A856EF9C124E114A86DB2; };
+		3C42E3E85BD9CC29243C20D6 /* plaza-strings.json in Resources */ = {isa = PBXBuildFile; fileRef = AA39987D77FC23F5EFF56344; };
+		90E61ECB23FDF0F8DA27BE95 /* PlazaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7F27BD4E369448FF2399CB1; };
+		AF33E8FA0FF2D152893A9F54 /* PlazaStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9D9A0E4377DC7BB5BA5C964; };
+		442ED9BA0911E8A963CD824F /* PlazaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23B8B11387F154E936FA3720; };
+		8FD433A90C768E65DB9E112E /* PlazaStickers.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECFE779B6B4D8874BC5E0431; };
+		5469F6EA27D95D4555FABFD6 /* PlazaSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3939DAB5D48C2DB2B108BADC; };
+		88B662F34E1CD0E46335D90A /* PlazaPostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7357A122492B75F221A17227; };
+		1AB9E88025BD6F6EA942909D /* PlazaModerationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26102BED413D6FAFAEFD3DED; };
+		F82CEF297AA7356F276957CF /* PlazaModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A4EF1B5CAFA316ABF00C6E6; };
+		922C82E5B073CEA0AF0B4D30 /* PlazaMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7408DE0F9414DCFB6350F20A; };
+		48E3643CD9F18FF68DD3F8AF /* PlazaIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABD2A0E0F3BEF3D49441A8FF; };
+		65513C67E52324D75AB56429 /* PlazaComposeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70FDBD8A715FB935D4A83124; };
+		B40AE4713749FB7DEC276F88 /* PlazaAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 11FF810AE903753A0B5C3C19; };
+		97B251806008460A781E7D27 /* PlazaAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DA0C6A23A0592123E35797A; };
 		A1000000000000000000B001 /* Shaft_iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F001 /* Shaft_iOSApp.swift */; };
 		A1000000000000000000B002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F002 /* ContentView.swift */; };
 		A1000000000000000000B003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F003 /* Assets.xcassets */; };
@@ -189,6 +207,24 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		B56861FB866B08D7A102A29B /* PlazaUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSUITests/PlazaUITests.swift"; sourceTree = "<group>"; };
+		F181B040AD60D8998EF9C4FA /* PlazaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/PlazaTests.swift"; sourceTree = "<group>"; };
+		E240653DEE669FB9EFBE71B2 /* PlazaRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/PlazaRenderTests.swift"; sourceTree = "<group>"; };
+		E65A856EF9C124E114A86DB2 /* PlazaFixtures */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "Shaft-iOSTests/PlazaFixtures"; sourceTree = "<group>"; };
+		AA39987D77FC23F5EFF56344 /* plaza-strings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "Plaza/plaza-strings.json"; sourceTree = "<group>"; };
+		D7F27BD4E369448FF2399CB1 /* PlazaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Plaza/PlazaView.swift"; sourceTree = "<group>"; };
+		A9D9A0E4377DC7BB5BA5C964 /* PlazaStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Plaza/PlazaStyle.swift"; sourceTree = "<group>"; };
+		23B8B11387F154E936FA3720 /* PlazaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Plaza/PlazaStore.swift"; sourceTree = "<group>"; };
+		ECFE779B6B4D8874BC5E0431 /* PlazaStickers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Plaza/PlazaStickers.swift"; sourceTree = "<group>"; };
+		3939DAB5D48C2DB2B108BADC /* PlazaSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Plaza/PlazaSession.swift"; sourceTree = "<group>"; };
+		7357A122492B75F221A17227 /* PlazaPostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Plaza/PlazaPostView.swift"; sourceTree = "<group>"; };
+		26102BED413D6FAFAEFD3DED /* PlazaModerationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Plaza/PlazaModerationView.swift"; sourceTree = "<group>"; };
+		5A4EF1B5CAFA316ABF00C6E6 /* PlazaModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Plaza/PlazaModels.swift"; sourceTree = "<group>"; };
+		7408DE0F9414DCFB6350F20A /* PlazaMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Plaza/PlazaMedia.swift"; sourceTree = "<group>"; };
+		ABD2A0E0F3BEF3D49441A8FF /* PlazaIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Plaza/PlazaIcons.swift"; sourceTree = "<group>"; };
+		70FDBD8A715FB935D4A83124 /* PlazaComposeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Plaza/PlazaComposeView.swift"; sourceTree = "<group>"; };
+		11FF810AE903753A0B5C3C19 /* PlazaAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Plaza/PlazaAssets.xcassets"; sourceTree = "<group>"; };
+		9DA0C6A23A0592123E35797A /* PlazaAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Plaza/PlazaAPI.swift"; sourceTree = "<group>"; };
 		A1000000000000000000A001 /* Shaft-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Shaft-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000000000000000000F001 /* Shaft_iOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shaft_iOSApp.swift; sourceTree = "<group>"; };
 		A1000000000000000000F002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -381,6 +417,10 @@
 		A1000000000000000000G001 = {
 			isa = PBXGroup;
 			children = (
+				B56861FB866B08D7A102A29B /* PlazaUITests.swift */,
+				F181B040AD60D8998EF9C4FA /* PlazaTests.swift */,
+				E240653DEE669FB9EFBE71B2 /* PlazaRenderTests.swift */,
+				E65A856EF9C124E114A86DB2 /* PlazaFixtures */,
 				9041C89376CAD3336D17B7AA /* ReferralUITests.swift */,
 				E2C31BEFC620282406756CC1 /* DiscoverSocialUITests.swift */,
 				FD32A36F83621BE6D44E4839 /* ReferralTests.swift */,
@@ -392,6 +432,20 @@
 		A1000000000000000000G002 /* Shaft-iOS */ = {
 			isa = PBXGroup;
 			children = (
+				AA39987D77FC23F5EFF56344 /* plaza-strings.json */,
+				D7F27BD4E369448FF2399CB1 /* PlazaView.swift */,
+				A9D9A0E4377DC7BB5BA5C964 /* PlazaStyle.swift */,
+				23B8B11387F154E936FA3720 /* PlazaStore.swift */,
+				ECFE779B6B4D8874BC5E0431 /* PlazaStickers.swift */,
+				3939DAB5D48C2DB2B108BADC /* PlazaSession.swift */,
+				7357A122492B75F221A17227 /* PlazaPostView.swift */,
+				26102BED413D6FAFAEFD3DED /* PlazaModerationView.swift */,
+				5A4EF1B5CAFA316ABF00C6E6 /* PlazaModels.swift */,
+				7408DE0F9414DCFB6350F20A /* PlazaMedia.swift */,
+				ABD2A0E0F3BEF3D49441A8FF /* PlazaIcons.swift */,
+				70FDBD8A715FB935D4A83124 /* PlazaComposeView.swift */,
+				11FF810AE903753A0B5C3C19 /* PlazaAssets.xcassets */,
+				9DA0C6A23A0592123E35797A /* PlazaAPI.swift */,
 				D1C6C0C0D06193F8BD759795 /* Shaft-iOSUITests.xctest */,
 				506BBAA543216E5FBA1AE8D2 /* Shaft-iOSTests.xctest */,
 				174B822FDA67FC5123691E49 /* ReferralPreview.swift */,
@@ -836,6 +890,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3C42E3E85BD9CC29243C20D6 /* plaza-strings.json */,
+				B40AE4713749FB7DEC276F88 /* PlazaAssets.xcassets */,
 				7ECA60654DC5C16B477836CD /* discover-social-strings.json in Resources */,
 				36C9E36195BBEF87FBC8064C /* montserrat_extra_bold.ttf in Resources */,
 				A921FDDBF86A6316FCFD8782 /* montserrat_regular.ttf in Resources */,
@@ -851,7 +907,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		B27815D00228916F461D5CBD = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		B27815D00228916F461D5CBD = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (3D5D8C1E343AD8CED6714DDA,); runOnlyForDeploymentPostprocessing = 0; };
 		BF4585776E9313E8AF6592DD = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
@@ -860,6 +916,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				90E61ECB23FDF0F8DA27BE95 /* PlazaView.swift */,
+				AF33E8FA0FF2D152893A9F54 /* PlazaStyle.swift */,
+				442ED9BA0911E8A963CD824F /* PlazaStore.swift */,
+				8FD433A90C768E65DB9E112E /* PlazaStickers.swift */,
+				5469F6EA27D95D4555FABFD6 /* PlazaSession.swift */,
+				88B662F34E1CD0E46335D90A /* PlazaPostView.swift */,
+				1AB9E88025BD6F6EA942909D /* PlazaModerationView.swift */,
+				F82CEF297AA7356F276957CF /* PlazaModels.swift */,
+				922C82E5B073CEA0AF0B4D30 /* PlazaMedia.swift */,
+				48E3643CD9F18FF68DD3F8AF /* PlazaIcons.swift */,
+				65513C67E52324D75AB56429 /* PlazaComposeView.swift */,
+				97B251806008460A781E7D27 /* PlazaAPI.swift */,
 				0B265051DD9A3128C03B2508 /* DiscoverSocialPreview.swift in Sources */,
 				2CED58E4C748169F04C02FC0 /* DiscoverSocialArt.swift in Sources */,
 				9B4C8B77EF47E7C0A89B67DF /* DiscoverSocialPalette.swift in Sources */,
@@ -1019,8 +1087,8 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		715CEB466C368648489445F5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (914987C45FFEA7183388C86A,); runOnlyForDeploymentPostprocessing = 0; };
-		2D339A82CA9C4D373BA23634 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B669B1D8C99FD8302912B05C,4FCEBBEE279B651725FF8E35,); runOnlyForDeploymentPostprocessing = 0; };
+		715CEB466C368648489445F5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (CED7F99A19BA076297B02BF6,C72C29D7D73334F1DC62F4A0,914987C45FFEA7183388C86A,); runOnlyForDeploymentPostprocessing = 0; };
+		2D339A82CA9C4D373BA23634 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (352006898A7A9C876D799232,B669B1D8C99FD8302912B05C,4FCEBBEE279B651725FF8E35,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */

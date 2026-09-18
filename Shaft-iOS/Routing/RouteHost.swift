@@ -111,7 +111,7 @@ struct RouteHost: ViewModifier {
             case .referral(let code):
                 ReferralPlanView(initialCode: code)
             case .plaza:
-                PlazaEntryPendingView()
+                PlazaView()
             case .history:
                 HistoryView()
             case .downloads:
