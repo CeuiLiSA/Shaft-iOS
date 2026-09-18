@@ -1,0 +1,72 @@
+{
+  "zh-Hans": {
+    "discover_social_title": "交流与分享",
+    "discover_community_title": "社区",
+    "discover_chat_description": "公屏闲聊 · 私信交流",
+    "discover_community_description": "分享作品 · 参与讨论",
+    "discover_chat_action": "进入聊天",
+    "discover_community_action": "浏览广场",
+    "chat_drawer_entry": "聊天室",
+    "plaza_title": "广场"
+  },
+  "zh-Hant": {
+    "discover_social_title": "交流與分享",
+    "discover_community_title": "社群",
+    "discover_chat_description": "公屏閒聊 · 私訊交流",
+    "discover_community_description": "分享作品 · 參與討論",
+    "discover_chat_action": "進入聊天",
+    "discover_community_action": "瀏覽廣場",
+    "chat_drawer_entry": "聊天室",
+    "plaza_title": "廣場"
+  },
+  "en": {
+    "discover_social_title": "Chat and share",
+    "discover_community_title": "Community",
+    "discover_chat_description": "Public chat · Direct messages",
+    "discover_community_description": "Share artwork · Join discussions",
+    "discover_chat_action": "Open chat",
+    "discover_community_action": "Browse plaza",
+    "chat_drawer_entry": "Chat Room",
+    "plaza_title": "Plaza"
+  },
+  "ja": {
+    "discover_social_title": "交流と共有",
+    "discover_community_title": "コミュニティ",
+    "discover_chat_description": "公開チャット・個別メッセージ",
+    "discover_community_description": "作品を共有・話題に参加",
+    "discover_chat_action": "チャットを開く",
+    "discover_community_action": "広場を見る",
+    "chat_drawer_entry": "チャットルーム",
+    "plaza_title": "広場"
+  },
+  "ko": {
+    "discover_social_title": "소통과 공유",
+    "discover_community_title": "커뮤니티",
+    "discover_chat_description": "공개 채팅 · 개인 메시지",
+    "discover_community_description": "작품 공유 · 토론 참여",
+    "discover_chat_action": "채팅 열기",
+    "discover_community_action": "광장 보기",
+    "chat_drawer_entry": "채팅방",
+    "plaza_title": "광장"
+  },
+  "ru": {
+    "discover_social_title": "Общение и публикации",
+    "discover_community_title": "Сообщество",
+    "discover_chat_description": "Общий чат · Личные сообщения",
+    "discover_community_description": "Делитесь работами и обсуждайте их",
+    "discover_chat_action": "Открыть чат",
+    "discover_community_action": "Открыть ленту",
+    "chat_drawer_entry": "Чат",
+    "plaza_title": "Площадка"
+  },
+  "tr": {
+    "discover_social_title": "Sohbet ve paylaşım",
+    "discover_community_title": "Topluluk",
+    "discover_chat_description": "Genel sohbet · Özel mesajlar",
+    "discover_community_description": "Eser paylaşın · Tartışmalara katılın",
+    "discover_chat_action": "Sohbeti aç",
+    "discover_community_action": "Meydanı aç",
+    "chat_drawer_entry": "Sohbet Odası",
+    "plaza_title": "Meydan"
+  }
+}

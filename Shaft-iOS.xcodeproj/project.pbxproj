@@ -180,6 +180,12 @@
 		1E6CFD2D29F685538410030D /* ReferralPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 174B822FDA67FC5123691E49; };
 		914987C45FFEA7183388C86A /* ReferralTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD32A36F83621BE6D44E4839; };
 		B669B1D8C99FD8302912B05C /* ReferralUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9041C89376CAD3336D17B7AA; };
+		F92A3B6DAC613E7514E27EA7 /* DiscoverSocialSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 469C14B6F40821DFC1BC5B42 /* DiscoverSocialSection.swift */; };
+		9B4C8B77EF47E7C0A89B67DF /* DiscoverSocialPalette.swift in Sources */ = {isa = PBXBuildFile; fileRef = C876C0C5AAC5D8CED58A2493 /* DiscoverSocialPalette.swift */; };
+		2CED58E4C748169F04C02FC0 /* DiscoverSocialArt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A1F3BF33E7F89258916A73F /* DiscoverSocialArt.swift */; };
+		0B265051DD9A3128C03B2508 /* DiscoverSocialPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E03023F636113D235DB0EF /* DiscoverSocialPreview.swift */; };
+		7ECA60654DC5C16B477836CD /* discover-social-strings.json in Resources */ = {isa = PBXBuildFile; fileRef = 2D2C5B758ADA32B57DF2FA71 /* discover-social-strings.json */; };
+		4FCEBBEE279B651725FF8E35 /* DiscoverSocialUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2C31BEFC620282406756CC1 /* DiscoverSocialUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -351,6 +357,12 @@
 		506BBAA543216E5FBA1AE8D2 /* Shaft-iOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = "Shaft-iOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		9041C89376CAD3336D17B7AA /* ReferralUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSUITests/ReferralUITests.swift"; sourceTree = "<group>"; };
 		D1C6C0C0D06193F8BD759795 /* Shaft-iOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = "Shaft-iOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		469C14B6F40821DFC1BC5B42 /* DiscoverSocialSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DiscoverSocialSection.swift"; sourceTree = "<group>"; };
+		C876C0C5AAC5D8CED58A2493 /* DiscoverSocialPalette.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DiscoverSocialPalette.swift"; sourceTree = "<group>"; };
+		6A1F3BF33E7F89258916A73F /* DiscoverSocialArt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DiscoverSocialArt.swift"; sourceTree = "<group>"; };
+		F6E03023F636113D235DB0EF /* DiscoverSocialPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DiscoverSocialPreview.swift"; sourceTree = "<group>"; };
+		2D2C5B758ADA32B57DF2FA71 /* discover-social-strings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "discover-social-strings.json"; sourceTree = "<group>"; };
+		E2C31BEFC620282406756CC1 /* DiscoverSocialUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSUITests/DiscoverSocialUITests.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -370,6 +382,7 @@
 			isa = PBXGroup;
 			children = (
 				9041C89376CAD3336D17B7AA /* ReferralUITests.swift */,
+				E2C31BEFC620282406756CC1 /* DiscoverSocialUITests.swift */,
 				FD32A36F83621BE6D44E4839 /* ReferralTests.swift */,
 				A1000000000000000000G002 /* Shaft-iOS */,
 				A1000000000000000000G003 /* Products */,
@@ -544,6 +557,11 @@
 		A1000000000000000000G015 /* Discover */ = {
 			isa = PBXGroup;
 			children = (
+				2D2C5B758ADA32B57DF2FA71 /* discover-social-strings.json */,
+				F6E03023F636113D235DB0EF /* DiscoverSocialPreview.swift */,
+				6A1F3BF33E7F89258916A73F /* DiscoverSocialArt.swift */,
+				C876C0C5AAC5D8CED58A2493 /* DiscoverSocialPalette.swift */,
+				469C14B6F40821DFC1BC5B42 /* DiscoverSocialSection.swift */,
 				A1000000000000000000F037 /* DiscoverView.swift */,
 				A1000000000000000000F047 /* LatestWorksView.swift */,
 				A1000000000000000000F117 /* DiscoverDestinations.swift */,
@@ -818,6 +836,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7ECA60654DC5C16B477836CD /* discover-social-strings.json in Resources */,
 				36C9E36195BBEF87FBC8064C /* montserrat_extra_bold.ttf in Resources */,
 				A921FDDBF86A6316FCFD8782 /* montserrat_regular.ttf in Resources */,
 				FF62B557C644A2E3E4B7042E /* referral-strings.json in Resources */,
@@ -841,6 +860,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				0B265051DD9A3128C03B2508 /* DiscoverSocialPreview.swift in Sources */,
+				2CED58E4C748169F04C02FC0 /* DiscoverSocialArt.swift in Sources */,
+				9B4C8B77EF47E7C0A89B67DF /* DiscoverSocialPalette.swift in Sources */,
+				F92A3B6DAC613E7514E27EA7 /* DiscoverSocialSection.swift in Sources */,
 				1E6CFD2D29F685538410030D /* ReferralPreview.swift in Sources */,
 				1C5964C55FCF91CC84994A70 /* ReferralIcons.swift in Sources */,
 				2CA2E86EABE5BE93E283E9D0 /* ReferralSheet.swift in Sources */,
@@ -997,7 +1020,7 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		715CEB466C368648489445F5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (914987C45FFEA7183388C86A,); runOnlyForDeploymentPostprocessing = 0; };
-		2D339A82CA9C4D373BA23634 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B669B1D8C99FD8302912B05C,); runOnlyForDeploymentPostprocessing = 0; };
+		2D339A82CA9C4D373BA23634 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B669B1D8C99FD8302912B05C,4FCEBBEE279B651725FF8E35,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */

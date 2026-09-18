@@ -70,7 +70,7 @@ final class DiscoverViewModel {
 // MARK: - Discover tab — 1:1 FragmentCenter / fragment_new_center.xml
 
 /// 「发现」tab, V3 content-shelf version. Order (as in the XML):
-/// 漫画/小说 big cards → pixivision 特辑 → 热度标签 → 最新 → 当前最热 → 本月收藏 → 其他分类 chips.
+/// 漫画/小说 big cards → pixivision 特辑 → 热度标签 → 最新 → 当前最热 → 本月收藏 → 其他分类 chips → 交流与分享.
 /// The header row (drawer / title / search) is the host `HomeView` nav bar, as
 /// on the 推荐 tab. Pull-to-refresh stands in for upstream's double-tap
 /// `forceRefresh` (the only refresh affordance iOS tabs have).
@@ -78,6 +78,7 @@ struct DiscoverView: View {
     @State private var vm = DiscoverViewModel()
     @State private var showWebHomeComingSoon = false
     @Environment(OnboardingStore.self) private var l10n
+    @Environment(\.pushRoute) private var pushRoute
 
     var body: some View {
         ScrollView {
@@ -100,6 +101,8 @@ struct DiscoverView: View {
                 }
 
                 otherCategories
+
+                DiscoverSocialSection(onChat: { pushRoute(.chatRoomList) }, onCommunity: { pushRoute(.plaza) })
             }
             // NestedScrollView paddingBottom=24 (clipToPadding=false → just scroll slack).
             .padding(.bottom, 24)

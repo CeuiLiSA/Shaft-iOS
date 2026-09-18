@@ -98,9 +98,7 @@ final class AppSettingsStore {
     var isFirebaseEnable = true { didSet { save(isFirebaseEnable, "st_isFirebaseEnable") } }
 
     // MARK: Experimental (试验性)
-    var showChatRoomEntry = false { didSet { save(showChatRoomEntry, "st_showChatRoomEntry") } }
     var showChatRoomPushBanner = false { didSet { save(showChatRoomPushBanner, "st_showChatRoomPushBanner") } }
-    var showPlazaEntry = false { didSet { save(showPlazaEntry, "st_showPlazaEntry") } }
 
     /// Upstream `PageTransformerHelper` derives these from the transformer
     /// class names — they are shown untranslated on Android too.
@@ -164,9 +162,7 @@ final class AppSettingsStore {
         useThreeLevelZoom = bool("st_useThreeLevelZoo", false)
         useCustomLongPressReset = bool("st_useCustomLongPressReset", false)
         isFirebaseEnable = bool("st_isFirebaseEnable", true)
-        showChatRoomEntry = bool("st_showChatRoomEntry", false)
         showChatRoomPushBanner = bool("st_showChatRoomPushBanner", false)
-        showPlazaEntry = bool("st_showPlazaEntry", false)
     }
 
     private func bool(_ key: String, _ fallback: Bool) -> Bool {

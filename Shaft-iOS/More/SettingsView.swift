@@ -162,9 +162,7 @@ private enum SettingsCatalog {
         .init(id: "bulkCache", category: .data, title: .stClearBulkData, keywords: "bulk download cache 批量 下载 缓存"),
 
         // Experimental
-        .init(id: "chat", category: .experimental, title: .stChatRoomEntry, description: .stChatRoomWarning, keywords: "chat room 聊天室"),
         .init(id: "chatBanner", category: .experimental, title: .stChatRoomPushBanner, keywords: "chat push banner 聊天 消息 横幅"),
-        .init(id: "plaza", category: .experimental, title: .stPlazaEntry, keywords: "plaza 广场"),
         .init(id: "analytics", category: .experimental, title: .stFirebase, keywords: "firebase analytics telemetry privacy 分析 统计 隐私"),
     ]
 
@@ -463,7 +461,6 @@ private struct SettingsCategoryView: View {
         case "synonymDictionary": return st.synonymDictEnabled
         case "fabOrder": return st.useArtworkV3
         case "zoomScale", "threeZoom", "longPressReset": return st.useCustomDoubleTapZoom
-        case "chatBanner": return st.showChatRoomEntry
         default: return true
         }
     }
@@ -765,13 +762,8 @@ private struct SettingsCategoryView: View {
 
     @ViewBuilder private var experimentalContent: some View {
         Section {
-            hintToggle(l10n.t(.stChatRoomEntry), l10n.t(.stChatRoomWarning), isOn: $st.showChatRoomEntry, hintColor: .red)
-                .settingRow("chat", highlightID)
-            if st.showChatRoomEntry {
-                Toggle(l10n.t(.stChatRoomPushBanner), isOn: $st.showChatRoomPushBanner)
-                    .settingRow("chatBanner", highlightID)
-            }
-            Toggle(l10n.t(.stPlazaEntry), isOn: $st.showPlazaEntry).settingRow("plaza", highlightID)
+            Toggle(l10n.t(.stChatRoomPushBanner), isOn: $st.showChatRoomPushBanner)
+                .settingRow("chatBanner", highlightID)
         }
         Section {
             Toggle(l10n.t(.stFirebase), isOn: $st.isFirebaseEnable).settingRow("analytics", highlightID)

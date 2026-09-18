@@ -91,6 +91,8 @@ enum AppRoute: Hashable, Codable, Sendable {
     // 聊天室 (shaft-api-v2 chat)
     /// Conversation list — the 聊天室 drawer entry.
     case chatRoomList
+    /// Discover's community entry; the native plaza will replace its pending page.
+    case plaza
     /// One thread's message list. `peerUid == nil` is the public 公屏闲聊 room;
     /// non-nil is a 1v1 DM with that pixiv uid.
     case chatThread(peerUid: Int64?, title: String?)
