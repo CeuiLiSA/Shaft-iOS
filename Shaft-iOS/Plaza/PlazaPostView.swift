@@ -229,11 +229,18 @@ struct PlazaImageGrid: View {
                 ForEach(0..<Int(ceil(Double(count) / Double(columns))), id: \.self) { row in
                     HStack(spacing: 4) {
                         ForEach(row * columns..<min(count, (row + 1) * columns), id: \.self) { index in
-                            Button { viewing = index } label: {
-                                if post.images.isEmpty {
-                                    PixivAsyncImage(url: URL(string: post.linkedPages[index]), showsProgress: false, placeholder: Theme.v3Surface2)
-                                        .blur(radius: ((post.objectExtensions?.illust?.xRestrict ?? 0) > 0 || MuteStore.shared.isIllustMuted(post.objectId ?? 0)) ? 25 : 0)
-                                } else { PlazaRemoteImage(url: URL(string: post.images[index].url), pixels: Int(size.width * displayScale)) }
+                            Group {
+                                if post.images.isEmpty, let work = post.objectExtensions?.illust {
+                                    // Stay in the registered app stack so author/related-work links keep working.
+                                    NavigationLink(value: work) {
+                                        PixivAsyncImage(url: URL(string: post.linkedPages[index]), showsProgress: false, placeholder: Theme.v3Surface2)
+                                            .blur(radius: ((work.xRestrict ?? 0) > 0 || MuteStore.shared.isIllustMuted(work.id)) ? 25 : 0)
+                                    }
+                                } else {
+                                    Button { viewing = index } label: {
+                                        PlazaRemoteImage(url: URL(string: post.images[index].url), pixels: Int(size.width * displayScale), refresh: refreshImages)
+                                    }
+                                }
                             }
                             .buttonStyle(.plain).frame(width: size.width, height: size.height)
                             .clipped().clipShape(RoundedRectangle(cornerRadius: count == 1 ? 16 : 12))
@@ -246,10 +253,16 @@ struct PlazaImageGrid: View {
         .frame(height: gridHeight)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .fullScreenCover(isPresented: Binding(get: { viewing != nil }, set: { if !$0 { viewing = nil } })) {
-            if post.images.isEmpty, let work = post.objectExtensions?.illust {
-                NavigationStack { IllustDetailView(illust: work) }
-            } else { PlazaImageViewer(postID: post.id, store: store, initialIndex: viewing ?? 0) }
+            PlazaImageViewer(postID: post.id, store: store, initialIndex: viewing ?? 0)
         }
+        .task(id: post.id) {
+            if post.needsFreshImages { await refreshImages() }
+        }
+    }
+    private func refreshImages() async {
+        do { try await store.fetch(post.id, force: true) }
+        catch is CancellationError { }
+        catch { store.failure = error }
     }
     @State private var width: CGFloat = 320
     private func geometry(width: CGFloat) -> CGSize {
@@ -272,6 +285,7 @@ struct PlazaImageGrid: View {
 struct PlazaRemoteImage: View {
     let url: URL?
     var pixels = 600
+    var refresh: (() async -> Void)?
     @State private var image: UIImage?
     @State private var failed = false
     @State private var attempt = 0
@@ -279,7 +293,11 @@ struct PlazaRemoteImage: View {
         ZStack {
             PlazaPalette.primary.opacity(0.08)
             if let image { Image(uiImage: image).resizable().scaledToFill() }
-            else if failed { Button { attempt += 1 } label: { Image(systemName: "arrow.clockwise").padding(16) } }
+            else if failed {
+                Button {
+                    Task { failed = false; await refresh?(); attempt += 1 }
+                } label: { Image(systemName: "arrow.clockwise").padding(16) }
+            }
             else { ProgressView() }
         }.task(id: "\(url?.absoluteString ?? "")-\(pixels)-\(attempt)") {
             guard let url else { failed = true; return }
@@ -338,15 +356,44 @@ struct PlazaImageViewer: View {
     }
 }
 
+/// Camera JPEGs retain EXIF orientation because uploads preserve original bytes.
+/// Orient the tiled scroll surface instead of decoding a full-resolution bitmap.
+struct PlazaOrientedZoomView: View {
+    let source: TileImageSource
+    let orientation: CGImagePropertyOrientation
+    private var swapsAxes: Bool { orientation.rawValue >= 5 }
+    private var mirrored: Bool { [2, 4, 5, 7].contains(orientation.rawValue) }
+    private var degrees: Double {
+        switch orientation {
+        case .down, .downMirrored: return 180
+        case .right, .leftMirrored: return 90
+        case .left, .rightMirrored: return 270
+        default: return 0
+        }
+    }
+    var body: some View {
+        GeometryReader { geometry in
+            ZoomImageScrollView(source: source, onSingleTap: {})
+                .id(ObjectIdentifier(source))
+                .frame(width: swapsAxes ? geometry.size.height : geometry.size.width,
+                       height: swapsAxes ? geometry.size.width : geometry.size.height)
+                .rotationEffect(.degrees(degrees))
+                .scaleEffect(x: mirrored ? -1 : 1, y: 1)
+                .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+        }.clipped()
+    }
+}
+
 private struct PlazaZoomPage: View {
     let url: URL?
     var refresh: () async -> Void
     @State private var source: TileImageSource?
+    @State private var orientation: CGImagePropertyOrientation = .up
     @State private var failed = false
     @State private var retry = 0
     var body: some View {
         ZStack {
-            if let source { ZoomImageScrollView(source: source, onSingleTap: {}) }
+            if let source { PlazaOrientedZoomView(source: source, orientation: orientation) }
             else if failed { Button { Task { await refresh(); retry += 1 } } label: { Image(systemName: "arrow.clockwise").font(.title).padding(24) } }
             else { ProgressView().tint(.white) }
         }.task(id: "\(url?.absoluteString ?? "")-\(retry)") {
@@ -355,9 +402,11 @@ private struct PlazaZoomPage: View {
                 failed = false
                 let (data, response) = try await URLSession.shared.data(from: url)
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
-                let decoded = await TileImageSource.make(data: data)
+                let decoded = await Task.detached(priority: .userInitiated) {
+                    (TileImageSource(data: data), PlazaPhotoFiles.orientation(of: data))
+                }.value
                 try Task.checkCancellation()
-                source = decoded; failed = decoded == nil
+                orientation = decoded.1; source = decoded.0; failed = decoded.0 == nil
             } catch { if !Task.isCancelled { failed = true } }
         }
     }

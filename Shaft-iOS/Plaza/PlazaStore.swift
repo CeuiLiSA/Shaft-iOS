@@ -27,13 +27,14 @@ final class PlazaStore {
         posts[post.id] = post
         fetched[post.id] = plazaNow()
     }
-    func page(before: Int64?, author: Int64?, replyTo: Int64?) async throws -> PlazaPage {
+    func page(before: Int64?, author: Int64?, replyTo: Int64?, isCurrent: () -> Bool = { true }) async throws -> PlazaPage {
         // Mutations return complete posts. A read started earlier cannot replace them.
         for _ in 0..<3 {
             try check()
             let epoch = revision
             let result = try await api.feed(uid: uid, before: before, author: author, replyTo: replyTo)
             try check(); try Task.checkCancellation()
+            guard isCurrent() else { throw CancellationError() }
             guard epoch == revision else { continue }
             for post in result.items { accept(post) }
             return result
@@ -123,7 +124,7 @@ final class PlazaPageModel {
         loading = true; error = nil
         defer { if token == generation { loading = false } }
         do {
-            let page = try await store.page(before: cursor, author: author, replyTo: replyTo)
+            let page = try await store.page(before: cursor, author: author, replyTo: replyTo, isCurrent: { token == self.generation })
             guard token == generation else { return }
             var seen = Set<Int64>()
             ids = ((reset ? [] : ids) + page.items.map(\.id)).filter { seen.insert($0).inserted }

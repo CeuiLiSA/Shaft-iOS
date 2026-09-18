@@ -42,7 +42,7 @@ struct PlazaView: View {
                             Button(copy.error(error) + " · " + copy.text("retry")) { Task { await loadMore() } }
                                 .padding(16).frame(minHeight: 48)
                         } else if page.next != nil {
-                            ProgressView().padding(20).task { await loadMore() }
+                            ProgressView().padding(20).task(id: page.next) { await loadMore() }
                         }
                     }
                 }.frame(maxWidth: 720).frame(maxWidth: .infinity).padding(.bottom, 96)
@@ -159,7 +159,7 @@ struct PlazaDetailView: View {
                             .padding(16)
                     } else if comments.loading || comments.next != nil {
                         ProgressView().padding(20).frame(maxWidth: .infinity)
-                            .task { if !comments.loading { await loadComments(reset: false) } }
+                            .task(id: comments.next) { if comments.next != nil { await loadComments(reset: false) } }
                     }
                     if let error { PlazaText(value: copy.error(error), color: Theme.v3Danger).padding(16) }
                 } else if store.deleted.contains(postID) {

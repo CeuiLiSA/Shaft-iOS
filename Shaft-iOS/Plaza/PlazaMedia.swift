@@ -67,6 +67,12 @@ enum PlazaPhotoFiles {
         try FileManager.default.copyItem(at: source, to: directory.appendingPathComponent(name))
         return PlazaAttachment(id: id, fileName: name, contentType: mime, size: size, width: width, height: height)
     }
+    static func orientation(of data: Data) -> CGImagePropertyOrientation {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let raw = properties[kCGImagePropertyOrientation] as? UInt32 else { return .up }
+        return CGImagePropertyOrientation(rawValue: raw) ?? .up
+    }
     static func thumbnail(_ url: URL, pixels: Int = 240) -> CGImage? {
         guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         return CGImageSourceCreateThumbnailAtIndex(src, 0, [

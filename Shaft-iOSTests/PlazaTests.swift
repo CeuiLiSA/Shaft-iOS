@@ -21,12 +21,23 @@ actor PlazaTestService: PlazaServing {
     var pending: CheckedContinuation<Void, Never>?
     var pageStarted = false
     var requestCount = 0
+    var paginated = false
+    func paginate() { paginated = true; value = compactPost(100) }
+    private func compactPost(_ id: Int64) -> PlazaPost {
+        PlazaPost(id: id, uid: 42, displayName: "Test", text: "Page \(id)", createdAt: 1778371200000)
+    }
     func configure(failCreate: Bool = false, holdPage: Bool = false) { self.failCreate = failCreate; self.holdPage = holdPage }
     func setPost(_ post: PlazaPost) { value = post }
     func resumePage() { pending?.resume(); pending = nil }
     func feed(uid: Int64, before: Int64?, author: Int64?, replyTo: Int64?) async throws -> PlazaPage {
         let captured = value
         requestCount += 1
+        if paginated {
+            // Keep the loading footer mounted before each response arrives.
+            try await Task.sleep(for: .milliseconds(80))
+            let id = (before ?? 4) - 1
+            return .init(items: [compactPost(id)], nextBefore: id > 1 ? id : nil)
+        }
         if holdPage {
             holdPage = false; pageStarted = true
             await withCheckedContinuation { pending = $0 }
@@ -206,6 +217,23 @@ final class PlazaTests: XCTestCase {
         let count = await api.requestCount
         XCTAssertEqual(count, 2)
     }
+    @MainActor func testSupersededRefreshCannotOverwriteNewerPostCache() async throws {
+        let api = PlazaTestService()
+        await api.configure(holdPage: true)
+        let store = PlazaStore(api: api, currentUID: { 42 })
+        let page = PlazaPageModel()
+        let old = Task { await page.load(store: store, reset: true) }
+        while !(await api.pageStarted) { await Task.yield() }
+        await api.setPost(fixturePost(likes: 7))
+        await page.load(store: store, reset: true)
+        XCTAssertEqual(store.posts[1]?.likeCount, 7)
+        await api.resumePage()
+        await old.value
+        XCTAssertEqual(page.ids, [1])
+        XCTAssertEqual(store.posts[1]?.likeCount, 7, "Superseded responses must not rewrite the shared cache")
+        XCTAssertFalse(page.loading)
+    }
+
     @MainActor func testDeletedPostCannotBeResurrectedByFeed() async throws {
         let store = PlazaStore(api: PlazaTestService(), currentUID: { 42 })
         store.accept(fixturePost())
