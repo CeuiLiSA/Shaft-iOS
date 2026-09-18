@@ -598,12 +598,15 @@ actor PixivAPI {
 
     @discardableResult
     func bookmarkIllust(_ illustId: Int64, restrict: String = "public", tags: [String] = []) async throws -> EmptyResponse {
+        let referralUID = tokenProvider is AuthTokenProvider ? KeychainTokenStore.shared.load()?.user?.id : nil
         var pairs: [(String, String)] = [
             ("illust_id", "\(illustId)"),
             ("restrict", restrict),
         ]
         for t in tags { pairs.append(("tags[]", t)) }
-        return try await postPairs(path: "/v2/illust/bookmark/add", pairs: pairs)
+        let response: EmptyResponse = try await postPairs(path: "/v2/illust/bookmark/add", pairs: pairs)
+        if let referralUID { Task { await ReferralActivityReporter.shared.bookmark(uid: referralUID) } }
+        return response
     }
 
     @discardableResult
@@ -613,12 +616,15 @@ actor PixivAPI {
 
     @discardableResult
     func bookmarkNovel(_ novelId: Int64, restrict: String = "public", tags: [String] = []) async throws -> EmptyResponse {
+        let referralUID = tokenProvider is AuthTokenProvider ? KeychainTokenStore.shared.load()?.user?.id : nil
         var pairs: [(String, String)] = [
             ("novel_id", "\(novelId)"),
             ("restrict", restrict),
         ]
         for t in tags { pairs.append(("tags[]", t)) }
-        return try await postPairs(path: "/v2/novel/bookmark/add", pairs: pairs)
+        let response: EmptyResponse = try await postPairs(path: "/v2/novel/bookmark/add", pairs: pairs)
+        if let referralUID { Task { await ReferralActivityReporter.shared.bookmark(uid: referralUID) } }
+        return response
     }
 
     @discardableResult

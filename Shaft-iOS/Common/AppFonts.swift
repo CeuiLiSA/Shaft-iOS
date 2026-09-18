@@ -11,7 +11,7 @@ import CoreText
 /// `textMontserratMedium` (no bold flag) → Montserrat-Medium.
 enum AppFonts {
     static func register() {
-        for resource in ["montserrat_medium", "montserrat_semi_bold", "montserrat_bold"] {
+        for resource in ["montserrat_regular", "montserrat_medium", "montserrat_semi_bold", "montserrat_bold", "montserrat_extra_bold"] {
             guard let url = Bundle.main.url(forResource: resource, withExtension: "ttf") else {
                 continue
             }

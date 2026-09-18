@@ -49,6 +49,7 @@ enum AppRoute: Hashable, Codable, Sendable {
     case mangaRecommend
     case novelRecommend
     case more
+    case referral(code: String? = nil)
     case history
     case downloads
     case mute

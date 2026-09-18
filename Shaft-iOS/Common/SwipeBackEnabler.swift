@@ -65,7 +65,7 @@ final class SwipeBackGestureDelegate: NSObject, UIGestureRecognizerDelegate {
         var responder: UIResponder? = gesture.view
         while let current = responder {
             if let nav = current as? UINavigationController {
-                return nav.viewControllers.count > 1
+                return nav.viewControllers.count > 1 && nav.topViewController?.isModalInPresentation != true
             }
             responder = current.next
         }

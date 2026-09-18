@@ -8,7 +8,13 @@ struct Shaft_iOSApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--referral-preview") {
+                ReferralPreviewScreen()
+            } else { RootView() }
+            #else
             RootView()
+            #endif
         }
     }
 }

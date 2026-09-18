@@ -5,6 +5,14 @@
 	};
 	objectVersion = 56;
 	objects = {
+/* Begin PBXTargetDependency section */
+		073E24FB365115147C96C05F = {isa = PBXTargetDependency; target = A1000000000000000000T001; targetProxy = D8596C6643A422647F697B80; };
+		632EAC52267B5E1B390E7B6B = {isa = PBXTargetDependency; target = A1000000000000000000T001; targetProxy = 04203FCCE475D690AF9D9873; };
+/* End PBXTargetDependency section */
+/* Begin PBXContainerItemProxy section */
+		D8596C6643A422647F697B80 = {isa = PBXContainerItemProxy; containerPortal = A1000000000000000000P001; proxyType = 1; remoteGlobalIDString = A1000000000000000000T001; remoteInfo = "Shaft-iOS"; };
+		04203FCCE475D690AF9D9873 = {isa = PBXContainerItemProxy; containerPortal = A1000000000000000000P001; proxyType = 1; remoteGlobalIDString = A1000000000000000000T001; remoteInfo = "Shaft-iOS"; };
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXBuildFile section */
 		A1000000000000000000B001 /* Shaft_iOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F001 /* Shaft_iOSApp.swift */; };
@@ -160,6 +168,18 @@
 		A1000000000000000000B914 /* CardMenuHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F914 /* CardMenuHost.swift */; };
 		A1000000000000000000B915 /* NovelDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F915 /* NovelDownloader.swift */; };
 		A1000000000000000000B916 /* NovelBulkSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F916 /* NovelBulkSelectView.swift */; };
+		5AC117765FB32199D287433B /* ReferralService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DF8820DBD7976522B5D4F11 /* ReferralService.swift */; };
+		FF62B557C644A2E3E4B7042E /* referral-strings.json in Resources */ = {isa = PBXBuildFile; fileRef = 9D70CDC31C5E9363DEC75C57 /* referral-strings.json */; };
+		1B76BFB44AC60BC5799C5666 /* ReferralStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF089B3EDB1057DA5F81DACF /* ReferralStyle.swift */; };
+		EC0D9B9A5DA11B659FA5E4D9 /* ReferralModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1899A390A61C064E03958AB9 /* ReferralModels.swift */; };
+		755E7AAC9D092850F315B82B /* ReferralPlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DEF7AB219444726F46C6144 /* ReferralPlanView.swift */; };
+		2CA2E86EABE5BE93E283E9D0 /* ReferralSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 758164C3497516252440D602 /* ReferralSheet.swift */; };
+		1C5964C55FCF91CC84994A70 /* ReferralIcons.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74D189DC9CF9CEAB5953085 /* ReferralIcons.swift */; };
+		A921FDDBF86A6316FCFD8782 /* montserrat_regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3FB6F221226F423FA997B405 /* montserrat_regular.ttf */; };
+		36C9E36195BBEF87FBC8064C /* montserrat_extra_bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 782A09D745A66BB15BC815E8 /* montserrat_extra_bold.ttf */; };
+		1E6CFD2D29F685538410030D /* ReferralPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 174B822FDA67FC5123691E49; };
+		914987C45FFEA7183388C86A /* ReferralTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD32A36F83621BE6D44E4839; };
+		B669B1D8C99FD8302912B05C /* ReferralUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9041C89376CAD3336D17B7AA; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -317,6 +337,20 @@
 		A1000000000000000000F914 /* CardMenuHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardMenuHost.swift; sourceTree = "<group>"; };
 		A1000000000000000000F915 /* NovelDownloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelDownloader.swift; sourceTree = "<group>"; };
 		A1000000000000000000F916 /* NovelBulkSelectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NovelBulkSelectView.swift; sourceTree = "<group>"; };
+		2DF8820DBD7976522B5D4F11 /* ReferralService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Referral/ReferralService.swift"; sourceTree = "<group>"; };
+		9D70CDC31C5E9363DEC75C57 /* referral-strings.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "Referral/referral-strings.json"; sourceTree = "<group>"; };
+		BF089B3EDB1057DA5F81DACF /* ReferralStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Referral/ReferralStyle.swift"; sourceTree = "<group>"; };
+		1899A390A61C064E03958AB9 /* ReferralModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Referral/ReferralModels.swift"; sourceTree = "<group>"; };
+		6DEF7AB219444726F46C6144 /* ReferralPlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Referral/ReferralPlanView.swift"; sourceTree = "<group>"; };
+		758164C3497516252440D602 /* ReferralSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Referral/ReferralSheet.swift"; sourceTree = "<group>"; };
+		A74D189DC9CF9CEAB5953085 /* ReferralIcons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Referral/ReferralIcons.swift"; sourceTree = "<group>"; };
+		3FB6F221226F423FA997B405 /* montserrat_regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Common/montserrat_regular.ttf"; sourceTree = "<group>"; };
+		782A09D745A66BB15BC815E8 /* montserrat_extra_bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Common/montserrat_extra_bold.ttf"; sourceTree = "<group>"; };
+		174B822FDA67FC5123691E49 /* ReferralPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Referral/ReferralPreview.swift"; sourceTree = "<group>"; };
+		FD32A36F83621BE6D44E4839 /* ReferralTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/ReferralTests.swift"; sourceTree = "<group>"; };
+		506BBAA543216E5FBA1AE8D2 /* Shaft-iOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = "Shaft-iOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9041C89376CAD3336D17B7AA /* ReferralUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSUITests/ReferralUITests.swift"; sourceTree = "<group>"; };
+		D1C6C0C0D06193F8BD759795 /* Shaft-iOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = "Shaft-iOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -327,12 +361,16 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E967B73BB23420401A22DD76 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		981E562C6C8579A6248154F8 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		A1000000000000000000G001 = {
 			isa = PBXGroup;
 			children = (
+				9041C89376CAD3336D17B7AA /* ReferralUITests.swift */,
+				FD32A36F83621BE6D44E4839 /* ReferralTests.swift */,
 				A1000000000000000000G002 /* Shaft-iOS */,
 				A1000000000000000000G003 /* Products */,
 			);
@@ -341,6 +379,18 @@
 		A1000000000000000000G002 /* Shaft-iOS */ = {
 			isa = PBXGroup;
 			children = (
+				D1C6C0C0D06193F8BD759795 /* Shaft-iOSUITests.xctest */,
+				506BBAA543216E5FBA1AE8D2 /* Shaft-iOSTests.xctest */,
+				174B822FDA67FC5123691E49 /* ReferralPreview.swift */,
+				782A09D745A66BB15BC815E8 /* montserrat_extra_bold.ttf */,
+				3FB6F221226F423FA997B405 /* montserrat_regular.ttf */,
+				A74D189DC9CF9CEAB5953085 /* ReferralIcons.swift */,
+				758164C3497516252440D602 /* ReferralSheet.swift */,
+				6DEF7AB219444726F46C6144 /* ReferralPlanView.swift */,
+				1899A390A61C064E03958AB9 /* ReferralModels.swift */,
+				BF089B3EDB1057DA5F81DACF /* ReferralStyle.swift */,
+				9D70CDC31C5E9363DEC75C57 /* referral-strings.json */,
+				2DF8820DBD7976522B5D4F11 /* ReferralService.swift */,
 				A1000000000000000000G027 /* Chat */,
 				A1000000000000000000F001 /* Shaft_iOSApp.swift */,
 				A1000000000000000000F002 /* ContentView.swift */,
@@ -726,6 +776,8 @@
 			productReference = A1000000000000000000A001 /* Shaft-iOS.app */;
 			productType = "com.apple.product-type.application";
 		};
+		DD025BEF37D8D20E7744DBA4 /* Shaft-iOSTests */ = {isa = PBXNativeTarget; buildConfigurationList = D1950CE8401BE06005321C80; buildPhases = (715CEB466C368648489445F5,E967B73BB23420401A22DD76,B27815D00228916F461D5CBD,); buildRules = (); dependencies = (073E24FB365115147C96C05F,); name = "Shaft-iOSTests"; productName = "Shaft-iOSTests"; productReference = 506BBAA543216E5FBA1AE8D2; productType = "com.apple.product-type.bundle.unit-test"; };
+		214991430373C201CDC4A8F0 /* Shaft-iOSUITests */ = {isa = PBXNativeTarget; buildConfigurationList = 629D1D5F8C4B824BD5D708F6; buildPhases = (2D339A82CA9C4D373BA23634,981E562C6C8579A6248154F8,BF4585776E9313E8AF6592DD,); buildRules = (); dependencies = (632EAC52267B5E1B390E7B6B,); name = "Shaft-iOSUITests"; productName = "Shaft-iOSUITests"; productReference = D1C6C0C0D06193F8BD759795; productType = "com.apple.product-type.bundle.ui-testing"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -754,6 +806,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				214991430373C201CDC4A8F0 /* Shaft-iOSUITests */,
+				DD025BEF37D8D20E7744DBA4 /* Shaft-iOSTests */,
 				A1000000000000000000T001 /* Shaft-iOS */,
 			);
 		};
@@ -764,6 +818,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				36C9E36195BBEF87FBC8064C /* montserrat_extra_bold.ttf in Resources */,
+				A921FDDBF86A6316FCFD8782 /* montserrat_regular.ttf in Resources */,
+				FF62B557C644A2E3E4B7042E /* referral-strings.json in Resources */,
 				A1000000000000000000B004 /* Preview Assets.xcassets in Resources */,
 				A1000000000000000000B003 /* Assets.xcassets in Resources */,
 				A1000000000000000000B070 /* montserrat_medium.ttf in Resources */,
@@ -775,6 +832,8 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B27815D00228916F461D5CBD = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		BF4585776E9313E8AF6592DD = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -782,6 +841,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1E6CFD2D29F685538410030D /* ReferralPreview.swift in Sources */,
+				1C5964C55FCF91CC84994A70 /* ReferralIcons.swift in Sources */,
+				2CA2E86EABE5BE93E283E9D0 /* ReferralSheet.swift in Sources */,
+				755E7AAC9D092850F315B82B /* ReferralPlanView.swift in Sources */,
+				EC0D9B9A5DA11B659FA5E4D9 /* ReferralModels.swift in Sources */,
+				1B76BFB44AC60BC5799C5666 /* ReferralStyle.swift in Sources */,
+				5AC117765FB32199D287433B /* ReferralService.swift in Sources */,
 				A1000000000000000000B911 /* ChatRoomListView.swift in Sources */,
 				A1000000000000000000B912 /* ChatThreadView.swift in Sources */,
 				A1000000000000000000B906 /* ChatThreadId.swift in Sources */,
@@ -930,6 +996,8 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		715CEB466C368648489445F5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (914987C45FFEA7183388C86A,); runOnlyForDeploymentPostprocessing = 0; };
+		2D339A82CA9C4D373BA23634 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B669B1D8C99FD8302912B05C,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -1112,6 +1180,10 @@
 			};
 			name = Release;
 		};
+		B25A69862728490D8BE6C525 = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = "com.shaft.Shaft-iOSTests"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; IPHONEOS_DEPLOYMENT_TARGET = 18.0; TARGETED_DEVICE_FAMILY = "1,2"; SDKROOT = iphoneos; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; BUNDLE_LOADER = "$(TEST_HOST)"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Shaft-iOS.app/Shaft-iOS";}; name = Debug; };
+		87BD79AEE6CED3F4F5945B25 = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = "com.shaft.Shaft-iOSTests"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; IPHONEOS_DEPLOYMENT_TARGET = 18.0; TARGETED_DEVICE_FAMILY = "1,2"; SDKROOT = iphoneos; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; BUNDLE_LOADER = "$(TEST_HOST)"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Shaft-iOS.app/Shaft-iOS";}; name = Release; };
+		7E37BC550D941BF63F657DDC = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = "com.shaft.Shaft-iOSUITests"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; IPHONEOS_DEPLOYMENT_TARGET = 18.0; TARGETED_DEVICE_FAMILY = "1,2"; SDKROOT = iphoneos; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; TEST_TARGET_NAME = "Shaft-iOS";}; name = Debug; };
+		BBA1B2BCBE0E0C7DA512BA45 = {isa = XCBuildConfiguration; buildSettings = {GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = "com.shaft.Shaft-iOSUITests"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_VERSION = 5.0; IPHONEOS_DEPLOYMENT_TARGET = 18.0; TARGETED_DEVICE_FAMILY = "1,2"; SDKROOT = iphoneos; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; TEST_TARGET_NAME = "Shaft-iOS";}; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1133,6 +1205,8 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		D1950CE8401BE06005321C80 = {isa = XCConfigurationList; buildConfigurations = (B25A69862728490D8BE6C525,87BD79AEE6CED3F4F5945B25,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		629D1D5F8C4B824BD5D708F6 = {isa = XCConfigurationList; buildConfigurations = (7E37BC550D941BF63F657DDC,BBA1B2BCBE0E0C7DA512BA45,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
 /* End XCConfigurationList section */
 	};
 	rootObject = A1000000000000000000P001 /* Project object */;

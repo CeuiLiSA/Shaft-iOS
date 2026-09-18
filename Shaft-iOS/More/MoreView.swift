@@ -23,6 +23,9 @@ struct MoreView: View {
             }
 
             Section {
+                NavigationLink(value: AppRoute.referral()) {
+                    Label(ReferralCopy(tag: l10n.activeTag).text("entry"), systemImage: "ticket")
+                }
                 NavigationLink(value: AppRoute.notifications) {
                     Label(l10n.t(.notificationsTitle), systemImage: "bell")
                 }

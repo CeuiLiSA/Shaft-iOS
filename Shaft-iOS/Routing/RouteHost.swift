@@ -108,6 +108,8 @@ struct RouteHost: ViewModifier {
                 NovelRecommendView()
             case .more:
                 MoreView(auth: auth)
+            case .referral(let code):
+                ReferralPlanView(initialCode: code)
             case .history:
                 HistoryView()
             case .downloads:

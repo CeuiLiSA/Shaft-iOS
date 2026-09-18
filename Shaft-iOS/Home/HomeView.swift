@@ -7,6 +7,7 @@ struct HomeView: View {
     @State private var recommendPath = NavigationPath()
     @State private var discoverPath = NavigationPath()
     @State private var whatsNewPath = NavigationPath()
+    @State private var referralLink = ReferralLinkStore.shared
 
     var body: some View {
         TabView(selection: $selection) {
@@ -18,6 +19,8 @@ struct HomeView: View {
         .bookmarkMirrorReadyBanner { route in pushOnSelectedTab(route) }
         // 收藏镜像引擎跟着登录态活着：已注册的书架会从上次落盘的断点续上（幂等）。
         .task { await BookmarkMirrorService.shared.start() }
+        .onAppear { openPendingReferral() }
+        .onChange(of: referralLink.pendingCode) { _, _ in openPendingReferral() }
     }
 
     private func pushOnSelectedTab(_ route: AppRoute) {
@@ -26,6 +29,10 @@ struct HomeView: View {
         case .discover: discoverPath.append(route)
         case .whatsNew: whatsNewPath.append(route)
         }
+    }
+
+    private func openPendingReferral() {
+        if let code = referralLink.consume() { pushOnSelectedTab(.referral(code: code)) }
     }
 
     @ViewBuilder
