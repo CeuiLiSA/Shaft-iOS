@@ -70,13 +70,12 @@ final class DiscoverViewModel {
 // MARK: - Discover tab — 1:1 FragmentCenter / fragment_new_center.xml
 
 /// 「发现」tab, V3 content-shelf version. Order (as in the XML):
-/// 漫画/小说 big cards → pixivision 特辑 → 热度标签 → 最新 → 当前最热 → 本月收藏 → 其他分类 chips → 交流与分享.
+/// 漫画/小说 big cards → pixivision 特辑 → 热度标签 → 最新 → 当前最热 → 本月收藏 → 其他分类 → Shaft 榜单 → 交流与分享.
 /// The header row (drawer / title / search) is the host `HomeView` nav bar, as
 /// on the 推荐 tab. Pull-to-refresh stands in for upstream's double-tap
 /// `forceRefresh` (the only refresh affordance iOS tabs have).
 struct DiscoverView: View {
     @State private var vm = DiscoverViewModel()
-    @State private var showWebHomeComingSoon = false
     @Environment(OnboardingStore.self) private var l10n
     @Environment(\.pushRoute) private var pushRoute
 
@@ -101,6 +100,7 @@ struct DiscoverView: View {
                 }
 
                 otherCategories
+                shaftRankings
 
                 DiscoverSocialSection(onChat: { pushRoute(.chatRoomList) }, onCommunity: { pushRoute(.plaza) })
             }
@@ -112,12 +112,6 @@ struct DiscoverView: View {
         // the tab bar (upstream's bottom nav is opaque and never overlaps content).
         .refreshable { await vm.reload() }
         .task { await vm.start() }
-        // catWeb → WitDialog "Web 首页 / Coming soon... / OK" (github channel placeholder).
-        .alert(l10n.t(.webHome), isPresented: $showWebHomeComingSoon) {
-            Button("OK") {}
-        } message: {
-            Text("Coming soon...")
-        }
     }
 
     // MARK: 重点模块：漫画 / 小说 (bigManga / bigNovel)
@@ -155,15 +149,39 @@ struct DiscoverView: View {
 
             FlowLayout(spacing: 9) {
                 chip(.discoverWalkThrough, "photo.on.rectangle", .walkthrough)
+                chip(.pixivComic, "paintpalette.fill", .pixivComic)
+                chip(.followingNovels, "bookmark.fill", .followingNovels)
+                chip(.discoveryFeed, "safari.fill", .discoveryFeed)
+                chip(.webDiscovery, "globe.americas.fill", .webDiscovery)
+                chip(.webHome, "globe", .webHome)
+                chip(.fanboxEntry, "heart.fill", .fanboxHome)
+                chip(.niceFriendWorks, "person.crop.circle.badge.checkmark", .niceFriendWorks)
+                chip(.corpusLibrary, "magnifyingglass", .corpusLibrary)
+                chip(.novelLengthRank, "book.fill", .novelLengthRank)
+                chip(.trendingArtists, "flame.fill", .trendingArtists)
+                chip(.dailyRecommendations, "sparkles", .dailyRecommendations)
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    // Android keeps the shaft-api-v2 leaderboards in their own section. The
+    // separator is part of the page hierarchy, so ranking chips must not be
+    // mixed into the general category flow on iOS.
+    private var shaftRankings: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(l10n.t(.shaftRankings))
+                .font(.montserratBold(13))
+                .tracking(13 * 0.06)
+                .foregroundStyle(Theme.v3Text2)
+                .padding(.leading, 20)
+                .padding(.top, 24)
+                .padding(.bottom, 12)
+
+            FlowLayout(spacing: 9) {
                 chip(.artistRank, "person.fill", .artistRank(mode: "total"))
                 chip(.artistAvgRank, "star.fill", .artistRank(mode: "avg"))
                 chip(.viewRank, "eye.fill", .viewRank)
-                // catPixivComic is the one chip FragmentCenter does NOT restyle —
-                // it keeps the plain bg_v3_chip look (no icon, surface fill).
-                NavigationLink(value: AppRoute.pixivComic) {
-                    PlainCategoryChip(title: l10n.t(.pixivComic))
-                }
-                .buttonStyle(PressScaleStyle())
                 chip(.bookmarkRank, "heart.fill", .bookmarkRank(aiOnly: false))
                 chip(.aiRank, "sparkles", .bookmarkRank(aiOnly: true))
                 chip(.yearRank, "calendar", .yearRank)
@@ -171,19 +189,8 @@ struct DiscoverView: View {
                 chip(.wallpaperRank, "photo.fill", .wallpaperRank)
                 chip(.seriesRank, "list.bullet.rectangle", .seriesRank)
                 chip(.monthRank, "sparkles.rectangle.stack", .monthRank)
-                chip(.novelLengthRank, "book.fill", .novelLengthRank)
                 chip(.sfwRank, "checkmark.circle.fill", .sfwRank)
-                chip(.trendingArtists, "flame.fill", .trendingArtists)
                 chip(.ugoiraRank, "play.fill", .ugoiraRank)
-                chip(.followingNovels, "bookmark.fill", .followingNovels)
-                chip(.discoveryFeed, "safari.fill", .discoveryFeed)
-                Button {
-                    showWebHomeComingSoon = true
-                } label: {
-                    CategoryChip(title: l10n.t(.webHome), systemImage: "globe")
-                }
-                .buttonStyle(PressScaleStyle())
-                chip(.niceFriendWorks, "person.crop.circle.badge.checkmark", .niceFriendWorks)
             }
             .padding(.horizontal, 20)
         }
@@ -634,28 +641,5 @@ private struct CategoryChip: View {
                 .strokeBorder(Theme.brand.opacity(0.30), lineWidth: 1)
         )
         .contentShape(.rect)
-    }
-}
-
-/// Unstyled `bg_v3_chip` (v3_surface_1 fill, 0.5dp v3_border_1 stroke, r14),
-/// v3_text_1 13sp, padding 15/9 — only `catPixivComic` keeps this look.
-private struct PlainCategoryChip: View {
-    let title: String
-
-    var body: some View {
-        Text(title)
-            .font(.system(size: 13))
-            .foregroundStyle(Theme.v3Text1)
-            .padding(.horizontal, 15)
-            .padding(.vertical, 9)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Theme.v3Surface1)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Theme.v3Border1, lineWidth: 0.5)
-            )
-            .contentShape(.rect)
     }
 }
