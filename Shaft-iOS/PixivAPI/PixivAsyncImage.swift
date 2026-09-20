@@ -3,11 +3,96 @@ import ImageIO
 import SwiftUI
 import UIKit
 
+/// Image CDN routes shared by every Pixiv image request.
+///
+/// Raw values intentionally match Android's persisted `Mode` ordinal. The
+/// route is hydrated once at launch, like Android's image client; changing it
+/// in Settings persists the choice and takes effect after the next launch so
+/// an existing URLSession/cache cannot mix hosts.
+enum ImageHostMode: Int, CaseIterable, Sendable {
+    case pixiv = 0
+    case pixivCat = 1
+    case pixivRe = 2
+    case pixivNl = 3
+    case custom = 4
+}
+
+enum ImageHostManager {
+    private static let pixivImageHost = "i.pximg.net"
+    private static let pixivStaticHost = "s.pximg.net"
+    private static let pixivCatImageHost = "i.pixiv.cat"
+    private static let pixivCatStaticHost = "s.pixiv.cat"
+    private static let pixivReImageHost = "i.pixiv.re"
+    private static let pixivReStaticHost = "s.pixiv.re"
+    private static let pixivNlImageHost = "i.pixiv.nl"
+    private static let pixivNlStaticHost = "s.pixiv.nl"
+
+    private(set) static var mode: ImageHostMode = .pixiv
+    private(set) static var customHost = ""
+
+    /// Loads the persisted route before the first networking object is built.
+    static func hydrate(defaults: UserDefaults = .standard) {
+        mode = ImageHostMode(rawValue: defaults.integer(forKey: "st_imageHostMode")) ?? .pixiv
+        customHost = normalizeCustomHost(defaults.string(forKey: "st_customImageHost") ?? "")
+    }
+
+    static func requiresStandardClient() -> Bool {
+        mode != .pixiv
+    }
+
+    static func normalizeCustomHost(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    /// Rewrites only Pixiv's image hosts, preserving the full path/query.
+    /// Non-Pixiv URLs and malformed strings pass through unchanged.
+    static func rewrite(_ url: URL) -> URL {
+        let rewritten = rewrite(url.absoluteString)
+        guard let result = URL(string: rewritten) else {
+            return url
+        }
+        return result
+    }
+
+    static func rewrite(_ value: String) -> String {
+        guard !value.isEmpty, let schemeEnd = value.range(of: "://") else { return value }
+        let hostStart = schemeEnd.upperBound
+        // Treat query/fragment markers as the end of the authority too. This
+        // keeps host-only URLs (and URLs without a path) on the same route as
+        // regular image URLs while preserving their suffix verbatim.
+        let pathStart = value[hostStart...].firstIndex {
+            $0 == "/" || $0 == "?" || $0 == "#"
+        } ?? value.endIndex
+        let hostAndPort = String(value[hostStart..<pathStart])
+        guard !hostAndPort.isEmpty else { return value }
+        let host = hostAndPort.split(separator: ":", maxSplits: 1,
+                                     omittingEmptySubsequences: true).first.map(String.init) ?? ""
+        guard host == pixivImageHost || host == pixivStaticHost else { return value }
+
+        switch mode {
+        case .pixiv:
+            return value
+        case .pixivCat:
+            let mapped = host == pixivImageHost ? pixivCatImageHost : pixivCatStaticHost
+            return String(value[..<hostStart]) + mapped + String(value[pathStart...])
+        case .pixivRe:
+            let mapped = host == pixivImageHost ? pixivReImageHost : pixivReStaticHost
+            return String(value[..<hostStart]) + mapped + String(value[pathStart...])
+        case .pixivNl:
+            let mapped = host == pixivImageHost ? pixivNlImageHost : pixivNlStaticHost
+            return String(value[..<hostStart]) + mapped + String(value[pathStart...])
+        case .custom:
+            return customHost.isEmpty ? value : customHost + String(value[pathStart...])
+        }
+    }
+}
+
 extension URLRequest {
     /// Request for a pixiv image CDN URL with the Referer/User-Agent pair the
     /// CDN requires — the single place those headers live.
     static func pixivImage(_ url: URL) -> URLRequest {
-        var req = URLRequest(url: url)
+        var req = URLRequest(url: ImageHostManager.rewrite(url))
         req.setValue("https://app-api.pixiv.net/", forHTTPHeaderField: "Referer")
         req.setValue(PixivClientIdentity.userAgent, forHTTPHeaderField: "User-Agent")
         return req
@@ -37,35 +122,41 @@ final class PixivImageCache {
         // Pixiv CDN image URLs are immutable (content changes get new paths) —
         // serve straight from disk without revalidation round-trips.
         cfg.requestCachePolicy = .returnCacheDataElseLoad
-        self.directConnect = DirectConnection.isEnabled
+        // Mirror Android: mirror/custom hosts use normal DNS + TLS/SNI.
+        self.directConnect = DirectConnection.isEnabled && !ImageHostManager.requiresStandardClient()
         self.session = directConnect ? DirectConnection.makeSession(cfg)
                                      : URLSession(configuration: cfg)
     }
 
+    private func routed(_ url: URL) -> URL {
+        ImageHostManager.rewrite(url)
+    }
+
     func image(for url: URL) -> UIImage? {
-        cache.object(forKey: url.absoluteString as NSString)
+        cache.object(forKey: routed(url).absoluteString as NSString)
     }
 
     /// Memoized display-sized decode of an original (see `decodeForDisplay`) —
     /// revisiting the same detail page must not re-read disk and re-decode.
     func displayImage(for url: URL) -> UIImage? {
-        cache.object(forKey: "display:" + url.absoluteString as NSString)
+        cache.object(forKey: "display:" + routed(url).absoluteString as NSString)
     }
 
     func setDisplayImage(_ image: UIImage, for url: URL) {
-        cache.setObject(image, forKey: "display:" + url.absoluteString as NSString,
+        cache.setObject(image, forKey: "display:" + routed(url).absoluteString as NSString,
                         cost: cost(image, 0))
     }
 
     /// True when the encoded bytes for `url` are already in the disk cache —
     /// callers can skip placeholder work when the real thing is instant.
     nonisolated func hasDiskData(for url: URL) -> Bool {
-        FileManager.default.fileExists(atPath: diskURL(for: url).path)
+        FileManager.default.fileExists(atPath: diskURL(for: ImageHostManager.rewrite(url)).path)
     }
 
     private var inflightLoads: [URL: Task<UIImage?, Never>] = [:]
 
     func load(_ url: URL) async -> UIImage? {
+        let url = routed(url)
         if let cached = cache.object(forKey: url.absoluteString as NSString) {
             return cached
         }
@@ -174,6 +265,7 @@ final class PixivImageCache {
     /// is replayed the current progress immediately and continues from there.
     func loadData(_ url: URL,
                   onProgress: @MainActor @escaping (Double) -> Void = { _ in }) async -> Data? {
+        let url = routed(url)
         let file = diskURL(for: url)
         if let data = try? Data(contentsOf: file, options: .mappedIfSafe) {
             return data
@@ -266,7 +358,8 @@ private final class ProgressImageDownloader: NSObject, URLSessionDownloadDelegat
     /// This downloader owns its session delegate (`self`), so it can't share
     /// `DirectConnection`'s — it rewrites the request and runs the same trust
     /// decision in `didReceive challenge` below.
-    private let directConnect = DirectConnection.isEnabled
+    private let directConnect = DirectConnection.isEnabledAtLaunch
+        && !ImageHostManager.requiresStandardClient()
 
     init(onProgress: @escaping @Sendable (Double) -> Void) {
         self.onProgress = onProgress

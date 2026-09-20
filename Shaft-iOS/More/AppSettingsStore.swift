@@ -16,6 +16,11 @@ final class AppSettingsStore {
     // MARK: Network (网络)
     var directConnect = false { didSet { save(directConnect, "st_directConnect") } }
     var useSecureDns = true { didSet { save(useSecureDns, "st_useSecureDns") } }
+    /// Image CDN route. The raw value is kept in the same order as Android's
+    /// `ImageHostManager.Mode`: Pixiv, pixiv.cat, pixiv.re, pixiv.nl, custom.
+    var imageHostMode = 0 { didSet { save(imageHostMode, "st_imageHostMode") } }
+    /// Full custom image proxy URL prefix, without a trailing slash.
+    var customImageHost = "" { didSet { save(customImageHost, "st_customImageHost") } }
     var showLargeThumbnailImage = false { didSet { save(showLargeThumbnailImage, "st_showLargeThumbnailImage") } }
     var showOriginalPreviewImage = false { didSet { save(showOriginalPreviewImage, "st_showOriginalPreviewImage") } }
 
@@ -112,6 +117,8 @@ final class AppSettingsStore {
     private init() {
         directConnect = bool("st_directConnect", false)
         useSecureDns = bool("st_useSecureDns", true)
+        imageHostMode = int("st_imageHostMode", 0)
+        customImageHost = string("st_customImageHost", "")
         showLargeThumbnailImage = bool("st_showLargeThumbnailImage", false)
         showOriginalPreviewImage = bool("st_showOriginalPreviewImage", false)
         saveViewHistory = bool("st_saveViewHistory", true)
@@ -175,6 +182,10 @@ final class AppSettingsStore {
 
     private func double(_ key: String, _ fallback: Double) -> Double {
         defaults.object(forKey: key) == nil ? fallback : defaults.double(forKey: key)
+    }
+
+    private func string(_ key: String, _ fallback: String) -> String {
+        defaults.string(forKey: key) ?? fallback
     }
 
     private func save(_ value: Any, _ key: String) {

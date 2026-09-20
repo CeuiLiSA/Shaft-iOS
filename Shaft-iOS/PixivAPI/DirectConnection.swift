@@ -71,6 +71,12 @@ enum DirectConnection {
     /// session is touched, so `shared` and `adaptShared` can never disagree.
     static let isEnabledAtLaunch: Bool = isEnabled
 
+    /// Image mirrors/custom hosts must use their own DNS and TLS/SNI. The
+    /// direct-connect route is only valid for the official Pixiv CDN.
+    static var imageDirectConnectAtLaunch: Bool {
+        isEnabledAtLaunch && !ImageHostManager.requiresStandardClient()
+    }
+
     /// General-purpose session for ad-hoc pixiv fetches that don't own a session
     /// (ugoira zips, the cookieless web-ajax profile supplement). Direct-connect
     /// aware when the feature is on; a plain default session otherwise.

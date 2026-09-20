@@ -264,7 +264,10 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case stR18Setting, stPremiumSetting, stLogoutConfirmTitle, stDeleteAccountInfo
     // Network
     case stDirectConnect, stSeePixEz, stSecureDns, stSecureDnsHint
-    case stImageHost, stLargeThumbnail, stShowOriginalPreview, stOriginalHint
+    case stImageHost, stImageHostOfficial, stImageHostPixivCat, stImageHostPixivRe
+    case stImageHostPixivNl, stImageHostCustom, stImageHostCustomHint
+    case stImageHostCustomEmpty, stImageHostRestartHint
+    case stLargeThumbnail, stShowOriginalPreview, stOriginalHint
     // Normal
     case stSaveViewHistory, stCloudHistorySync, stClearCloudHistory
     case stFilterStarSearch, stFilterRankBookmarked, stFilterInvalidBookmarks

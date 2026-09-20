@@ -16,6 +16,7 @@
 
 /* Begin PBXBuildFile section */
 		D3C46192FB90706A8F0A869F /* StickerTests.swift */ = {isa = PBXBuildFile; fileRef = E8D5A2E74D8C63DA2DFFC85E; };
+		9F4B9D7C3A8E4E2B8A5F1C60 /* ImageHostManagerTests.swift */ = {isa = PBXBuildFile; fileRef = 9F4B9D7C3A8E4E2B8A5F1C61 /* ImageHostManagerTests.swift */; };
 		77DFBC336C0918E8F92DB333 /* StickerRenderTests.swift */ = {isa = PBXBuildFile; fileRef = D9E91AEB0C7A0916B3A7BAC7; };
 		AC5D9CAF0E275B894CB591DB /* StickerFixtures */ = {isa = PBXBuildFile; fileRef = 5107DF465D5237C560E06D1D; };
 		8721425C4E1AE3EB49D2DA20 /* StickerMessageContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B5AC9129DB77A756BA680E4; };
@@ -220,6 +221,7 @@
 
 /* Begin PBXFileReference section */
 		E8D5A2E74D8C63DA2DFFC85E /* StickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/StickerTests.swift"; sourceTree = "<group>"; };
+		9F4B9D7C3A8E4E2B8A5F1C61 /* ImageHostManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/ImageHostManagerTests.swift"; sourceTree = "<group>"; };
 		D9E91AEB0C7A0916B3A7BAC7 /* StickerRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/StickerRenderTests.swift"; sourceTree = "<group>"; };
 		5107DF465D5237C560E06D1D /* StickerFixtures */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "Shaft-iOSTests/StickerFixtures"; sourceTree = "<group>"; };
 		5B5AC9129DB77A756BA680E4 /* StickerMessageContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sticker/StickerMessageContent.swift"; sourceTree = "<group>"; };
@@ -441,6 +443,7 @@
 		A1000000000000000000G001 = {
 			isa = PBXGroup;
 			children = (
+				9F4B9D7C3A8E4E2B8A5F1C61 /* ImageHostManagerTests.swift */,
 				E8D5A2E74D8C63DA2DFFC85E /* StickerTests.swift */,
 				D9E91AEB0C7A0916B3A7BAC7 /* StickerRenderTests.swift */,
 				5107DF465D5237C560E06D1D /* StickerFixtures */,
@@ -1132,7 +1135,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		715CEB466C368648489445F5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (D3C46192FB90706A8F0A869F,77DFBC336C0918E8F92DB333,CED7F99A19BA076297B02BF6,C72C29D7D73334F1DC62F4A0,914987C45FFEA7183388C86A,); runOnlyForDeploymentPostprocessing = 0; };
+		715CEB466C368648489445F5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (9F4B9D7C3A8E4E2B8A5F1C60,D3C46192FB90706A8F0A869F,77DFBC336C0918E8F92DB333,CED7F99A19BA076297B02BF6,C72C29D7D73334F1DC62F4A0,914987C45FFEA7183388C86A,); runOnlyForDeploymentPostprocessing = 0; };
 		2D339A82CA9C4D373BA23634 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (352006898A7A9C876D799232,B669B1D8C99FD8302912B05C,4FCEBBEE279B651725FF8E35,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 

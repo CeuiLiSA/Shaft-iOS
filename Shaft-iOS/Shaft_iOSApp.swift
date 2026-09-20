@@ -4,6 +4,9 @@ import SwiftUI
 struct Shaft_iOSApp: App {
     init() {
         AppFonts.register()
+        // Load the image route before PixivImageCache/URLSession can be built.
+        // Settings changes are persisted and intentionally apply on next launch.
+        ImageHostManager.hydrate()
     }
 
     var body: some Scene {

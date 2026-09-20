@@ -404,6 +404,11 @@ private struct SettingsCategoryView: View {
     @State private var mute = MuteStore.shared
     @State private var showLogoutDialog = false
     @State private var showNotAvailable = false
+    @State private var showImageHostPicker = false
+    @State private var showCustomImageHost = false
+    @State private var showImageHostEmpty = false
+    @State private var showImageHostRestart = false
+    @State private var customImageHostDraft = ""
     @State private var highlightID: String?
 
     private static let r18SettingURL = URL(string: "https://www.pixiv.net/settings/viewing")!
@@ -448,6 +453,40 @@ private struct SettingsCategoryView: View {
         }
         .alert(l10n.t(.stNotAvailable), isPresented: $showNotAvailable) {
             Button(l10n.t(.stSure), role: .cancel) {}
+        }
+        .confirmationDialog(l10n.t(.stImageHost), isPresented: $showImageHostPicker,
+                            titleVisibility: .visible) {
+            ForEach(ImageHostMode.allCases, id: \.rawValue) { mode in
+                Button(imageHostOptionTitle(mode)) {
+                    if mode == .custom {
+                        customImageHostDraft = st.customImageHost
+                        showCustomImageHost = true
+                    } else {
+                        applyImageHostMode(mode)
+                    }
+                }
+            }
+            Button(l10n.t(.actionCancel), role: .cancel) {}
+        }
+        .alert(l10n.t(.stImageHostCustom), isPresented: $showCustomImageHost) {
+            TextField(l10n.t(.stImageHostCustomHint), text: $customImageHostDraft)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+            Button(l10n.t(.actionCancel), role: .cancel) {}
+            Button(l10n.t(.stSure)) { applyCustomImageHost() }
+        } message: {
+            Text(l10n.t(.stImageHostCustomHint))
+        }
+        .alert(l10n.t(.stImageHostCustom), isPresented: $showImageHostEmpty) {
+            Button(l10n.t(.stSure), role: .cancel) {}
+        } message: {
+            Text(l10n.t(.stImageHostCustomEmpty))
+        }
+        .alert(l10n.t(.stImageHost), isPresented: $showImageHostRestart) {
+            Button(l10n.t(.stSure), role: .cancel) {}
+        } message: {
+            Text(l10n.t(.stImageHostRestartHint))
         }
     }
 
@@ -512,7 +551,7 @@ private struct SettingsCategoryView: View {
                 hintToggle(l10n.t(.stSecureDns), l10n.t(.stSecureDnsHint), isOn: $st.useSecureDns)
                     .settingRow("secureDNS", highlightID)
             }
-            actionRow(l10n.t(.stImageHost), value: l10n.t(.stNotAvailable)) { showNotAvailable = true }
+            actionRow(l10n.t(.stImageHost), value: imageHostSummary) { showImageHostPicker = true }
                 .settingRow("imageHost", highlightID)
         }
         Section {
@@ -864,12 +903,56 @@ private struct SettingsCategoryView: View {
                     if let hint { Text(hint).font(.caption).foregroundStyle(Theme.brand) }
                 }
                 Spacer()
-                if let value { Text(value).foregroundStyle(Theme.brand) }
+                if let value {
+                    Text(value)
+                        .foregroundStyle(Theme.brand)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
         }
+    }
+
+    private var imageHostSummary: String {
+        switch ImageHostMode(rawValue: st.imageHostMode) ?? .pixiv {
+        case .pixiv: return l10n.t(.stImageHostOfficial)
+        case .pixivCat: return l10n.t(.stImageHostPixivCat)
+        case .pixivRe: return l10n.t(.stImageHostPixivRe)
+        case .pixivNl: return l10n.t(.stImageHostPixivNl)
+        case .custom:
+            return st.customImageHost.isEmpty ? l10n.t(.stImageHostCustom) : st.customImageHost
+        }
+    }
+
+    private func imageHostOptionTitle(_ mode: ImageHostMode) -> String {
+        let title: String
+        switch mode {
+        case .pixiv: title = l10n.t(.stImageHostOfficial)
+        case .pixivCat: title = l10n.t(.stImageHostPixivCat)
+        case .pixivRe: title = l10n.t(.stImageHostPixivRe)
+        case .pixivNl: title = l10n.t(.stImageHostPixivNl)
+        case .custom: title = l10n.t(.stImageHostCustom)
+        }
+        return mode.rawValue == st.imageHostMode ? "✓ \(title)" : title
+    }
+
+    private func applyImageHostMode(_ mode: ImageHostMode) {
+        st.imageHostMode = mode.rawValue
+        showImageHostRestart = true
+    }
+
+    private func applyCustomImageHost() {
+        let host = ImageHostManager.normalizeCustomHost(customImageHostDraft)
+        guard !host.isEmpty else {
+            showImageHostEmpty = true
+            return
+        }
+        st.customImageHost = host
+        st.imageHostMode = ImageHostMode.custom.rawValue
+        showImageHostRestart = true
     }
 }
 
