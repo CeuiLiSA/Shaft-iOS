@@ -147,6 +147,14 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case followingNovelsPageTitle     // string_197 关注者的最新小说
     case discoveryFeed                // string_discovery 发现
     case webHome                      // street_title Web 首页
+    case webDiscovery                 // 官网发现
+    case fanboxEntry                  // pixiv FANBOX
+    case corpusLibrary                // 热门搜索
+    case corpusTagWorkCount           // %@ 件作品
+    case dailyRecommendations         // 每日推荐
+    case dailyRecommendationsIntro, dailyRecommendationsPersonalized, dailyRecommendationsPopular
+    case dailyRecommendationsLogin, dailyRecommendationsUnavailable, dailyRecommendationsExpired, dailyRecommendationsEmpty
+    case shaftRankings                // Shaft 榜单
     case niceFriendWorks              // nice_friend_works 好P友作品
     case niceFriendWorksPageTitle     // string_274 好P友的插画/漫画作品
     // 动态 tab — 1:1 FragmentRight / fragment_new_right.xml

@@ -162,7 +162,7 @@ enum LocalizedStrings {
             .dynRestrictAll: "All", .dynRestrictPublic: "Public", .dynRestrictPrivate: "Private",
             .dynTypeIllustManga: "Illust/Manga", .dynTypeNovel: "Novel", .timeJustNow: "Just now",
             // Discover tab (FragmentCenter)
-            .discoverOtherCategories: "Other categories", .discoverViewAll: "view all", .discoverSeeMore: "see more",
+            .discoverOtherCategories: "Other categories", .discoverViewAll: "view all", .discoverSeeMore: "see more", .webDiscovery: "Web Discovery", .fanboxEntry: "pixiv FANBOX", .corpusLibrary: "Popular searches", .corpusTagWorkCount: "%@ works", .dailyRecommendations: "Daily recommendations", .dailyRecommendationsIntro: "A daily selection based on bookmarks and follows on this device. Pull down to reload.", .dailyRecommendationsPersonalized: "%@ · Based on your bookmarks and follows. Updates at midnight, Beijing time.", .dailyRecommendationsPopular: "%@ · Showing popular works while preference history is limited.", .dailyRecommendationsLogin: "Sign in to view daily recommendations", .dailyRecommendationsUnavailable: "Daily recommendations are unavailable. Pull down to try again later.", .dailyRecommendationsExpired: "Daily recommendations changed. Pull down to refresh.", .dailyRecommendationsEmpty: "No daily recommendations match your filters. Pull down to try again later.", .shaftRankings: "Shaft rankings",
             .discoverLatest: "Latest", .discoverTypeManga: "Manga", .discoverTypeNovel: "Novel",
             .discoverRecommendManga: "Recommended Manga", .discoverRecommendNovel: "Recommended Novels",
             .discoverWalkThrough: "gallery",
@@ -1061,7 +1061,7 @@ enum LocalizedStrings {
             .dynRestrictAll: "全部", .dynRestrictPublic: "公开", .dynRestrictPrivate: "私人",
             .dynTypeIllustManga: "插画/漫画", .dynTypeNovel: "小说", .timeJustNow: "Just now",
             // Discover tab (FragmentCenter)
-            .discoverOtherCategories: "其他分类", .discoverViewAll: "查看全部", .discoverSeeMore: "查看更多",
+            .discoverOtherCategories: "其他分类", .discoverViewAll: "查看全部", .discoverSeeMore: "查看更多", .webDiscovery: "官网发现", .fanboxEntry: "pixiv FANBOX", .corpusLibrary: "热门搜索", .corpusTagWorkCount: "%@ 件作品", .dailyRecommendations: "每日推荐", .dailyRecommendationsIntro: "参考本设备的收藏与关注，每天更新一组插画。下拉可重新加载。", .dailyRecommendationsPersonalized: "%@ · 根据收藏与关注推荐，次日北京时间零点更新。", .dailyRecommendationsPopular: "%@ · 偏好记录不足，先展示热门作品。", .dailyRecommendationsLogin: "请登录后查看每日推荐", .dailyRecommendationsUnavailable: "每日推荐暂不可用，请稍后下拉重试", .dailyRecommendationsExpired: "推荐已更新，请下拉刷新后继续浏览", .dailyRecommendationsEmpty: "今天暂无符合筛选条件的推荐作品，可稍后下拉重试。", .shaftRankings: "Shaft 榜单",
             .discoverLatest: "最新", .discoverTypeManga: "漫画", .discoverTypeNovel: "小说",
             .discoverRecommendManga: "推荐漫画", .discoverRecommendNovel: "推荐小说",
             .discoverWalkThrough: "画廊",
@@ -1957,7 +1957,7 @@ enum LocalizedStrings {
             .dynRestrictAll: "全部", .dynRestrictPublic: "公開", .dynRestrictPrivate: "私人",
             .dynTypeIllustManga: "插畫/漫畫", .dynTypeNovel: "小說", .timeJustNow: "剛剛",
             // Discover tab (FragmentCenter)
-            .discoverOtherCategories: "其他分類", .discoverViewAll: "查看全部", .discoverSeeMore: "查看更多",
+            .discoverOtherCategories: "其他分類", .discoverViewAll: "查看全部", .discoverSeeMore: "查看更多", .webDiscovery: "官網發現", .fanboxEntry: "pixiv FANBOX", .corpusLibrary: "熱門搜尋", .corpusTagWorkCount: "%@ 件作品", .dailyRecommendations: "每日推薦", .dailyRecommendationsIntro: "參考本裝置的收藏與關注，每天更新一組插畫。下拉可重新載入。", .dailyRecommendationsPersonalized: "%@ · 根據收藏與關注推薦，次日北京時間零點更新。", .dailyRecommendationsPopular: "%@ · 偏好紀錄不足，先顯示熱門作品。", .dailyRecommendationsLogin: "請登入後查看每日推薦", .dailyRecommendationsUnavailable: "每日推薦暫時無法使用，請稍後下拉重試", .dailyRecommendationsExpired: "推薦已更新，請下拉重新整理後繼續瀏覽", .dailyRecommendationsEmpty: "今天尚無符合篩選條件的推薦作品，可稍後下拉重試。", .shaftRankings: "Shaft 榜單",
             .discoverLatest: "最新", .discoverTypeManga: "漫畫", .discoverTypeNovel: "小說",
             .discoverRecommendManga: "推薦漫畫", .discoverRecommendNovel: "推薦小說",
             .discoverWalkThrough: "畫廊",
@@ -2753,7 +2753,7 @@ enum LocalizedStrings {
             .dynRestrictAll: "すべて", .dynRestrictPublic: "公開", .dynRestrictPrivate: "非公開",
             .dynTypeIllustManga: "イラスト/マンガ", .dynTypeNovel: "小説", .timeJustNow: "たった今",
             // Discover tab (FragmentCenter)
-            .discoverOtherCategories: "その他のカテゴリー", .discoverViewAll: "すべて表示", .discoverSeeMore: "もっと見る",
+            .discoverOtherCategories: "その他のカテゴリー", .discoverViewAll: "すべて表示", .discoverSeeMore: "もっと見る", .webDiscovery: "Web の発見", .fanboxEntry: "pixiv FANBOX", .corpusLibrary: "人気検索", .corpusTagWorkCount: "%@ 件の作品", .dailyRecommendations: "毎日のおすすめ", .dailyRecommendationsIntro: "この端末のブックマークとフォローを参考に、毎日イラストを更新します。下に引くと再読み込みできます。", .dailyRecommendationsPersonalized: "%@ · ブックマークとフォローに基づくおすすめです。翌日の北京時間 0 時に更新されます。", .dailyRecommendationsPopular: "%@ · 好みの記録が少ないため、人気作品を表示しています。", .dailyRecommendationsLogin: "ログインして毎日のおすすめを見る", .dailyRecommendationsUnavailable: "毎日のおすすめは現在利用できません。しばらくしてから下に引いて再試行してください", .dailyRecommendationsExpired: "おすすめが更新されました。下に引いて更新してから閲覧を続けてください", .dailyRecommendationsEmpty: "今日はフィルター条件に合うおすすめ作品がありません。しばらくしてから下に引いて再試行してください。", .shaftRankings: "Shaft ランキング",
             .discoverLatest: "最新", .discoverTypeManga: "漫画", .discoverTypeNovel: "小説",
             .discoverRecommendManga: "おすすめマンガ", .discoverRecommendNovel: "おすすめ小説",
             .discoverWalkThrough: "ギャラリー",
@@ -3446,7 +3446,7 @@ enum LocalizedStrings {
             .dynRestrictAll: "모두", .dynRestrictPublic: "공공의", .dynRestrictPrivate: "은밀한",
             .dynTypeIllustManga: "일러스트/만화", .dynTypeNovel: "소설.", .timeJustNow: "방금",
             // Discover tab (FragmentCenter)
-            .discoverOtherCategories: "기타 분류", .discoverViewAll: "전부 보기", .discoverSeeMore: "더 보기",
+            .discoverOtherCategories: "기타 분류", .discoverViewAll: "전부 보기", .discoverSeeMore: "더 보기", .webDiscovery: "웹 탐색", .fanboxEntry: "pixiv FANBOX", .corpusLibrary: "인기 검색", .corpusTagWorkCount: "%@ 작품", .dailyRecommendations: "오늘의 추천", .dailyRecommendationsIntro: "이 기기의 북마크와 팔로우를 바탕으로 매일 일러스트를 추천합니다. 아래로 당겨 다시 불러올 수 있습니다.", .dailyRecommendationsPersonalized: "%@ · 북마크와 팔로우를 바탕으로 추천하며, 다음 날 베이징 시간 자정에 갱신됩니다.", .dailyRecommendationsPopular: "%@ · 취향 기록이 부족하여 인기 작품을 먼저 표시합니다.", .dailyRecommendationsLogin: "오늘의 추천을 보려면 로그인해 주세요", .dailyRecommendationsUnavailable: "오늘의 추천을 사용할 수 없습니다. 나중에 아래로 당겨 다시 시도해 주세요", .dailyRecommendationsExpired: "추천이 갱신되었습니다. 아래로 당겨 새로고침한 후 계속 감상해 주세요", .dailyRecommendationsEmpty: "오늘은 필터 조건에 맞는 추천 작품이 없습니다. 나중에 아래로 당겨 다시 시도해 주세요.", .shaftRankings: "Shaft 순위",
             .discoverLatest: "최신", .discoverTypeManga: "만화", .discoverTypeNovel: "소설.",
             .discoverRecommendManga: "추천 만화", .discoverRecommendNovel: "추천 소설",
             .discoverWalkThrough: "화랑",
@@ -4139,7 +4139,7 @@ enum LocalizedStrings {
             .dynRestrictAll: "Все", .dynRestrictPublic: "Публичные", .dynRestrictPrivate: "Приватные",
             .dynTypeIllustManga: "Илл./Манга", .dynTypeNovel: "Новелла", .timeJustNow: "Только что",
             // Discover tab (FragmentCenter)
-            .discoverOtherCategories: "Другие категории", .discoverViewAll: "Показать всё", .discoverSeeMore: "Показать ещё",
+            .discoverOtherCategories: "Другие категории", .discoverViewAll: "Показать всё", .discoverSeeMore: "Показать ещё", .webDiscovery: "Обзор сайта", .fanboxEntry: "pixiv FANBOX", .corpusLibrary: "Популярные поиски", .corpusTagWorkCount: "%@ работ", .dailyRecommendations: "Рекомендации дня", .dailyRecommendationsIntro: "Ежедневная подборка иллюстраций на основе закладок и подписок на этом устройстве. Потяните вниз для перезагрузки.", .dailyRecommendationsPersonalized: "%@ · На основе закладок и подписок. Обновление в полночь следующего дня по пекинскому времени.", .dailyRecommendationsPopular: "%@ · Данных о предпочтениях пока мало, поэтому показаны популярные работы.", .dailyRecommendationsLogin: "Войдите, чтобы увидеть рекомендации дня", .dailyRecommendationsUnavailable: "Рекомендации дня временно недоступны. Позже потяните вниз, чтобы повторить попытку", .dailyRecommendationsExpired: "Рекомендации изменились. Потяните вниз для обновления, прежде чем продолжить просмотр", .dailyRecommendationsEmpty: "Сегодня нет рекомендаций, соответствующих фильтрам. Позже потяните вниз, чтобы повторить попытку.", .shaftRankings: "Рейтинги Shaft",
             .discoverLatest: "Новое", .discoverTypeManga: "Манга", .discoverTypeNovel: "Новелла",
             .discoverRecommendManga: "Рекомендованная манга", .discoverRecommendNovel: "Рекомендованные новеллы",
             .discoverWalkThrough: "Галерея",
@@ -4833,7 +4833,7 @@ enum LocalizedStrings {
             .dynRestrictAll: "Tümü", .dynRestrictPublic: "Açık", .dynRestrictPrivate: "Gizli",
             .dynTypeIllustManga: "İllüstrasyon/Manga", .dynTypeNovel: "Roman", .timeJustNow: "Az önce",
             // Discover tab (FragmentCenter)
-            .discoverOtherCategories: "Diğerleri", .discoverViewAll: "Hepsini gör", .discoverSeeMore: "Daha fazla",
+            .discoverOtherCategories: "Diğerleri", .discoverViewAll: "Hepsini gör", .discoverSeeMore: "Daha fazla", .webDiscovery: "Web keşfi", .fanboxEntry: "pixiv FANBOX", .corpusLibrary: "Popüler aramalar", .corpusTagWorkCount: "%@ eser", .dailyRecommendations: "Günlük öneriler", .dailyRecommendationsIntro: "Bu cihazdaki yer imleri ve takiplerinize göre her gün yenilenen illüstrasyon seçkisi. Yeniden yüklemek için aşağı çekin.", .dailyRecommendationsPersonalized: "%@ · Yer imleri ve takiplerinize göre önerilir. Ertesi gün Pekin saatiyle gece yarısında yenilenir.", .dailyRecommendationsPopular: "%@ · Tercih geçmişi yetersiz olduğu için popüler eserler gösteriliyor.", .dailyRecommendationsLogin: "Günlük önerileri görmek için giriş yapın", .dailyRecommendationsUnavailable: "Günlük öneriler şu anda kullanılamıyor. Daha sonra aşağı çekerek yeniden deneyin", .dailyRecommendationsExpired: "Öneriler değişti. Göz atmaya devam etmeden önce aşağı çekerek yenileyin", .dailyRecommendationsEmpty: "Bugün filtrelerinize uyan öneri yok. Daha sonra aşağı çekerek yeniden deneyin.", .shaftRankings: "Shaft sıralamaları",
             .discoverLatest: "En son", .discoverTypeManga: "Manga", .discoverTypeNovel: "Roman",
             .discoverRecommendManga: "Önerilen Manga", .discoverRecommendNovel: "Önerilen Romanlar",
             .discoverWalkThrough: "Galeri",
