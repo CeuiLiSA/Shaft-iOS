@@ -69,6 +69,9 @@ actor ShaftApiV2Client {
     static let shared = ShaftApiV2Client()
 
     let base = ShaftEventsConfig.baseURL
+    /// Corpus shelves are served by the public pixshaft-api origin rather than
+    /// the legacy shaft-api-v2 process that owns the recommendation feeds.
+    private let corpusBase = URL(string: "https://pixshaft.com")!
     private let session: URLSession
 
     init() {
@@ -123,6 +126,51 @@ actor ShaftApiV2Client {
                                recent: shelf("recent", scoreFromBookmark: true))
     }
 
+    /// Account-aware daily recommendations. The Android Center signs the
+    /// exact JSON body with the shared Shaft HMAC key before posting it; keep
+    /// the same contract here so iOS can render the personalized feed.
+    func dailyRecommendations(uid: Int64, cursor: String? = nil) async throws -> DailyRecommendationsPage {
+        guard uid > 0, ShaftEventsConfig.hmacEnabled else { throw ShaftApiError.http(401) }
+        var body: [String: Any] = [
+            "uid": uid,
+            "client_id": ShaftEventsConfig.clientId,
+            "ts": Int64(Date().timeIntervalSince1970 * 1000),
+            "type": "illust",
+        ]
+        if let cursor { body["cursor"] = cursor }
+        let bodyData = try JSONSerialization.data(withJSONObject: body)
+        var request = URLRequest(url: base.appendingPathComponent("/api/v1/recommendations/daily"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 15
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(Self.signHex(bodyData, secret: ShaftEventsConfig.hmacSecret), forHTTPHeaderField: "X-Shaft-Sign")
+        request.httpBody = bodyData
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw ShaftApiError.http((response as? HTTPURLResponse)?.statusCode ?? -1)
+        }
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw ShaftApiError.decode
+        }
+        let rawItems = object["items"] as? [[String: Any]] ?? []
+        let decoder = JSONDecoder()
+        let illusts = rawItems.compactMap { item -> Illust? in
+            var candidate = (item["bean"] as? [String: Any]) ?? item
+            // The stored bean belongs to its reporter, not the current reader.
+            // Keep local InteractionStore overrides, but never inherit that heart.
+            candidate["is_bookmarked"] = false
+            guard let json = try? JSONSerialization.data(withJSONObject: candidate) else { return nil }
+            return try? decoder.decode(Illust.self, from: json)
+        }
+        return DailyRecommendationsPage(
+            illusts: illusts,
+            nextCursor: object["next_cursor"] as? String,
+            date: object["date"] as? String,
+            refreshAt: Self.int64(object["refresh_at"]),
+            mode: object["mode"] as? String
+        )
+    }
+
     // 操作记录 — reads this client's own event log by client_id (public, no auth).
     func eventsHistory(clientId: String, limit: Int = 50, before: Int64? = nil) async throws -> EventHistoryPage {
         var q = [URLQueryItem(name: "client_id", value: clientId),
@@ -130,6 +178,57 @@ actor ShaftApiV2Client {
         if let before { q.append(URLQueryItem(name: "before", value: String(before))) }
         let data = try await getData(path: "/api/v1/events/history", query: q)
         return decodeHistory(data)
+    }
+
+    // "热门搜索" is the server-backed corpus shelf used by FragmentCenter.
+    // The Android response is intentionally kept loose (preview entries are
+    // just image URLs), so decode it defensively and let the page show whatever
+    // the current server version provides.
+    func corpusTags(limit: Int = 200, minWorks: Int = 30) async throws -> [CorpusTagSummary] {
+        let data = try await getCorpusData(path: "/v1/corpus/tags", query: [
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "min_works", value: String(minWorks)),
+        ])
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let raw = obj["tags"] as? [[String: Any]] else { throw ShaftApiError.decode }
+        return raw.compactMap { item in
+            guard let name = item["name"] as? String, !name.isEmpty else { return nil }
+            let count = Self.int64(item["count"]) ?? Self.int64(item["work_count"]) ?? 0
+            let preview = (item["preview"] as? [Any])?.compactMap { value -> String? in
+                if let s = value as? String { return s }
+                if let image = value as? [String: Any] {
+                    return (image["url"] as? String) ?? (image["medium"] as? String)
+                }
+                return nil
+            } ?? []
+            return CorpusTagSummary(name: name, count: count, previewURLs: preview)
+        }
+    }
+
+    func corpusWorks(tag: String, cursor: String? = nil, limit: Int = 30, r18: Int = 0) async throws -> CorpusWorksPage {
+        var query = [
+            URLQueryItem(name: "tag", value: tag),
+            URLQueryItem(name: "limit", value: String(limit)),
+            URLQueryItem(name: "r18", value: String(r18)),
+        ]
+        if let cursor { query.append(URLQueryItem(name: "cursor", value: cursor)) }
+        let data = try await getCorpusData(path: "/v1/corpus/works", query: query)
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw ShaftApiError.decode
+        }
+        let raws = (obj["illusts"] as? [[String: Any]])
+            ?? (obj["items"] as? [[String: Any]])
+            ?? []
+        let decoder = JSONDecoder()
+        let illusts = raws.compactMap { item -> Illust? in
+            let candidate = (item["bean"] as? [String: Any]) ?? item
+            guard let json = try? JSONSerialization.data(withJSONObject: candidate) else { return nil }
+            return try? decoder.decode(Illust.self, from: json)
+        }
+        return CorpusWorksPage(
+            illusts: illusts,
+            nextCursor: (obj["next_cursor"] as? String) ?? (obj["nextCursor"] as? String)
+        )
     }
 
     /// Follow a server-supplied absolute `next_url` verbatim (trending/recent paging).
@@ -155,6 +254,19 @@ actor ShaftApiV2Client {
             throw ShaftApiError.http((resp as? HTTPURLResponse)?.statusCode ?? -1)
         }
         return data
+    }
+
+    private func getCorpusData(path: String, query: [URLQueryItem]) async throws -> Data {
+        var comps = URLComponents(url: corpusBase.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
+        comps.queryItems = query
+        guard let url = comps.url else { throw ShaftApiError.badURL }
+        return try await getData(url: url)
+    }
+
+    private static func signHex(_ data: Data, secret: String) -> String {
+        let key = SymmetricKey(data: Data(secret.utf8))
+        let mac = HMAC<SHA256>.authenticationCode(for: data, using: key)
+        return mac.map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: decode
@@ -264,6 +376,26 @@ struct WorksPage {
     var illusts: [Illust]
     var novels: [Novel]
     var nextUrl: String?
+}
+
+struct CorpusTagSummary: Identifiable, Sendable {
+    let name: String
+    let count: Int64
+    let previewURLs: [String]
+    var id: String { name }
+}
+
+struct CorpusWorksPage: Sendable {
+    let illusts: [Illust]
+    let nextCursor: String?
+}
+
+struct DailyRecommendationsPage: Sendable {
+    let illusts: [Illust]
+    let nextCursor: String?
+    let date: String?
+    let refreshAt: Int64?
+    let mode: String?
 }
 
 /// `/api/v1/discover` result — the two Discover-tab shelves.

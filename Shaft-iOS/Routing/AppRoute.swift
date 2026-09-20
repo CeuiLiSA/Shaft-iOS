@@ -69,13 +69,20 @@ enum AppRoute: Hashable, Codable, Sendable {
     case currentHot
     case siteRecommend
     case eventHistory
-    /// Discover tab (FragmentCenter) destinations
+    /// Discover tab (FragmentCenter) destinations, including every XML chip.
     case webArticle(url: String)
+    /// Discover content pages that are web-backed on Android as well.
+    case webHome
+    case webDiscovery
+    case fanboxHome
+    case pixivComic
     case niceFriendWorks
     case followingNovels
+    case corpusLibrary
+    case corpusTagDetail(tag: String)
+    case dailyRecommendations
     case artistRank(mode: String)        // "total" 画师榜 / "avg" 画师均分榜
     case viewRank
-    case pixivComic
     case bookmarkRank(aiOnly: Bool)      // 收藏榜 / AI榜
     case yearRank
     case tagRank

@@ -156,18 +156,39 @@ struct RouteHost: ViewModifier {
                 } else {
                     PlaceholderView(title: urlString, systemImage: "link")
                 }
+            case .webHome:
+                DiscoverWebDestinationView(
+                    titleKey: .webHome,
+                    url: URL(string: "https://www.pixiv.net/")!
+                )
+            case .webDiscovery:
+                DiscoverWebDestinationView(
+                    titleKey: .webDiscovery,
+                    url: URL(string: "https://www.pixiv.net/discovery")!
+                )
+            case .fanboxHome:
+                DiscoverWebDestinationView(
+                    titleKey: .fanboxEntry,
+                    url: URL(string: "https://www.fanbox.cc/")!
+                )
+            case .pixivComic:
+                PixivComicView()
             case .niceFriendWorks:
                 NiceFriendIllustsView()
             case .followingNovels:
                 FollowingNovelsView()
-            // Discover "其他分类" entries whose upstream pages (shaft-api-v2 榜单 /
-            // pixiv 漫画 / 算法发现流) are not ported yet — placeholder until then.
+            case .corpusLibrary:
+                CorpusLibraryView()
+            case .corpusTagDetail(let tag):
+                CorpusTagWorksView(tag: tag)
+            case .dailyRecommendations:
+                DailyRecommendationsView()
+            // Discover "其他分类" entries whose upstream pages are backed by
+            // shaft-api-v2 feeds.
             case .artistRank(let mode):
                 ArtistRankView(mode: mode)
             case .viewRank:
                 ViewRankView()
-            case .pixivComic:
-                DiscoverPendingView(titleKey: .pixivComic)
             case .bookmarkRank(let aiOnly):
                 BookmarkRankView(ai: aiOnly ? "only" : nil)
             case .yearRank:
@@ -189,7 +210,7 @@ struct RouteHost: ViewModifier {
             case .ugoiraRank:
                 UgoiraRankView()
             case .discoveryFeed:
-                DiscoverPendingView(titleKey: .discoveryFeed)
+                DiscoveryFeedView()
             case .chatRoomList:
                 ChatRoomListView()
             case .chatThread(let peerUid, let title):
