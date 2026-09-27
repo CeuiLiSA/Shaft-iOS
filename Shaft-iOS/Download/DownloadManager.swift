@@ -42,7 +42,9 @@ struct DownloadWorkInfo: Codable, Hashable, Identifiable, Sendable {
 
     var pageCount: Int { kind == .ugoira ? 1 : max(pageURLs.count, 1) }
 
-    init(illust: Illust) {
+    /// `resolution`: the page size to save — callers that don't let the user pick
+    /// on the spot pass `ImageResolution.default` (upstream `defaultImageResolution()`).
+    init(illust: Illust, resolution: ImageResolution = .original) {
         self.id = illust.id
         self.title = (illust.title?.isEmpty == false ? illust.title! : "illust \(illust.id)")
         self.userName = illust.user?.name ?? ""
@@ -56,10 +58,10 @@ struct DownloadWorkInfo: Codable, Hashable, Identifiable, Sendable {
             self.pageURLs = []
         } else if illust.type == "manga" {
             self.kind = .manga
-            self.pageURLs = IllustPages.urls(for: illust).map(\.absoluteString)
+            self.pageURLs = resolution.urls(for: illust).map(\.absoluteString)
         } else {
             self.kind = .illust
-            self.pageURLs = IllustPages.urls(for: illust).map(\.absoluteString)
+            self.pageURLs = resolution.urls(for: illust).map(\.absoluteString)
         }
     }
 }
@@ -122,6 +124,82 @@ enum DoneLayoutMode: Int, CaseIterable, Codable, Sendable {
     }
 }
 
+// MARK: - Resolution
+
+/// The four `Params.IMAGE_RESOLUTION_*` buckets. Raw values follow the
+/// 设置 · 下载「默认图片清晰度」 picker (0 原图 / 1 大图 / 2 中图 / 3 小图).
+enum ImageResolution: Int, Sendable {
+    case original = 0, large, medium, squareMedium
+
+    /// Upstream `IllustDownload.defaultImageResolution()`: every download entry
+    /// that doesn't let the user pick a size on the spot (main download button,
+    /// download-after-bookmark, the bulk queue) uses the setting, not a hard-coded original.
+    @MainActor
+    static var `default`: ImageResolution {
+        ImageResolution(rawValue: AppSettingsStore.shared.defaultImageResolutionIndex) ?? .original
+    }
+
+    func url(_ page: IllustPageURLs, illust: Illust, index: Int) -> URL? {
+        switch self {
+        case .original: return page.original ?? page.large
+        case .large: return page.large ?? page.original
+        case .medium, .squareMedium:
+            // `meta_pages` carries the small variants; single-page works
+            // fall back to the work-level `image_urls`.
+            let urls = illust.metaPages?.indices.contains(index) == true
+                ? illust.metaPages?[index].imageUrls
+                : illust.imageUrls
+            let s = self == .medium ? urls?.medium : urls?.squareMedium
+            return s.flatMap(URL.init(string:)) ?? page.large ?? page.original
+        }
+    }
+
+    func urls(for illust: Illust) -> [URL] {
+        IllustPages.pages(for: illust).enumerated().compactMap { url($1, illust: illust, index: $0) }
+    }
+}
+
+// MARK: - Storage guard
+
+/// Free-space gate before each download (pixez#1361: downloading onto a full
+/// disk only produces empty / truncated images). Instead of letting every page
+/// fail on its own — hundreds of 「失败」 rows to retry one by one — the whole
+/// queue is paused once, with one notice; after freeing space 「全部继续」
+/// picks up exactly where it stopped.
+enum StorageSpaceGuard {
+    /// Below this, no new download starts: an original is 1–30 MB and the
+    /// Photos import copies it once more, the rest is left for the app's own writes.
+    static let minFreeBytes: Int64 = 100 * 1024 * 1024
+
+    /// Unknown free space lets downloads through — a failed query must never block everything.
+    static func hasRoomForDownload() -> Bool {
+        guard let free = freeBytes() else { return true }
+        return free >= minFreeBytes
+    }
+
+    static func freeBytes() -> Int64? {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+        guard let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
+              let capacity = values.volumeAvailableCapacityForImportantUsage else { return nil }
+        return capacity
+    }
+
+    /// An error chain that says 「no space left」 (POSIX ENOSPC / Cocoa out-of-space).
+    static func isOutOfSpace(_ error: Error) -> Bool {
+        var current: NSError? = error as NSError
+        var depth = 0
+        while let e = current, depth < 8 {
+            if (e.domain == NSPOSIXErrorDomain && e.code == Int(ENOSPC))
+                || (e.domain == NSCocoaErrorDomain && e.code == NSFileWriteOutOfSpaceError) {
+                return true
+            }
+            current = e.userInfo[NSUnderlyingErrorKey] as? NSError
+            depth += 1
+        }
+        return false
+    }
+}
+
 // MARK: - Manager
 
 /// App-wide download queue. A single source of truth for the 3-tab manager:
@@ -142,6 +220,15 @@ final class DownloadManager {
     var isPaused = false { didSet { guard !isLoading else { return }; if !isPaused { pump() }; persistFlags() } }
     var doneLayout: DoneLayoutMode = .list { didSet { guard !isLoading else { return }; persistFlags() } }
 
+    /// One-shot 「存储空间不足，已暂停全部下载」 notice, shown app-wide.
+    private(set) var lowStorageNotice: LowStorageNotice?
+
+    struct LowStorageNotice: Identifiable, Equatable {
+        let id = UUID()
+        let freeBytes: Int64
+    }
+
+    @ObservationIgnored private var lastLowStorageNoticeAt: Date?
     @ObservationIgnored private var runningTasks: [Int64: Task<Void, Never>] = [:]
     @ObservationIgnored private var seqCounter: Int64 = 0
     @ObservationIgnored private var isLoading = false
@@ -185,9 +272,10 @@ final class DownloadManager {
     func enqueue(_ illusts: [Illust]) -> Int {
         let existing = Set(queue.map(\.id))
         var added = 0
+        let resolution = ImageResolution.default
         for illust in illusts where !existing.contains(illust.id) {
             seqCounter += 1
-            queue.append(DownloadItem(info: DownloadWorkInfo(illust: illust), seq: seqCounter))
+            queue.append(DownloadItem(info: DownloadWorkInfo(illust: illust, resolution: resolution), seq: seqCounter))
             added += 1
         }
         if added > 0 { persist(); pump() }
@@ -197,6 +285,22 @@ final class DownloadManager {
     // MARK: Queue controls
 
     func togglePause() { isPaused.toggle() }
+
+    /// Pause the whole queue for low storage and tell the user once
+    /// (`StorageSpaceGuard.pauseDownloadsForLowStorage`). Concurrent hits within
+    /// 2 s share one notice; a 「全部继续」 without freeing space pauses and
+    /// notifies again, so the button never looks dead.
+    func pauseForLowStorage() {
+        isPaused = true
+        let now = Date()
+        if let last = lastLowStorageNoticeAt, now.timeIntervalSince(last) < 2 { return }
+        lastLowStorageNoticeAt = now
+        lowStorageNotice = LowStorageNotice(freeBytes: max(StorageSpaceGuard.freeBytes() ?? 0, 0))
+    }
+
+    func consumeLowStorageNotice(_ id: UUID) {
+        if lowStorageNotice?.id == id { lowStorageNotice = nil }
+    }
 
     func retryFailed() {
         for i in queue.indices where queue[i].status == .failed {
@@ -290,20 +394,38 @@ final class DownloadManager {
         let urls = item.info.pageURLs.compactMap(URL.init(string:))
         guard !urls.isEmpty else { fail(item.id, "No image URL"); return }
         let total = urls.count
-        for (i, url) in urls.enumerated() {
+        var i = 0
+        while i < urls.count {
+            let url = urls[i]
             await parkWhilePaused()
             if Task.isCancelled { return }
+            // Check free space before every page (pixez#1361); the item stays
+            // in flight and resumes from this page on 「全部继续」.
+            if !StorageSpaceGuard.hasRoomForDownload() {
+                pauseForLowStorage()
+                continue
+            }
             mutate(item.id) { $0.currentPage = i + 1 }
+            let page = i
             let data = await PixivImageCache.shared.loadData(url) { [weak self] p in
                 self?.mutate(item.id, throttled: true) {
-                    $0.progress = (Double(i) + p) / Double(total)
+                    $0.progress = (Double(page) + p) / Double(total)
                 }
             }
             if Task.isCancelled { return }
             guard let data else { fail(item.id, "Couldn't load image"); return }
             do { try await PhotoLibrarySaver.save(data: data) }
-            catch { fail(item.id, error.localizedDescription); return }
-            mutate(item.id) { $0.pagesDone = i + 1; $0.progress = Double(i + 1) / Double(total) }
+            catch {
+                // The disk filled up mid-save: stop everything and retry this
+                // page later instead of failing page after page.
+                if StorageSpaceGuard.isOutOfSpace(error) || !StorageSpaceGuard.hasRoomForDownload() {
+                    pauseForLowStorage()
+                    continue
+                }
+                fail(item.id, error.localizedDescription); return
+            }
+            mutate(item.id) { $0.pagesDone = page + 1; $0.progress = Double(page + 1) / Double(total) }
+            i += 1
         }
         complete(item.id, info: item.info)
     }
@@ -312,6 +434,12 @@ final class DownloadManager {
         let id = item.id
         await parkWhilePaused()
         if Task.isCancelled { return }
+        // Ugoira never goes page by page — gate the whole work up front.
+        while !StorageSpaceGuard.hasRoomForDownload() {
+            pauseForLowStorage()
+            await parkWhilePaused()
+            if Task.isCancelled { return }
+        }
         do {
             let frames = try await UgoiraGIF.fetchFrames(illustId: id, api: api) { [weak self] phase in
                 Task { @MainActor in self?.mutate(id) { $0.ugoiraPhase = phase } }
