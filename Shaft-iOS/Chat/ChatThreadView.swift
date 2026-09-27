@@ -93,6 +93,12 @@ private enum ChatPalette {
     /// `Theme` doesn't already carry.
     static let orange = Color(light: 0xD45A30, dark: 0xFF6F3C)
 
+    /// Message-actions quote block: `primary` at 14 % (night) / 8 % (day).
+    static let quoteFill = Color(uiColor: UIColor { traits in
+        UIColor(Theme.brand).withAlphaComponent(traits.userInterfaceStyle == .dark ? 0.14 : 0.08)
+    })
+
+
     /// Sent bubble fill: `GradientDrawable(TL_BR, [palette.primary,
     /// palette.scrollProgressMid])`, and `scrollProgressMid == hueShift(primary,
     /// 40°)` (`V3Palette.kt:121`). `Theme.brand` is our `Shaft.getThemeColor()`.
@@ -113,6 +119,35 @@ private enum ChatPalette {
     static func nameColor(for uid: Int64) -> Color {
         let n = Int64(nameColors.count)
         return nameColors[Int(((uid % n) + n) % n)]
+    }
+}
+
+
+/// `ChatComposerStyle.kt` — theme-derived composer colours shared by the chat
+/// thread and plaza post replies (Android `applyChatComposerStyle`).
+enum ChatComposerStyle {
+    /// `V3Palette.chatComposerSurface()` == `cardFill` — the composer bar and
+    /// its inline sticker panel read as one surface.
+    static let composerSurface = Theme.v3CardFill
+    /// Composer field: `primary` at 14 % (night) / 7 % (day) composited over
+    /// the composer surface.
+    static let composerField = Color(uiColor: UIColor { traits in
+        let dark = traits.userInterfaceStyle == .dark
+        return composite(UIColor(Theme.brand), alpha: dark ? 0.14 : 0.07, over: UIColor(Theme.v3CardFill).resolvedColor(with: traits))
+    })
+    /// Disabled send chip: `alpha15` over the composer surface.
+    static let sendDisabled = Color(uiColor: UIColor { traits in
+        composite(UIColor(Theme.brand), alpha: 0.15, over: UIColor(Theme.v3CardFill).resolvedColor(with: traits))
+    })
+    /// `ColorUtils.compositeColors(fg @ alpha, bg)`.
+    static func composite(_ fg: UIColor, alpha: CGFloat, over bg: UIColor) -> UIColor {
+        var fr: CGFloat = 0, fgG: CGFloat = 0, fb: CGFloat = 0, fa: CGFloat = 0
+        var br: CGFloat = 0, bgG: CGFloat = 0, bb: CGFloat = 0, ba: CGFloat = 0
+        fg.getRed(&fr, green: &fgG, blue: &fb, alpha: &fa)
+        bg.getRed(&br, green: &bgG, blue: &bb, alpha: &ba)
+        return UIColor(red: fr * alpha + br * (1 - alpha),
+                       green: fgG * alpha + bgG * (1 - alpha),
+                       blue: fb * alpha + bb * (1 - alpha), alpha: 1)
     }
 }
 
@@ -860,10 +895,12 @@ struct ChatThreadView: View {
                     }
                 }
                 .frame(height: panelHeight)
+                .background(ChatComposerStyle.composerSurface)
             }
         }
         .background(Theme.v3Bg)
-        .background(alignment: .bottom) { Theme.v3MenuBg.frame(height: 1).ignoresSafeArea(edges: .bottom) }
+        // The composer surface also runs under the home indicator.
+        .background(alignment: .bottom) { ChatComposerStyle.composerSurface.frame(height: 1).ignoresSafeArea(edges: .bottom) }
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         // Opaque bar: the flipped list scrolls beneath it with the edge effect
@@ -901,7 +938,14 @@ struct ChatThreadView: View {
             keyboardHeight = max(0, frame.height - Self.bottomSafeAreaInset)
         }
         .sheet(item: $actionTarget) { message in
-            ChatMessageActionsSheet(message: message) { action in
+            ChatMessageActionsSheet(
+                message: message,
+                // Own messages need no name; others show who is being quoted, as on the bubble.
+                sender: message.isMine(selfUid: vm.selfUid) ? nil : message.resolvedDisplayName,
+                // Reply is only offered for messages the server knows about
+                // (Delivered + has a client_msg_id) — `ChatListViewModel.canReplyTo`.
+                canReply: message.clientMsgId != nil && message.state == .delivered
+            ) { action in
                 actionTarget = nil
                 handle(action, on: message)
             }
@@ -1239,8 +1283,13 @@ struct ChatThreadView: View {
 
     // MARK: Input bar
 
-    /// `chat_fragment_demo_list.xml`'s `input_bar`: emoji toggle (40dp) +
-    /// 22dp-radius filled field + 40dp filled send button, on `v3_menu_bg`.
+    /// `chat_view_composer.xml` + `ChatComposerStyle` (2026-09-24): the bar and
+    /// the inline sticker panel share the theme-derived `cardFill` surface with
+    /// a top `cardHairline`. The field is one tonal step above it (theme tint
+    /// 14 % night / 7 % day over the surface); text `v3_text_1`, hint and the
+    /// disabled text `v3_text_2`, cursor `textAccent`. Emoji and send keep 48pt
+    /// hit areas; send is a true 40pt circle — solid theme colour when enabled,
+    /// the same hue's `alpha15` tonal chip with a 45 % `textAccent` icon when not.
     private var inputBar: some View {
         HStack(alignment: .center, spacing: 0) {
             Button {
@@ -1248,39 +1297,46 @@ struct ChatThreadView: View {
             } label: {
                 Image(systemName: showEmojiPanel ? "keyboard" : "face.smiling")
                     .font(.system(size: 22))
-                    .foregroundStyle(Theme.v3Text2)
-                    .frame(width: 40, height: 40)
+                    .foregroundStyle(Theme.v3TextAccent)
+                    .frame(width: 48, height: 48)
+                    .contentShape(.rect)
             }
             .buttonStyle(.plain)
             .disabled(isComposerLocked)
 
-            TextField(inputHint, text: $draft, axis: .vertical)
+            TextField(text: $draft, axis: .vertical) {
+                Text(inputHint).foregroundStyle(Theme.v3Text2)
+            }
                 .font(.system(size: 15))
+                .foregroundStyle(isComposerLocked ? Theme.v3Text2 : Theme.v3Text1)
+                .tint(Theme.v3TextAccent)
                 .lineLimit(1...4)
                 .focused($inputFocused)
                 .disabled(isComposerLocked)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(ChatPalette.receivedBubble, in: .rect(cornerRadius: 22))
-                .padding(.leading, 6)
-                .padding(.trailing, 8)
+                .background(ChatComposerStyle.composerField, in: .rect(cornerRadius: 22))
+                .padding(.leading, 2)
+                .padding(.trailing, 4)
 
             Button {
                 send()
             } label: {
                 Image(systemName: "paperplane.fill")
                     .font(.system(size: 18))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(isSendEnabled ? Color.white : Theme.v3TextAccent.opacity(0.45))
                     .frame(width: 40, height: 40)
-                    // Disabled state mirrors `ColorUtils.setAlphaComponent(brand, 0x40)`.
-                    .background(Theme.brand.opacity(isSendEnabled ? 1 : 0.25), in: .circle)
+                    .background(isSendEnabled ? AnyShapeStyle(Theme.brand) : AnyShapeStyle(ChatComposerStyle.sendDisabled), in: .circle)
+                    .frame(width: 48, height: 48)
+                    .contentShape(.rect)
             }
             .buttonStyle(.plain)
             .disabled(!isSendEnabled)
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, 8)
         .padding(.vertical, 10)
-        .background(Theme.v3MenuBg)
+        .background(ChatComposerStyle.composerSurface)
+        .overlay(alignment: .top) { Theme.v3CardHairline.frame(height: 0.5) }
     }
 
     /// Admin closed the public room: lock the composer outright so a message the
@@ -1617,68 +1673,160 @@ private struct ChatBubbleRow: View {
 // MARK: - Message actions sheet
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Port of `MessageActionsSheet` + `chat_sheet_message_actions.xml`: a 2-line
-/// preview of the message, a hairline, then copy / reply / forward / delete rows
-/// (`Chat.ActionRow` = 24pt horizontal, 14pt vertical, 24pt icon, 16pt gap).
+/// Port of `MessageActionsSheet` + `chat_sheet_message_actions.xml` (V3 +
+/// MD3-E, 2026-09-24), on the `WitBottomSheet` surface (`v3_bg`, 16pt top
+/// corners, 32×4 hairline handle): the quote block (3pt theme accent bar +
+/// theme-tint 16pt container, `textAccent` sender name for others' messages,
+/// 15pt body up to three lines) → copy / reply / forward as one connected
+/// segmented group (outer 20 / inner 5, 2pt gaps, `cardFill` + hairline, rows
+/// ≥ 60pt) → a separate delete row 12pt below. Each row is a 40pt 17/17/17/7
+/// icon tile + 16pt Medium label; neutral rows put the theme colour only on the
+/// tile, delete uses the day/night danger colour for icon, tile and label.
 private struct ChatMessageActionsSheet: View {
     let message: ChatMessage
+    let sender: String?
+    let canReply: Bool
     let onAction: (ChatMessageAction) -> Void
 
     @Environment(OnboardingStore.self) private var l10n
+    @State private var contentHeight: CGFloat = 320
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(message.text)
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.v3Text2)
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-                .padding(.bottom, 12)
-
-            Rectangle()
-                .fill(Theme.v3Border1)
-                .frame(height: 1)
-                .padding(.horizontal, 16)
-
-            actionRow(.copy, title: l10n.t(.chatActionCopy), icon: "doc.on.doc")
-            actionRow(.reply, title: l10n.t(.chatActionReply), icon: "arrowshape.turn.up.left")
-            actionRow(.forward, title: l10n.t(.chatActionForward), icon: "arrowshape.turn.up.right")
-            actionRow(.delete, title: l10n.t(.chatActionDelete), icon: "trash", tint: Theme.v3Danger)
-
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.v3MenuBg)
-        .presentationDetents([.height(300)])
-        .presentationDragIndicator(.visible)
-        .presentationBackground(Theme.v3MenuBg)
+    private struct Row {
+        let action: ChatMessageAction
+        let title: String
+        let icon: String
     }
 
-    private func actionRow(
-        _ action: ChatMessageAction,
-        title: String,
-        icon: String,
-        tint: Color = Theme.v3Text1
-    ) -> some View {
-        Button {
-            onAction(action)
-        } label: {
-            HStack(spacing: 16) {
-                Image(systemName: icon)
-                    .font(.system(size: 18))
-                    .frame(width: 24, height: 24)
-                Text(title)
-                    .font(.system(size: 16))
-                Spacer(minLength: 0)
+    var body: some View {
+        let common = [
+            Row(action: .copy, title: l10n.t(.chatActionCopy), icon: "doc.on.doc"),
+            canReply ? Row(action: .reply, title: l10n.t(.chatActionReply), icon: "arrowshape.turn.up.left") : nil,
+            Row(action: .forward, title: l10n.t(.chatActionForward), icon: "arrowshape.turn.up.right"),
+        ].compactMap { $0 }
+
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(Theme.v3CardHairline)
+                .frame(width: 32, height: 4)
+                .padding(.vertical, 10)
+
+            VStack(spacing: 0) {
+                quote
+
+                VStack(spacing: 2) {
+                    ForEach(Array(common.enumerated()), id: \.offset) { index, row in
+                        actionRow(row, index: index, total: common.count, danger: false)
+                    }
+                }
+                .padding(.top, 16)
+
+                // Destructive action stands apart so it is not hit by accident.
+                actionRow(Row(action: .delete, title: l10n.t(.chatActionDelete), icon: "trash"),
+                          index: 0, total: 1, danger: true)
+                    .padding(.top, 12)
             }
-            .foregroundStyle(tint)
-            .padding(.horizontal, 24)
-            .padding(.vertical, 14)
-            .contentShape(.rect)
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
+            .padding(.bottom, 16)
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: 640)
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .presentationDetents([.height(contentHeight)])
+        .presentationDragIndicator(.hidden)
+        .presentationCornerRadius(16)
+        .presentationBackground(Theme.v3Bg)
+    }
+
+    private var quote: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Capsule()
+                .fill(Theme.brand)
+                .frame(width: 3)
+            VStack(alignment: .leading, spacing: 4) {
+                if let sender, !sender.isEmpty {
+                    Text(sender)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.v3TextAccent)
+                        .lineLimit(1)
+                }
+                Text(message.text)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Theme.v3Text1)
+                    .lineSpacing(15 * 0.3)
+                    .lineLimit(3)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.leading, 12)
+        .padding(.trailing, 16)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(ChatPalette.quoteFill)
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Theme.brand.opacity(0.15), lineWidth: 0.5))
+        )
+    }
+
+    private func actionRow(_ row: Row, index: Int, total: Int, danger: Bool) -> some View {
+        let accent = danger ? Theme.v3Danger : Theme.v3TextAccent
+        let outer: CGFloat = 20, inner: CGFloat = 5
+        let top = index == 0 ? outer : inner
+        let bottom = index == total - 1 ? outer : inner
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: top, bottomLeadingRadius: bottom,
+            bottomTrailingRadius: bottom, topTrailingRadius: top, style: .continuous
+        )
+        return Button {
+            onAction(row.action)
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: row.icon)
+                    .font(.system(size: 18))
+                    .foregroundStyle(accent)
+                    .frame(width: 22, height: 22)
+                    .frame(width: 40, height: 40)
+                    .background(
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: 17, bottomLeadingRadius: 17,
+                            bottomTrailingRadius: 7, topTrailingRadius: 17, style: .continuous
+                        )
+                        .fill(Theme.v3CardFill)
+                        .overlay(
+                            UnevenRoundedRectangle(
+                                topLeadingRadius: 17, bottomLeadingRadius: 17,
+                                bottomTrailingRadius: 7, topTrailingRadius: 17, style: .continuous
+                            )
+                            .fill(accent.opacity(0.14))
+                        )
+                    )
+                Text(row.title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(danger ? accent : Theme.v3Text1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, 16)
+            .padding(.vertical, 10)
+            .frame(minHeight: 60)
+            .background(shape.fill(Theme.v3CardFill))
+            .overlay(shape.strokeBorder(Theme.v3CardHairline, lineWidth: 0.5))
+            .contentShape(shape)
+        }
+        .buttonStyle(ChatActionRowStyle(shape: shape, pressTint: accent.opacity(0.16)))
+    }
+}
+
+/// Ripple stand-in: the row darkens with its accent at 16 % while pressed.
+private struct ChatActionRowStyle<S: Shape>: ButtonStyle {
+    let shape: S
+    let pressTint: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .overlay(shape.fill(pressTint).opacity(configuration.isPressed ? 1 : 0))
     }
 }
 

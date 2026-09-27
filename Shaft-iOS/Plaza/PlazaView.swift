@@ -224,23 +224,31 @@ struct PlazaDetailView: View {
                     if stickers { stickers = false; focused = true }
                     else { focused = false; stickers = true }
                 } label: {
+                    // Shared chat composer style (2026-09-24): 48pt hit area, textAccent tint.
                     Group {
                         if stickers { Image(systemName: "keyboard").font(.system(size: 22)) }
                         else { PlazaIcon(glyph: .emoji) }
-                    }.frame(width: 40, height: 40)
+                    }.foregroundStyle(Theme.v3TextAccent).frame(width: 48, height: 48).contentShape(.rect)
                 }.accessibilityLabel(copy.text("sticker_title"))
-                TextField(copy.text("comment_hint"), text: Binding(get: { composer.draft.text }, set: { value in composer.edit { $0.text = value } }), axis: .vertical)
+                TextField(text: Binding(get: { composer.draft.text }, set: { value in composer.edit { $0.text = value } }), axis: .vertical) {
+                    Text(copy.text("comment_hint")).foregroundStyle(Theme.v3Text2)
+                }
                     .font(.custom("Montserrat-Regular", size: 15)).lineLimit(1...4).focused($focused)
+                    // Disabled while sending: text steps back to v3_text_2.
+                    .foregroundStyle(composer.sending ? Theme.v3Text2 : Theme.v3Text1).tint(Theme.v3TextAccent)
                     .padding(.horizontal, 16).padding(.vertical, 12).frame(minHeight: 48)
-                    .background(PlazaPalette.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 22))
-                    .padding(.leading, 6).padding(.trailing, 8)
+                    .background(ChatComposerStyle.composerField, in: RoundedRectangle(cornerRadius: 22))
+                    .padding(.leading, 2).padding(.trailing, 4)
                     .accessibilityIdentifier("plaza-reply-input")
                 Button { if PlazaPolicy.accepted(uid: store.uid) { send() } else { policy = true } } label: {
-                    Group { if composer.sending { ProgressView().tint(.white) } else { PlazaIcon(glyph: .send, size: 20) } }
-                        .frame(width: 40, height: 40).foregroundStyle(.white)
-                        .background(PlazaPalette.primary.opacity(composer.canSend ? 1 : 0.35), in: Circle())
+                    let enabled = composer.canSend && !store.busy
+                    Group { if composer.sending { ProgressView().tint(Theme.v3TextAccent) } else { PlazaIcon(glyph: .send, size: 20) } }
+                        .frame(width: 40, height: 40)
+                        .foregroundStyle(enabled ? Color.white : Theme.v3TextAccent.opacity(0.45))
+                        .background(enabled ? AnyShapeStyle(PlazaPalette.primary) : AnyShapeStyle(ChatComposerStyle.sendDisabled), in: Circle())
+                        .frame(width: 48, height: 48).contentShape(.rect)
                 }.disabled(!composer.canSend || store.busy).accessibilityLabel(copy.text("send"))
-            }.padding(.horizontal, 12).padding(.vertical, 10).disabled(composer.sending)
+            }.padding(.horizontal, 8).padding(.vertical, 10).disabled(composer.sending)
             if stickers {
                 PlazaStickerPicker(inline: true, position: stickerPosition) { sticker in
                     guard !composer.sending else { return }
@@ -252,7 +260,8 @@ struct PlazaDetailView: View {
                 }.frame(height: stickerKeyboardHeight)
             }
         }.frame(maxWidth: 720).frame(maxWidth: .infinity)
-            .background(Theme.v3MenuBg.ignoresSafeArea(edges: .bottom))
+            .background(ChatComposerStyle.composerSurface.ignoresSafeArea(edges: .bottom))
+            .overlay(alignment: .top) { Theme.v3CardHairline.frame(height: 0.5) }
     }
     private func load(force: Bool) async {
         guard !store.deleted.contains(postID) else { return }
