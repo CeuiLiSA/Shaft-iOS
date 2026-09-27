@@ -260,6 +260,20 @@ final class InteractionStore {
         }
         followRestrictLocal.insert(id)
         Task { await ShaftEventReporter.shared.reportFollow(user, id: id, followed: target) }
+        syncFollowMirror(user: user, id: id, followed: target, restrict: resolvedRestrict)
         return true
+    }
+
+    /// 关注 / 取关被确认后同步进关注镜像（与 `syncBookmarkMirror` 同一个理由放在确认之后）。
+    /// 关注要一份 `PixivUser` 才能入库；手上没有就放弃这一条，下一次增量维护会在表头扫到它。
+    private func syncFollowMirror(user: PixivUser?, id: Int64, followed: Bool, restrict: String) {
+        Task {
+            if followed {
+                guard let user else { return }
+                await BookmarkMirrorService.shared.onUserFollowed(user, restrict: MirrorRestrict.ofApiValue(restrict))
+            } else {
+                await BookmarkMirrorService.shared.onUnbookmarked(contentType: .user, targetId: id)
+            }
+        }
     }
 }

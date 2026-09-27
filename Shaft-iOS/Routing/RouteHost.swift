@@ -53,18 +53,18 @@ struct RouteHost: ViewModifier {
                 UserIllustTagView(userId: userId, tag: tag, category: category)
             case .userWorksJump(let userId, let type, let offset, let targetDate):
                 UserWorksJumpListView(userId: userId, type: type, offset: offset, targetDate: targetDate)
-            // 「我的插画收藏」有两种落点：本地镜像已经完整同步过一次 → 直接进本地库
-            //（能倒序、能按标签/作者/年份筛，而服务端接口给不了这些）；还没同步完 → 原始列表。
+            // 「我的插画收藏」有两种落点：书架已注册或首次在线访问 → 进本地库，边回填边浏览，
+            // 全量完成后再开放筛选（#1109）；离线且从未注册 → 原始列表。
             // `classic` 是本地库自己的「原始收藏列表」入口发来的，必须原样给老页面，
             // 否则用户从库里点进去会被立刻重定向回来，两个页面互相踢皮球。
             case .userBookmarks(let userId, let classic):
-                if !classic, userId == BookmarkMirrorService.loggedInUid(), mirror.isMirrorReady(contentType: .illust) {
+                if !classic, userId == BookmarkMirrorService.loggedInUid(), mirror.canOpenLibrary(contentType: .illust) {
                     BookmarkLibraryView(contentType: .illust, restrict: .public)
                 } else {
                     UserBookmarksView(userId: userId)
                 }
             case .userNovelBookmarks(let userId, let classic):
-                if !classic, userId == BookmarkMirrorService.loggedInUid(), mirror.isMirrorReady(contentType: .novel) {
+                if !classic, userId == BookmarkMirrorService.loggedInUid(), mirror.canOpenLibrary(contentType: .novel) {
                     BookmarkLibraryView(contentType: .novel, restrict: .public)
                 } else {
                     UserNovelBookmarksView(userId: userId)
@@ -80,8 +80,13 @@ struct RouteHost: ViewModifier {
                 IllustSeriesView(seriesId: seriesId)
             case .novelSeries(let seriesId):
                 NovelSeriesView(seriesId: seriesId)
-            case .userFollowing(let userId):
-                UserFollowingView(userId: userId)
+            // 关注入口与收藏入口同一条规则：自己的关注已完整镜像过一次 → 关注库；否则原列表。
+            case .userFollowing(let userId, let classic):
+                if !classic, userId == BookmarkMirrorService.loggedInUid(), mirror.canOpenLibrary(contentType: .user) {
+                    BookmarkLibraryView(contentType: .user, restrict: .public)
+                } else {
+                    UserFollowingView(userId: userId)
+                }
             case .userFollower(let userId):
                 UserFollowerView(userId: userId)
             case .userMyPixiv(let userId):
@@ -162,10 +167,8 @@ struct RouteHost: ViewModifier {
                     url: URL(string: "https://www.pixiv.net/")!
                 )
             case .webDiscovery:
-                DiscoverWebDestinationView(
-                    titleKey: .webDiscovery,
-                    url: URL(string: "https://www.pixiv.net/discovery")!
-                )
+                // 官网发现 is a native feed on Android too (#1121).
+                WebDiscoveryView()
             case .fanboxHome:
                 DiscoverWebDestinationView(
                     titleKey: .fanboxEntry,

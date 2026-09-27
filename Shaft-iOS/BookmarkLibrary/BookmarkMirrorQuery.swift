@@ -192,6 +192,14 @@ enum BookmarkMirrorQuery {
         return SQLQuery(sql: sql, args: args)
     }
 
+    /// 默认顺序的续页锚定收藏序号：前面新增 / 删除行不会使下一页漂移（#1109）。
+    static func rowsAfter(shelfKey: String, afterSeq: Int64, limit: Int) -> SQLQuery {
+        SQLQuery(
+            sql: "SELECT * FROM \(rowsTable) WHERE shelfKey = ? AND bookmarkSeq < ? ORDER BY bookmarkSeq DESC LIMIT ?",
+            args: [.text(shelfKey), .int(afterSeq), .int(Int64(limit))]
+        )
+    }
+
     static func count(_ filter: BookmarkFilter) -> SQLQuery {
         var args: [SQLValue] = []
         let whereClause = buildWhere(filter, &args)
@@ -229,7 +237,9 @@ enum BookmarkMirrorQuery {
     /// 「我收藏过的年份」——年份筛选器的可选项，顺带给出每年多少件。
     static func yearFacets(shelfKey: String) -> SQLQuery {
         SQLQuery(
-            sql: "SELECT CAST(strftime('%Y', createDateMs / 1000, 'unixepoch') AS INTEGER) AS year, COUNT(*) AS hitCount " +
+            // 按**本地时区**切年：选中某一年时筛选面板按本地日历算区间，这里若按 UTC 切，
+            // 元旦前后发布的作品会被数进相邻那一年，件数与点进去的结果对不上。
+            sql: "SELECT CAST(strftime('%Y', createDateMs / 1000, 'unixepoch', 'localtime') AS INTEGER) AS year, COUNT(*) AS hitCount " +
                 "FROM \(rowsTable) WHERE shelfKey = ? AND createDateMs > 0 " +
                 "GROUP BY year ORDER BY year DESC",
             args: [.text(shelfKey)]

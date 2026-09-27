@@ -79,7 +79,14 @@ struct BookmarkMirrorReadyBannerHost: ViewModifier {
 
     private func card(_ a: BookmarkMirrorReadyBanner.Announcement) -> some View {
         let route = AppRoute.bookmarkLibrary(contentType: a.shelf.contentType.code, restrict: a.shelf.restrict.apiValue)
-        let caption = a.shelf.contentType == .novel ? l10n.t(.bookmarkLibraryNovelTitle) : l10n.t(.bookmarkLibraryTitle)
+        let isUser = a.shelf.contentType == .user
+        let caption: String = {
+            switch a.shelf.contentType {
+            case .illust: return l10n.t(.bookmarkLibraryTitle)
+            case .novel: return l10n.t(.bookmarkLibraryNovelTitle)
+            case .user: return l10n.t(.followingLibraryTitle)
+            }
+        }()
         return HStack(alignment: .top, spacing: 12) {
             // 用 app 自己的图标：这条不是某个作品/某个人发来的消息，而是**应用**在跟用户说话。
             Image(.launchLogo)
@@ -88,10 +95,10 @@ struct BookmarkMirrorReadyBannerHost: ViewModifier {
                 .frame(width: 40, height: 40)
                 .clipShape(.rect(cornerRadius: 10))
             VStack(alignment: .leading, spacing: 3) {
-                Text(l10n.t(.bookmarkMirrorReadyTitle))
+                Text(l10n.t(isUser ? .followingMirrorReadyTitle : .bookmarkMirrorReadyTitle))
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Theme.v3Text1)
-                Text(l10n.t(.bookmarkMirrorReadyMessage, BookmarkLibraryFormat.count(a.rows)))
+                Text(l10n.t(isUser ? .followingMirrorReadyMessage : .bookmarkMirrorReadyMessage, BookmarkLibraryFormat.count(a.rows)))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.v3Text2)
                     .lineLimit(3)

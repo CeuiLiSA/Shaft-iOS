@@ -622,7 +622,7 @@ actor SearchRequestCoordinator {
         }
 
         do {
-            return try await BorrowedSearchSerial.shared.run { [api, session] in
+            let borrowed = try await BorrowedSearchSerial.shared.run { [api, session] in
                 let result = await session.fetchReady(requesterUID: requesterUID)
                 try Task.checkCancellation()
                 guard case .success = result else {
@@ -632,6 +632,7 @@ actor SearchRequestCoordinator {
                     try await api.searchIllust(word: word, filter: filter, accessToken: token)
                 }
             }
+            return await Self.withViewerBookmarkState(borrowed)
         } catch is BorrowedSessionError {
             return wantsSort
                 ? try await api.searchPopularPreviewIllust(word: word, filter: filter)
@@ -673,7 +674,7 @@ actor SearchRequestCoordinator {
         guard enabled, !selectedPreview, wantsSort || wantsBookmark else { return try await own(false) }
 
         do {
-            return try await BorrowedSearchSerial.shared.run { [api, session] in
+            let borrowed = try await BorrowedSearchSerial.shared.run { [api, session] in
                 let result = await session.fetchReady(requesterUID: requesterUID)
                 try Task.checkCancellation()
                 guard case .success = result else {
@@ -690,6 +691,7 @@ actor SearchRequestCoordinator {
                     )
                 }
             }
+            return await Self.withViewerBookmarkState(borrowed)
         } catch is BorrowedSessionError {
             return try await own(wantsSort)
         }
@@ -700,11 +702,12 @@ actor SearchRequestCoordinator {
         if await session.borrowedAccountLost { return .init(illusts: [], nextUrl: nil) }
         guard await session.payload != nil else { return try await api.nextPage(url) }
         do {
-            return try await BorrowedSearchSerial.shared.run { [api, session] in
+            let borrowed: IllustResponse = try await BorrowedSearchSerial.shared.run { [api, session] in
                 try await session.request { token in
                     try await api.nextPage(url, accessToken: token)
                 }
             }
+            return await Self.withViewerBookmarkState(borrowed)
         } catch is BorrowedSessionError {
             return .init(illusts: [], nextUrl: nil)
         }
@@ -715,14 +718,35 @@ actor SearchRequestCoordinator {
         if await session.borrowedAccountLost { return .init(novels: [], nextUrl: nil) }
         guard await session.payload != nil else { return try await api.nextPage(url) }
         do {
-            return try await BorrowedSearchSerial.shared.run { [api, session] in
+            let borrowed: NovelResponse = try await BorrowedSearchSerial.shared.run { [api, session] in
                 try await session.request { token in
                     try await api.nextPage(url, accessToken: token)
                 }
             }
+            return await Self.withViewerBookmarkState(borrowed)
         } catch is BorrowedSessionError {
             return .init(novels: [], nextUrl: nil)
         }
+    }
+
+    // MARK: Viewer bookmark state (#1063)
+
+    /// A borrowed token answers `is_bookmarked` for the **borrowed** account. Pixiv
+    /// has no batch "did I bookmark these" endpoint, so keep only what is certainly
+    /// right for the viewer: works in the viewer's local bookmark mirror are
+    /// bookmarked; everything else becomes "unknown" (nil — rendered as not
+    /// bookmarked; in-app toggles still win through `InteractionStore`). "Not in
+    /// the mirror" never means "not bookmarked": the mirror may still be filling.
+    private static func withViewerBookmarkState(_ response: IllustResponse) async -> IllustResponse {
+        let mirrored = await BookmarkMirrorService.shared.bookmarkedAmong(contentType: .illust, targetIds: response.illusts.map(\.id))
+        let illusts = response.illusts.map { BookmarkMirrorMapper.withBookmarkedState($0, mirrored.contains($0.id) ? true : nil) }
+        return IllustResponse(illusts: illusts, nextUrl: response.nextUrl)
+    }
+
+    private static func withViewerBookmarkState(_ response: NovelResponse) async -> NovelResponse {
+        let mirrored = await BookmarkMirrorService.shared.bookmarkedAmong(contentType: .novel, targetIds: response.novels.map(\.id))
+        let novels = response.novels.map { BookmarkMirrorMapper.withBookmarkedState($0, mirrored.contains($0.id) ? true : nil) }
+        return NovelResponse(novels: novels, nextUrl: response.nextUrl)
     }
 
     private func withNovelSafeSort(_ filter: SearchFilter) -> SearchFilter {
@@ -739,7 +763,7 @@ actor SearchRequestCoordinator {
 /// WebKit cookies into the grouped AJAX request instead of silently remaining
 /// anonymous after the user has logged in on the web.
 @MainActor
-private enum PixivWebCookieBridge {
+enum PixivWebCookieBridge {
     static func header(for url: URL) async -> String? {
         let cookies: [HTTPCookie] = await withCheckedContinuation { continuation in
             WKWebsiteDataStore.default().httpCookieStore.getAllCookies {

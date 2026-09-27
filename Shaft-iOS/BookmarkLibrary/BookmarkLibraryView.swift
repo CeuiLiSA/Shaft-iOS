@@ -52,6 +52,8 @@ struct BookmarkLibraryView: View {
     }
 
     private var isIllust: Bool { contentType == .illust }
+    /// 文案 / 可选排序 / 面板露出哪几节，全由书架类型的档案决定（`LibraryProfile`）。
+    private var profile: LibraryProfile { LibraryProfile.of(contentType) }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -92,10 +94,14 @@ struct BookmarkLibraryView: View {
             ToolbarItem(placement: .principal) { shelfSwitch }
             ToolbarItem(placement: .topBarTrailing) { overflowMenu }
         }
+        // 书架退回未补齐（例如刚重建）时筛选面板没有意义，直接关掉。
+        .onChange(of: vm.isShelfComplete) { _, complete in if !complete { showFilter = false } }
         .sheet(isPresented: $showFilter) {
             BookmarkFilterSheet(vm: vm) { applyFilterChange() }
-                .presentationDetents([.fraction(0.86)])
+                .presentationDetents([.fraction(0.88)])
                 .presentationDragIndicator(.hidden)
+                .presentationCornerRadius(28)
+                .presentationBackground(Theme.v3Bg)
         }
         .onAppear {
             vm.bind()
@@ -105,7 +111,7 @@ struct BookmarkLibraryView: View {
             // 打开收藏库本身就是一次「用户在看这个书架」的信号：让引擎马上补一次增量，
             // 而不是等下一个例行窗口。补的过程静默，页面照常用本地数据。
             // onAppear 在推入与返回时都会触发 —— 对应 Android 的 install + onResumed。
-            Task { await BookmarkMirrorService.shared.ensureShelf(vm.shelf, reason: "打开收藏库") }
+            Task { await BookmarkMirrorService.shared.ensureShelf(vm.shelf, reason: "打开\(contentType.tag)本地库") }
         }
         // 「在网页端收藏几张 → 切回 app 看看」是最典型的动作，而那个来回根本不会重建本页：
         // 回到前台也要再对一次，否则回来看到的还是走之前那份。
@@ -141,8 +147,8 @@ struct BookmarkLibraryView: View {
     /// 现在在看哪一半 / 另一半在哪」三件事一次说清了，不再单独摆一行标题。
     private var shelfSwitch: some View {
         HStack(spacing: 0) {
-            shelfOption(.public, title: l10n.t(isIllust ? .bookmarkShelfPublicIllust : .bookmarkShelfPublicNovel))
-            shelfOption(.private, title: l10n.t(isIllust ? .bookmarkShelfPrivateIllust : .bookmarkShelfPrivateNovel))
+            shelfOption(.public, title: l10n.t(profile.publicShelf))
+            shelfOption(.private, title: l10n.t(profile.privateShelf))
         }
         .padding(3)
         .background(Theme.brand.opacity(0.16), in: .capsule)
@@ -171,7 +177,7 @@ struct BookmarkLibraryView: View {
             Button {
                 openClassicCollection()
             } label: {
-                Label(l10n.t(.bookmarkLibraryOpenClassic), systemImage: "list.bullet.rectangle")
+                Label(l10n.t(profile.openClassic), systemImage: "list.bullet.rectangle")
             }
             Button(role: .destructive) {
                 rebuildMirror()
@@ -187,7 +193,11 @@ struct BookmarkLibraryView: View {
     /// 否则用户从本页点进去会被立刻弹回来，两个页面互相踢皮球。
     private func openClassicCollection() {
         let uid = vm.shelf.ownerUid
-        pushRoute(isIllust ? .userBookmarks(userId: uid, classic: true) : .userNovelBookmarks(userId: uid, classic: true))
+        switch contentType {
+        case .illust: pushRoute(.userBookmarks(userId: uid, classic: true))
+        case .novel: pushRoute(.userNovelBookmarks(userId: uid, classic: true))
+        case .user: pushRoute(.userFollowing(userId: uid, classic: true))
+        }
     }
 
     private func rebuildMirror() {
@@ -230,9 +240,9 @@ struct BookmarkLibraryView: View {
                 if offline { return l10n.t(.bookmarkLibrarySyncOffline) }
                 if cooling { return l10n.t(.bookmarkLibrarySyncCooldown) }
                 if state.phase == MirrorPhase.backfilling.rawValue {
-                    return l10n.t(.bookmarkLibrarySyncing, BookmarkLibraryFormat.count(vm.totalCount ?? 0))
+                    return l10n.t(profile.syncing, BookmarkLibraryFormat.count(vm.totalCount ?? 0))
                 }
-                return l10n.t(.bookmarkLibrarySyncQueued)
+                return l10n.t(profile.syncQueued)
             }()
             HStack(spacing: 10) {
                 // 转圈只在真的在补的时候转；离线/冷却时停下来，别让一个永远转着的圈暗示「马上就好」
@@ -257,11 +267,13 @@ struct BookmarkLibraryView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(Theme.v3Text3)
-            TextField(l10n.t(.bookmarkLibrarySearchHint), text: $searchText)
+            TextField(l10n.t(profile.searchHint), text: $searchText)
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.v3Text1)
                 .submitLabel(.search)
                 .autocorrectionDisabled()
+                // 补齐前只按默认顺序浏览：搜索、排序与筛选在全量完成后开放（#1109）。
+                .disabled(!vm.isShelfComplete)
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
@@ -285,8 +297,13 @@ struct BookmarkLibraryView: View {
         let conditions = filter.conditionCount
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+              if !vm.isShelfComplete {
+                // 补齐中：排序 / 倒序 / 随机 / 筛选统统收起，只留一枚不可点的说明 chip。
+                BookmarkChip(label: l10n.t(.bookmarkChipSyncing), activated: false) {}
+                    .allowsHitTesting(false)
+              } else {
                 // 排序 chip 只在「不是默认排序」时点亮：默认态点亮一片，选中态就不再是信息了
-                BookmarkChip(label: l10n.t(BookmarkSortLabels.key(filter.sort)), activated: filter.sort != .bookmarkNewest) {
+                BookmarkChip(label: l10n.t(profile.sortLabel(filter.sort)), activated: filter.sort != .bookmarkNewest) {
                     showFilter = true
                 }
                 // 倒序是本页存在的直接理由，必须是一键，不能埋进面板
@@ -316,6 +333,7 @@ struct BookmarkLibraryView: View {
                         if vm.clearConditions() { applyFilterChange() }
                     }
                 }
+              }
             }
             .padding(.horizontal, 16)
         }
@@ -333,10 +351,10 @@ struct BookmarkLibraryView: View {
                     .padding(.top, 12)
             } else if vm.isLoading, vm.committedGeneration == 0 {
                 Group {
-                    if isIllust {
-                        WaterfallSkeleton(columns: mute.waterfallColumns)
-                    } else {
-                        NovelListSkeleton()
+                    switch contentType {
+                    case .illust: WaterfallSkeleton(columns: mute.waterfallColumns)
+                    case .novel: NovelListSkeleton()
+                    case .user: UserListSkeleton()
                     }
                 }
                 .padding(.top, 8)
@@ -361,9 +379,22 @@ struct BookmarkLibraryView: View {
             // 与 V3InlineIllustGrid 同款：长按菜单的宿主只套在瀑布流上；小说分支的
             // NovelListContent 自带宿主，整页再套一层会把同一批 sheet / destination 注册两遍。
             .cardMenuHost()
-        } else {
+        } else if contentType == .novel {
             NovelListContent(novels: vm.novels, hasMore: false, onLoadMore: nil)
                 .padding(.top, 8)
+        } else {
+            // 关注库：与原关注列表同一张用户卡（点进画师页）
+            LazyVStack(spacing: 12) {
+                ForEach(vm.users) { preview in
+                    NavigationLink(value: AppRoute.userProfile(preview.user.id)) {
+                        UserPreviewRow(preview: preview)
+                    }
+                    .buttonStyle(.plain)
+                    Divider()
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
         }
     }
 
@@ -371,9 +402,9 @@ struct BookmarkLibraryView: View {
     /// 条件筛没了 / 镜像还没补到这个书架 / 是真的一件都没收藏。
     private var emptyState: some View {
         let text: String = {
-            if vm.filter.hasAnyCondition { return l10n.t(.bookmarkLibraryEmptyFiltered) }
+            if vm.filter.hasAnyCondition { return l10n.t(profile.emptyFiltered) }
             if let state = vm.mirrorState, !state.isFirstSyncDone { return l10n.t(.bookmarkLibraryEmptySyncing) }
-            return l10n.t(.bookmarkLibraryEmpty)
+            return l10n.t(profile.empty)
         }()
         return VStack(spacing: 10) {
             Image(systemName: "tray")
@@ -448,6 +479,8 @@ struct BookmarkLibraryView: View {
         // 已经有一次刷新在路上：此刻屏幕上本来就是旧的，而且正在被修。
         if resetAfterGeneration != nil { return }
         if vm.filter.hasAnyCondition { return }
+        // 回填只向尾部增长，优先续接，避免最后一页同步完成时整表刷新并跳回顶部。
+        vm.resumeGrowingTail()
         let shown = vm.itemCount
         guard let stored = vm.totalCount else { return }
         let previous = lastKnownStored
@@ -467,7 +500,10 @@ struct BookmarkLibraryView: View {
 
     /// 从最近一份状态列表里挑出**当前**书架那条，喂给 VM。
     private func applyMirrorState() {
-        vm.setMirrorState(observed.state(of: vm.shelf))
+        let reset = vm.setMirrorState(observed.state(of: vm.shelf))
+        if reset { applyFilterChange() }
+        // 没补齐：搜索框不可用，里面还在防抖的输入一并丢掉。
+        if !vm.isShelfComplete, !searchText.isEmpty { searchText = "" }
     }
 }
 

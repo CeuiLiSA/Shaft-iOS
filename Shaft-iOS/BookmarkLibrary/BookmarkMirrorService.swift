@@ -164,7 +164,9 @@ actor BookmarkMirrorService {
             mirrorLog.warning("重建书架 \(shelf.label, privacy: .public)：清空 \(rows) 行并重新回填")
             try await db.clearShelf(shelfKey: shelf.key)
             try await db.upsertState(Self.newState(shelf, now: Self.nowMs()))
-            activeRun = nil
+            // 只丢这个书架自己的那一轮：别的书架正在跑的增量已经消费掉了「该维护」标记，
+            // 清掉它的 activeRun 会让那轮只补了一页就被静默放弃。
+            if activeRun?.shelf == shelf { activeRun = nil }
             await publish()
             kick("rebuild")
         } catch {
@@ -205,12 +207,42 @@ actor BookmarkMirrorService {
         }
     }
 
-    /// 取消收藏被确认后就地删除。
+    /// 这批作品里当前账号收藏过的那些（按镜像，公开/悄悄都算）。借号搜索结果校正收藏态用（#1063）。
+    ///
+    /// 只能回答「是」：回填没跑完、或在别的设备刚收藏还没被维护到时，不在表里 ≠ 没收藏。
+    /// 功能关闭 / 未登录 / 读库失败都返回空集，调用方退回原有判断。
+    func bookmarkedAmong(contentType: MirrorContentType, targetIds: [Int64]) async -> Set<Int64> {
+        guard !targetIds.isEmpty, await isFeatureEnabled() else { return [] }
+        let uid = Self.loggedInUid()
+        guard uid > 0 else { return [] }
+        do {
+            return try await db.mirroredAmong(ownerUid: uid, contentType: contentType.code, targetIds: targetIds)
+        } catch {
+            mirrorLog.warning("读取镜像收藏态失败，搜索结果按未知处理: \(String(describing: error), privacy: .public)")
+            return []
+        }
+    }
+
+    /// 关注被服务端确认成功后就地插到关注书架表头。
+    ///
+    /// 手上只有 `PixivUser`、没有 `/v1/user/following` 附带的三张预览作品，所以先以空预览入库
+    /// （卡片照常可点、可取关，只是预览格暂时留空）。不必为它补一次请求：下次打开关注库时
+    /// 的增量维护会走到表头，按 id 认出这一行、原序号不动地把整份预览刷新进来。
+    func onUserFollowed(_ user: PixivUser, restrict: MirrorRestrict) async {
+        let preview = UserPreview(user: BookmarkMirrorMapper.withFollowed(user, true), illusts: [], novels: [], isMuted: nil)
+        await upsertLocally(contentType: .user, targetId: user.id, restrict: restrict) { shelf, seq, generation, now in
+            BookmarkMirrorMapper.fromUserPreview(shelf: shelf, preview: preview, bookmarkSeq: seq, generation: generation, now: now)
+        }
+    }
+
+    /// 取消收藏 / 取消关注被确认后就地删除。
     ///
     /// 跨公开/悄悄两个书架删：调用点拿到的 restrict 是「本次操作用的默认可见性」，
     /// 未必是当初收藏时用的那个，按它删会漏。作品 id 上有索引，两架一起删也是两次点查。
+    ///
+    /// **不看功能开关**：删本地行不发请求，而开关关着时留下的行在重新打开后会一直冒充
+    /// 「仍在收藏」（收藏库里还在），直到 14 天后的全量重扫才被发现。
     func onUnbookmarked(contentType: MirrorContentType, targetId: Int64) async {
-        guard await isFeatureEnabled() else { return }
         let uid = Self.loggedInUid()
         guard uid > 0 else { return }
         do {
@@ -311,7 +343,10 @@ actor BookmarkMirrorService {
         guard uid > 0 else { return .idle }
         guard NetworkReachability.shared.isOnline else {
             mirrorLog.debug("离线，暂停镜像")
-            return .idle
+            // 不回 idle：网络恢复不写任何表、也没人会 kick，睡满 idlePollMs 就等于断一次网
+            // 回填白停一刻钟，收藏库上那句「恢复联网后会自动继续补齐」也不成立。
+            // 短间隔自己看一眼网络状态（只读内存里的值，不查库不发请求）。
+            return .wait(Self.offlinePollMs)
         }
 
         let now = Self.nowMs()
@@ -930,6 +965,9 @@ actor BookmarkMirrorService {
     /// 空闲时的兜底心跳（正常靠 `kick` 唤醒，这个只防信号丢失）。
     private static let idlePollMs: Int64 = 15 * 60_000
 
+    /// 离线时多久看一次网络恢复了没有。
+    private static let offlinePollMs: Int64 = 30_000
+
     /// 例行增量的最小间隔。
     private static let maintenanceIntervalMs: Int64 = 6 * 60 * 60_000
 
@@ -1065,6 +1103,15 @@ final class BookmarkMirrorObserved {
         AppSettingsStore.shared.bookmarkMirrorEnabled && readyShelfKeys.contains(shelf.key)
     }
 
+    /// 收藏 / 关注入口要不要直接进本地库（#1109）：已注册的书架可直接浏览；首次在线访问也可
+    /// 进入，由页面注册并开始回填。全量完成只决定筛选是否开放，不再是进入本地库的门槛。
+    func canOpenLibrary(contentType: MirrorContentType) -> Bool {
+        let uid = BookmarkMirrorService.loggedInUid()
+        guard uid > 0, AppSettingsStore.shared.bookmarkMirrorEnabled else { return false }
+        let shelf = BookmarkShelf(ownerUid: uid, contentType: contentType, restrict: .public)
+        return state(of: shelf) != nil || NetworkReachability.shared.isOnline
+    }
+
     /// 当前账号在这个内容类型下的「公开收藏」在本地镜像里是不是已经完整了。判据用**公开**
     /// 书架：收藏库默认落在它上面，悄悄收藏那半边进去以后可以就地切。
     func isMirrorReady(contentType: MirrorContentType) -> Bool {
@@ -1084,5 +1131,5 @@ final class BookmarkMirrorObserved {
 func trackBookmarkShelfVisit(userId: Int64, restrict: String, contentType: MirrorContentType) {
     guard userId > 0, BookmarkMirrorService.loggedInUid() == userId else { return }
     let shelf = BookmarkShelf(ownerUid: userId, contentType: contentType, restrict: MirrorRestrict.ofApiValue(restrict))
-    Task { await BookmarkMirrorService.shared.ensureShelf(shelf, reason: "打开收藏页") }
+    Task { await BookmarkMirrorService.shared.ensureShelf(shelf, reason: "打开\(contentType.tag)列表") }
 }

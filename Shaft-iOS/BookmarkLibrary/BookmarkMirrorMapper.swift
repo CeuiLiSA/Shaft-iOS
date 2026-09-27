@@ -6,7 +6,7 @@ import os
 ///     'subsystem == "com.shaft.ShaftiOS" AND category == "BookmarkMirror"' --style compact
 let mirrorLog = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Shaft-iOS", category: "BookmarkMirror")
 
-/// 网络模型（`Illust` / `Novel`）→ 镜像行 + 标签行。
+/// 网络模型（`Illust` / `Novel` / `UserPreview`）→ 镜像行 + 标签行。
 ///
 /// 1:1 移植自 `ceui.pixiv.db.mirror.BookmarkMirrorMapper`。这里是**唯一**决定「哪些字段被摊平成
 /// 可筛选列」的地方。加一个筛选维度 = 在 `BookmarkMirrorEntity` 加一列 + 在这里填上 +
@@ -124,6 +124,68 @@ enum BookmarkMirrorMapper {
         return MirrorRow(row: row, tags: tagRows)
     }
 
+    /// 关注书架的 `workType`。
+    static let workTypeUser = "user"
+
+    /// 一位关注的用户。作品维度的列（页数、画幅、人气、分级…）对人没有意义，一律填「未知」，
+    /// 筛选面板也不会给用户书架露出那些节；借用的只有三处，都是有真实语义的：
+    ///
+    /// - `createDateMs` = 预览作品里**最新一件的发布时间**，即「最近投稿」。
+    ///   `/v1/user/following` 附带的预览就是对方最近的作品，于是「发布时间」排序在这个书架上
+    ///   就是「最近有更新 / 最久没更新」—— 清理多年不更新的关注，正是这份镜像能给的东西。
+    /// - 标签表 = 预览作品的标签并集，回答「我关注的人最近在画什么」。只覆盖最近几件，
+    ///   面板上会写明这一点，不冒充画师的全部标签。
+    /// - `authorId` = 用户自己，纯数字关键词按 uid 命中不用另写分支。
+    static func fromUserPreview(
+        shelf: BookmarkShelf,
+        preview: UserPreview,
+        bookmarkSeq: Int64,
+        generation: Int,
+        now: Int64
+    ) -> MirrorRow {
+        let user = preview.user
+        let works: [(tags: [Tag], date: String?)] =
+            (preview.illusts ?? []).map { ($0.tags ?? [], $0.createDate) } +
+            (preview.novels ?? []).map { ($0.tags ?? [], $0.createDate) }
+        let tags = works.flatMap(\.tags)
+        let tagRows = tagRows(shelf: shelf, targetId: user.id, tags: tags)
+        let name = user.name ?? ""
+        let row = BookmarkMirrorEntity(
+            shelfKey: shelf.key,
+            targetId: user.id,
+            ownerUid: shelf.ownerUid,
+            contentType: shelf.contentType.code,
+            restrictCode: shelf.restrict.code,
+            bookmarkSeq: bookmarkSeq,
+            payloadJson: encode(preview),
+            title: name,
+            authorId: user.id,
+            authorName: name,
+            workType: workTypeUser,
+            pageCount: 0,
+            width: 0,
+            height: 0,
+            aspectRatio: 0,
+            orientation: Orientation.unknown,
+            totalBookmarks: 0,
+            totalView: 0,
+            textLength: 0,
+            createDateMs: works.map { parseCreateDate($0.date) }.max() ?? 0,
+            aiType: 0,
+            xRestrict: 0,
+            sanityLevel: 0,
+            isVisible: true,
+            isMuted: preview.isMuted == true,
+            seriesId: 0,
+            tagCount: tagRows.count,
+            // 作者名那一格放 pixiv 账号（@xxx）：用户记得住的往往是账号而不是昵称
+            searchText: buildSearchText(title: name, authorName: user.account ?? "", tags: tags),
+            syncedAt: now,
+            generation: generation
+        )
+        return MirrorRow(row: row, tags: tagRows)
+    }
+
     private static func tagRows(shelf: BookmarkShelf, targetId: Int64, tags: [Tag]) -> [BookmarkMirrorTagEntity] {
         if tags.isEmpty { return [] }
         // 去重：主键含 tagName，同一作品重名标签（pixiv 偶发）会在一次 insert 里撞主键。
@@ -195,6 +257,26 @@ enum BookmarkMirrorMapper {
     private static func encode<T: Encodable>(_ value: T) -> String {
         guard let data = try? JSONEncoder().encode(value) else { return "{}" }
         return String(decoding: data, as: UTF8.self)
+    }
+
+    /// 把 `is_bookmarked` 改成给定值（nil = 「不知道」），用于借号结果的收藏态校正。
+    static func withBookmarkedState<T: Codable>(_ value: T, _ bookmarked: Bool?) -> T {
+        guard let data = try? JSONEncoder().encode(value),
+              var object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return value }
+        object["is_bookmarked"] = bookmarked.map { $0 as Any } ?? NSNull()
+        guard let patched = try? JSONSerialization.data(withJSONObject: object),
+              let decoded = try? JSONDecoder().decode(T.self, from: patched) else { return value }
+        return decoded
+    }
+
+    /// `user.copy(is_followed = true)`：同 `withBookmarked`，走一次 JSON 往返改 `is_followed`。
+    static func withFollowed(_ user: PixivUser, _ followed: Bool) -> PixivUser {
+        guard let data = try? JSONEncoder().encode(user),
+              var object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return user }
+        object["is_followed"] = followed
+        guard let patched = try? JSONSerialization.data(withJSONObject: object),
+              let decoded = try? JSONDecoder().decode(PixivUser.self, from: patched) else { return user }
+        return decoded
     }
 
     /// `Illust.withBookmarked(true)` 的 iOS 版：模型字段是 `let`，走一次 JSON 往返改

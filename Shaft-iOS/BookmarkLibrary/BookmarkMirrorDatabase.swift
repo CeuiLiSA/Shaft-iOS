@@ -337,6 +337,17 @@ actor BookmarkMirrorDatabase {
         ).first
     }
 
+    /// 这批作品里哪些在该账号的镜像中（公开/悄悄两架都算），走 targetId 索引。
+    func mirroredAmong(ownerUid: Int64, contentType: Int, targetIds: [Int64]) throws -> Set<Int64> {
+        guard !targetIds.isEmpty else { return [] }
+        let marks = Array(repeating: "?", count: targetIds.count).joined(separator: ",")
+        let args: [SQLValue] = [.int(ownerUid), .int(Int64(contentType))] + targetIds.map { .int($0) }
+        return Set(try query(
+            "SELECT DISTINCT targetId FROM bookmark_mirror_table WHERE ownerUid = ? AND contentType = ? AND targetId IN (\(marks))",
+            args
+        ) { sqlite3_column_int64($0, 0) })
+    }
+
     /// 花式筛选的执行口。查询由 `BookmarkMirrorQuery` 拼出来，这里只负责跑。
     func rawRows(_ q: SQLQuery) throws -> [BookmarkMirrorEntity] {
         try query(q.sql, q.args, Self.readRow)

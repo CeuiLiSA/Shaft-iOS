@@ -262,8 +262,13 @@ private final class UserPreviewListVM {
 struct UserFollowingView: View {
     let userId: Int64
     @State private var vm: UserPreviewListVM
+    @Environment(\.pushRoute) private var pushRoute
+    @Environment(OnboardingStore.self) private var l10n
+    private let isOwn: Bool
+
     init(userId: Int64) {
         self.userId = userId
+        self.isOwn = userId == BookmarkMirrorService.loggedInUid()
         _vm = State(wrappedValue: UserPreviewListVM(source: .following(userId)))
     }
     var body: some View {
@@ -276,6 +281,25 @@ struct UserFollowingView: View {
         .task { await vm.loadIfNeeded() }
         .refreshable { await vm.load() }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // 「按条件浏览关注」：倒序 / 按最近投稿 / 按名字与最近作品标签搜的入口
+            //（pixiv 的关注接口只能从新到旧顺着翻）。只对自己的关注出现。
+            if isOwn {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            pushRoute(.bookmarkLibrary(contentType: MirrorContentType.user.code, restrict: "public"))
+                        } label: {
+                            Label(l10n.t(.followingLibraryMenuEntry), systemImage: "line.3.horizontal.decrease.circle")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
+        }
+        // 打开**自己**的关注列表 = 开启关注书架的本地镜像（与收藏页同一个入口函数，隐私边界同一条）。
+        .onAppear { trackBookmarkShelfVisit(userId: userId, restrict: "public", contentType: .user) }
     }
 }
 

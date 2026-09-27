@@ -35,7 +35,9 @@ enum AppRoute: Hashable, Codable, Sendable {
     case userNovels(userId: Int64)
     case illustSeries(seriesId: Int64)
     case novelSeries(seriesId: Int64)
-    case userFollowing(userId: Int64)
+    /// `classic == true` forces the server-order list even when the local
+    /// following mirror is complete (the 「原始关注列表」 escape hatch).
+    case userFollowing(userId: Int64, classic: Bool = false)
     case userFollower(userId: Int64)
     case userMyPixiv(userId: Int64)
     case userRelated(userId: Int64)

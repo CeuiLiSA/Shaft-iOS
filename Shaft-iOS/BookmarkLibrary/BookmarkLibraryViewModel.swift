@@ -1,7 +1,8 @@
 import Foundation
 import Observation
 
-/// 收藏库页面的读侧门面：把 `BookmarkMirrorQuery` 拼出来的 SQL 跑掉，并把行还原成 `Illust` / `Novel`。
+/// 本地库页面的读侧门面：把 `BookmarkMirrorQuery` 拼出来的 SQL 跑掉，并把行还原成
+/// `Illust` / `Novel` / `UserPreview`。
 ///
 /// 1:1 移植自 `ceui.pixiv.ui.library.BookmarkLibraryRepo`。全部方法 main-safe（内部走 DB actor）。
 enum BookmarkLibraryRepo {
@@ -12,9 +13,11 @@ enum BookmarkLibraryRepo {
 
     private static var db: BookmarkMirrorDatabase { BookmarkMirrorDatabase.shared }
 
-    static func page(_ filter: BookmarkFilter, limit: Int, offset: Int) async throws -> [BookmarkMirrorEntity] {
+    static func page(_ filter: BookmarkFilter, limit: Int, offset: Int, afterSeq: Int64? = nil) async throws -> [BookmarkMirrorEntity] {
         let startedAt = Date()
-        let rows = try await db.rawRows(BookmarkMirrorQuery.rows(filter, limit: limit, offset: offset))
+        let query = afterSeq.map { BookmarkMirrorQuery.rowsAfter(shelfKey: filter.shelfKey, afterSeq: $0, limit: limit) }
+            ?? BookmarkMirrorQuery.rows(filter, limit: limit, offset: offset)
+        let rows = try await db.rawRows(query)
         let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
         mirrorLog.debug("查询 offset=\(offset) limit=\(limit) sort=\(String(describing: filter.sort), privacy: .public) → \(rows.count) 行，耗时 \(ms)ms")
         return rows
@@ -51,6 +54,9 @@ enum BookmarkLibraryRepo {
 
     /// 行 → `Novel`。容错策略同 `toIllust`。
     nonisolated static func toNovel(_ row: BookmarkMirrorEntity) -> Novel? { deserialize(row) }
+
+    /// 关注书架的行 → `UserPreview`。容错策略同 `toIllust`。
+    nonisolated static func toUserPreview(_ row: BookmarkMirrorEntity) -> UserPreview? { deserialize(row) }
 
     private nonisolated static func deserialize<T: Decodable>(_ row: BookmarkMirrorEntity) -> T? {
         do {
@@ -100,6 +106,7 @@ final class BookmarkLibraryViewModel {
 
     private(set) var illusts: [Illust] = []
     private(set) var novels: [Novel] = []
+    private(set) var users: [UserPreview] = []
     private(set) var isLoading = false
     private(set) var hasMore = false
     private(set) var errorMessage: String?
@@ -111,9 +118,23 @@ final class BookmarkLibraryViewModel {
     private(set) var needsManualLoad = false
 
     /// 屏幕上有多少条目（`itemCount`）。
-    var itemCount: Int { contentType == .illust ? illusts.count : novels.count }
+    var itemCount: Int {
+        switch contentType {
+        case .illust: return illusts.count
+        case .novel: return novels.count
+        case .user: return users.count
+        }
+    }
 
     @ObservationIgnored private var loadedRows = 0
+    /// 上一页最后一条**原始 SQL 行**的收藏序号（不是过滤后的卡片）——默认顺序按它续页。
+    @ObservationIgnored private var loadedTailSeq: Int64?
+
+    /// 书架补齐过一次了吗：没补齐前只有最新一段收藏，只按默认顺序浏览，筛选稍后可用。
+    var isShelfComplete: Bool { mirrorState?.isFirstSyncDone == true }
+
+    /// 默认顺序 + 无条件：这一种才带稳定的收藏序号游标（其他排序 / 筛选仍用 offset）。
+    private var isStableOrder: Bool { filter.sort == .bookmarkNewest && !filter.hasAnyCondition }
     @ObservationIgnored private var burstPages = 0
     @ObservationIgnored private var loadTask: Task<Void, Never>?
 
@@ -173,7 +194,12 @@ final class BookmarkLibraryViewModel {
     @discardableResult
     func updateFilter(_ transform: (inout BookmarkFilter) -> Void) -> Bool {
         var next = filter
-        transform(&next)
+        // 补齐前只有最新一段收藏，不能让筛选或倒序把它伪装成完整结果（#1109）。
+        if isShelfComplete {
+            transform(&next)
+        } else {
+            next = BookmarkFilter(shelfKey: filter.shelfKey)
+        }
         if next == filter { return false }
         filter = next
         mirrorLog.debug("筛选变更 sort=\(String(describing: next.sort), privacy: .public) kw='\(next.keyword, privacy: .public)' tags=\(next.tagNames.count) 排除=\(next.excludedTagNames.count) 作者=\(next.authorIds.count) 类型=\(next.workTypes, privacy: .public)")
@@ -193,8 +219,22 @@ final class BookmarkLibraryViewModel {
         }
     }
 
-    func setMirrorState(_ state: BookmarkMirrorStateEntity?) {
+    /// 返回是否因未补齐而复位了条件；调用方据此重查列表。
+    @discardableResult
+    func setMirrorState(_ state: BookmarkMirrorStateEntity?) -> Bool {
+        let wasComplete = isShelfComplete
         if mirrorState != state { mirrorState = state }
+        // 刚补齐：标签 / 作者这些筛选选项现在才完整，重算一次。
+        if !wasComplete && isShelfComplete { refreshFacets() }
+        return !isShelfComplete && updateFilter { _ in }
+    }
+
+    /// 回填只向尾部增长：默认顺序下列表已经读到（暂时的）底、而库里又多出了行，
+    /// 就重开游标让 footer 接着读，不整表刷新、不跳回顶部。
+    func resumeGrowingTail() {
+        guard isStableOrder, !hasMore, !isLoading, loadTask == nil, committedGeneration > 0,
+              let stored = totalCount, stored > loadedRows else { return }
+        hasMore = true
     }
 
     /// 后台又镜像进来一批：命中数、总数、年份分布都得跟着变。
@@ -273,7 +313,8 @@ final class BookmarkLibraryViewModel {
         needsManualLoad = false
         errorMessage = nil
         let generation = refreshGeneration
-        loadTask = Task { await load(offset: 0, generation: generation) }
+        loadedTailSeq = nil
+        loadTask = Task { await load(offset: 0, afterSeq: nil, generation: generation) }
     }
 
     /// 首次进入（列表还是空的）才拉，旋转/返回不重拉。
@@ -291,7 +332,8 @@ final class BookmarkLibraryViewModel {
         burstPages += 1
         let generation = refreshGeneration
         let offset = loadedRows
-        loadTask = Task { await load(offset: offset, generation: generation) }
+        let afterSeq = isStableOrder ? loadedTailSeq : nil
+        loadTask = Task { await load(offset: offset, afterSeq: afterSeq, generation: generation) }
     }
 
     /// 用户点了 footer：预算归零，接着翻。
@@ -311,19 +353,21 @@ final class BookmarkLibraryViewModel {
     /// 一路甩下去是零成本的 —— 3 万条 `Illust`（每条带 tags / user / image_urls）能吃掉上百 MB。
     private static let burstPageBudget = 30
 
-    private func load(offset: Int, generation: Int) async {
+    private func load(offset: Int, afterSeq: Int64?, generation: Int) async {
         isLoading = true
         defer { if generation == refreshGeneration { isLoading = false } }
         let filter = self.filter
         guard !filter.shelfKey.isEmpty else {
             // VM 还没 bind（理论上不会：页面 onAppear 里先 bind）。与其抛，不如给一页空的。
             mirrorLog.warning("VM 尚未绑定书架，返回空页")
-            commit(illusts: [], novels: [], rows: 0, offset: offset, generation: generation)
+            commit(illusts: [], novels: [], users: [], rows: 0, offset: offset, generation: generation)
             return
         }
         do {
-            let rows = try await BookmarkLibraryRepo.page(filter, limit: Self.pageSize, offset: offset)
+            let rows = try await BookmarkLibraryRepo.page(filter, limit: Self.pageSize, offset: offset, afterSeq: afterSeq)
             guard !Task.isCancelled, generation == refreshGeneration else { return }
+            // 锚点取原始 SQL 行，不能取被全局屏蔽规则过滤后的卡片。
+            if let last = rows.last?.bookmarkSeq { loadedTailSeq = last }
             // 内容过滤跟着「它替代的那个页面」走：屏蔽标签 / 屏蔽画师 / R18 / AI 屏蔽照常生效
             // —— 那几条是用户对特定对象或类别的显式表态，换个入口就绕过去，等于这个新页面偷偷
             // 把用户明确说过不想看的东西放了进来。两处让步：用户在筛选面板里**显式选了分级**
@@ -340,7 +384,7 @@ final class BookmarkLibraryViewModel {
                 }.value
                 guard !Task.isCancelled, generation == refreshGeneration else { return }
                 let visible = mute.filter(decoded, applyR18: applyR18).filter { !dropAI || $0.illustAIType != 2 }
-                commit(illusts: visible, novels: [], rows: rows.count, offset: offset, generation: generation)
+                commit(illusts: visible, novels: [], users: [], rows: rows.count, offset: offset, generation: generation)
             case .novel:
                 let decoded = await Task.detached(priority: .userInitiated) {
                     rows.compactMap(BookmarkLibraryRepo.toNovel)
@@ -349,21 +393,33 @@ final class BookmarkLibraryViewModel {
                 // 对齐小说收藏页：字数/超长 tag 那套反刷屏阈值是冲着发现面上的广告去的，
                 // 不该把用户自己收藏过的短文从藏书里抹掉；这里只走屏蔽 + R18 + AI。
                 let visible = mute.filter(decoded, applyR18: applyR18).filter { !dropAI || $0.novelAIType != 2 }
-                commit(illusts: [], novels: visible, rows: rows.count, offset: offset, generation: generation)
+                commit(illusts: [], novels: visible, users: [], rows: rows.count, offset: offset, generation: generation)
+            case .user:
+                let decoded = await Task.detached(priority: .userInitiated) {
+                    rows.compactMap(BookmarkLibraryRepo.toUserPreview)
+                }.value
+                guard !Task.isCancelled, generation == refreshGeneration else { return }
+                // 对齐原关注列表：不套作品屏蔽规则，只丢没有身份的坏行
+                commit(illusts: [], novels: [], users: decoded.filter { $0.user.id > 0 }, rows: rows.count, offset: offset, generation: generation)
             }
         } catch is CancellationError {
         } catch {
             guard generation == refreshGeneration else { return }
             mirrorLog.warning("列表查询失败: \(String(describing: error), privacy: .public)")
             errorMessage = error.localizedDescription
+            // 否则 resumeGrowingTail / loadIfNeeded 会一直以为还有一次查询在路上
+            loadTask = nil
         }
     }
 
-    private func commit(illusts: [Illust], novels: [Novel], rows: Int, offset: Int, generation: Int) {
+    private func commit(illusts: [Illust], novels: [Novel], users: [UserPreview], rows: Int, offset: Int, generation: Int) {
         if offset == 0 {
             self.illusts = illusts
             self.novels = novels
+            self.users = users
         } else {
+            let seenUser = Set(self.users.map(\.id))
+            self.users.append(contentsOf: users.filter { !seenUser.contains($0.id) })
             // 去重：后台镜像在两次查询之间插了新行时，offset 会漂移一两条
             let seenIllust = Set(self.illusts.map(\.id))
             self.illusts.append(contentsOf: illusts.filter { !seenIllust.contains($0.id) })

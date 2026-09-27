@@ -1,6 +1,10 @@
 import Foundation
 
-/// 一个可镜像的「收藏书架」= 谁的收藏 × 什么内容 × 什么可见性。
+/// 一个可镜像的「书架」= 谁的列表 × 什么内容 × 什么可见性。
+///
+/// 「关注」也叫书架而不另起一套：pixiv 的关注列表和收藏列表是同一种东西 —— 按时间倒序、
+/// 分公开/私人、只能顺着 next_url 翻 —— 引擎、续传、限速、全量重扫一行都不用分叉，
+/// 差别只在翻页接口（`BookmarkShelfFetcher`）和摊平哪些列（`BookmarkMirrorMapper`）。
 ///
 /// 1:1 移植自 Pixiv-Shaft `ceui.pixiv.db.mirror.BookmarkShelf`。整套镜像系统（表、引擎、
 /// 查询）都以 [BookmarkShelf] 为分区单位，**不是**围绕「我的插画公开收藏」这一种情况写死的：
@@ -44,7 +48,7 @@ struct BookmarkShelf: Hashable, Sendable, Codable {
         return BookmarkShelf(ownerUid: uid, contentType: type, restrict: restrict)
     }
 
-    /// 当前登录用户的四个书架（插画/小说 × 公开/悄悄收藏）。
+    /// 某账号的全部书架（每种内容类型 × 公开/悄悄）。
     static func allOf(ownerUid: Int64) -> [BookmarkShelf] {
         MirrorContentType.allCases.flatMap { type in
             MirrorRestrict.allCases.map { BookmarkShelf(ownerUid: ownerUid, contentType: type, restrict: $0) }
@@ -56,6 +60,8 @@ struct BookmarkShelf: Hashable, Sendable, Codable {
 enum MirrorContentType: Int, CaseIterable, Sendable, Codable, Hashable {
     case illust = 0
     case novel = 1
+    /// 关注的用户（`/v1/user/following`）。一行 = 一位关注的用户，payload 是 `UserPreview`。
+    case user = 2
 
     var code: Int { rawValue }
 
@@ -63,6 +69,7 @@ enum MirrorContentType: Int, CaseIterable, Sendable, Codable, Hashable {
         switch self {
         case .illust: return "illust"
         case .novel: return "novel"
+        case .user: return "user"
         }
     }
 
@@ -71,8 +78,8 @@ enum MirrorContentType: Int, CaseIterable, Sendable, Codable, Hashable {
 
 /// 收藏可见性。`apiValue` 直接是 pixiv 的 `restrict` 参数值，`code` 是入库值（不能改）。
 ///
-/// PRIVATE 就是「悄悄收藏」：它与 PUBLIC 是**两条互不相交的列表**（pixiv 的
-/// `/v1/user/bookmarks/…` 一次只回一种），所以必须是两个书架，不能靠一列布尔混在一起
+/// PRIVATE 就是「悄悄收藏 / 私人关注」：它与 PUBLIC 是**两条互不相交的列表**（pixiv 的
+/// `/v1/user/bookmarks/…`、`/v1/user/following` 一次只回一种），所以必须是两个书架，不能靠一列布尔混在一起
 /// ——混在一起就没法各自记续传游标，也没法各自判「同步完成过一次」。
 enum MirrorRestrict: Int, CaseIterable, Sendable, Codable, Hashable {
     case `public` = 0
@@ -233,14 +240,14 @@ struct BookmarkMirrorEntity: Hashable, Sendable {
     /// 收藏顺序序号，越大越新。见类文档。
     var bookmarkSeq: Int64
 
-    /// 完整的 `Illust` / `Novel` JSON，渲染时才反序列化。
+    /// 完整的 `Illust` / `Novel` / `UserPreview` JSON，渲染时才反序列化。
     var payloadJson: String
 
     // ── 去规范化的筛选/排序列 ──────────────────────────────────────────────
     var title: String
     var authorId: Int64
     var authorName: String
-    /// `illust` / `manga` / `ugoira` / `novel`。
+    /// `illust` / `manga` / `ugoira` / `novel` / `user`。
     var workType: String
     /// 插画页数；小说恒 1。
     var pageCount: Int
