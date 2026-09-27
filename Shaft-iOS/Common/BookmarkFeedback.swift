@@ -23,6 +23,10 @@ enum BookmarkHaptics {
     private static let medium  = UIImpactFeedbackGenerator(style: .medium)
     private static let note    = UINotificationFeedbackGenerator()
 
+    /// 设置 · 收藏与互动「收藏按钮振动反馈」(upstream `isLikeHapticEnabled()`)。
+    /// 收藏与取消收藏共用这一个开关；每次现读，关掉立即生效。
+    private static var enabled: Bool { AppSettingsStore.shared.likeHapticEnable }
+
     /// Warm the engine so the first press-down is not late.
     static func warmUp() {
         press.prepare()
@@ -30,6 +34,7 @@ enum BookmarkHaptics {
 
     /// Finger lands on the heart.
     static func pressDown() {
+        guard enabled else { return }
         press.impactOccurred(intensity: 0.7)
         // Warm up both possible release generators; the engine stays ready
         // for a couple of seconds, long enough to cover the release.
@@ -39,6 +44,7 @@ enum BookmarkHaptics {
 
     /// Finger lifts and the toggle is issued.
     static func commit(bookmarking: Bool) {
+        guard enabled else { return }
         if bookmarking {
             heavy.impactOccurred(intensity: 1.0)
         } else {
@@ -50,6 +56,7 @@ enum BookmarkHaptics {
 
     /// The optimistic state was rolled back.
     static func failed() {
+        guard enabled else { return }
         note.notificationOccurred(.error)
     }
 }

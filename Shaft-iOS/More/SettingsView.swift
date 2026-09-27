@@ -74,6 +74,7 @@ private enum SettingsCatalog {
         // Appearance
         .init(id: "themeMode", category: .appearance, title: .stThemeMode, keywords: "theme dark light system 主题 深色 浅色"),
         .init(id: "themeColor", category: .appearance, title: .stThemeColor, keywords: "accent palette color 主题色 配色"),
+        .init(id: "tagLegibility", category: .appearance, title: .tagLegibilityBoost, keywords: "亮暗度 标签原文 正文 标签 辨识度 明暗 亮度 对比度 可读性 清晰 胶囊 增强 无障碍 白天 黑暗 brightness lightness contrast readability tag text"),
         .init(id: "language", category: .appearance, title: .settingsLanguage, keywords: "language 中文 english 日本語 한국어 语言"),
         .init(id: "startPage", category: .appearance, title: .stNavInitPosition, keywords: "start home initial 启动页 默认页 首页"),
         .init(id: "tabOrder", category: .appearance, title: .stBottomBarOrder, keywords: "bottom bar tab order 底部 导航 顺序"),
@@ -98,13 +99,15 @@ private enum SettingsCatalog {
         .init(id: "searchFilter", category: .browsing, title: .stSearchFilter, keywords: "search bookmarks filter 搜索 收藏量 筛选"),
         .init(id: "searchSort", category: .browsing, title: .stSearchSort, keywords: "search sort popular date 搜索 排序 热门 时间"),
         .init(id: "searchExitConfirm", category: .browsing, title: .stSearchExitConfirm, description: .stSearchExitConfirmHint, keywords: "search exit back confirm 搜索 退出 返回 确认"),
-        .init(id: "searchBookmarked", category: .browsing, title: .stFilterStarSearch, keywords: "search bookmarked hide 搜索 已收藏 去重"),
+        .init(id: "searchBookmarked", category: .browsing, title: .stDeleteStarFeed, keywords: "following feed bookmarked hide 动态 已收藏 过滤 去重"),
         .init(id: "synonymEnable", category: .browsing, title: .stSynonymEnable, keywords: "synonym dictionary 同义词 词典 别名"),
         .init(id: "synonymDictionary", category: .browsing, title: .stSynonymDict, keywords: "synonym dictionary import export 同义词 词典 管理"),
 
         // Viewer & details
         .init(id: "detailV3", category: .viewing, title: .stIllustDetailV3, keywords: "v3 immersive detail 新版 沉浸 详情"),
+        .init(id: "fabPosition", category: .viewing, title: .artworkV3FabPositionTitle, description: .artworkV3FabPositionDesc, keywords: "悬浮按钮 胶囊 位置 靠左 靠右 居中 单手 fab position left right"),
         .init(id: "fabOrder", category: .viewing, title: .stFabOrder, keywords: "fab download bookmark order 按钮 下载 收藏 顺序"),
+        .init(id: "autoExpand", category: .viewing, title: .artworkV3AutoExpandTitle, description: .artworkV3AutoExpandDesc, keywords: "多图 多P 多页 自动展开 展开剩余 第一页 多张 expand multi page"),
         .init(id: "novelDirectReader", category: .viewing, title: .stNovelDirectReader, description: .stNovelDirectReaderHint, keywords: "novel direct reader detail 小说 直接 阅读器 详情"),
         .init(id: "transition", category: .viewing, title: .stTransformMode, keywords: "page transition animation 翻页 动画 过渡"),
         .init(id: "ugoiraRife", category: .viewing, title: .stUgoiraRife, description: .stUgoiraRifeHint, keywords: "ugoira rife ai frame interpolation 动图 插帧 补帧"),
@@ -120,6 +123,7 @@ private enum SettingsCatalog {
         .init(id: "privateBookmark", category: .bookmarks, title: .stPrivateStar, keywords: "private bookmark 私密 收藏 非公开"),
         .init(id: "privateFollow", category: .bookmarks, title: .stPrivateFollow, keywords: "private follow 私密 关注 悄悄关注"),
         .init(id: "hideBookmarkButton", category: .bookmarks, title: .stHideStarButton, keywords: "hide bookmark button 隐藏 收藏 按钮"),
+        .init(id: "likeHaptic", category: .bookmarks, title: .settingsLikeHaptic, description: .settingsLikeHapticDesc, keywords: "振动 震动 触感反馈 震动反馈 收藏振动 收藏震动 关掉振动 haptic vibration"),
         .init(id: "invalidBookmarks", category: .bookmarks, title: .stFilterInvalidBookmarks, keywords: "invalid deleted bookmark 失效 无效 收藏"),
         .init(id: "bookmarkMirror", category: .bookmarks, title: .settingsBookmarkMirror, keywords: "bookmark mirror library local offline 收藏库 镜像 本地 筛选"),
         .init(id: "selectAllTags", category: .bookmarks, title: .stSelectAllTags, keywords: "select all tags 全选 标签 收藏"),
@@ -405,6 +409,8 @@ private struct SettingsCategoryView: View {
     @State private var showLogoutDialog = false
     @State private var showNotAvailable = false
     @State private var showImageHostPicker = false
+    @State private var showTagLegibility = false
+    @State private var tagLegibility = TagLegibility.shared
     @State private var showCustomImageHost = false
     @State private var showImageHostEmpty = false
     @State private var showImageHostRestart = false
@@ -444,6 +450,9 @@ private struct SettingsCategoryView: View {
         }
         .navigationTitle(l10n.t(category.titleKey))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showTagLegibility) {
+            TagLegibilitySheet().presentationDetents([.medium, .large])
+        }
         .confirmationDialog(l10n.t(.stLogoutConfirmTitle), isPresented: $showLogoutDialog, titleVisibility: .visible) {
             // iOS currently has one keychain-backed account, so both upstream
             // choices converge on clearing that account and returning to login.
@@ -498,7 +507,8 @@ private struct SettingsCategoryView: View {
         switch id {
         case "secureDNS": return st.directConnect
         case "synonymDictionary": return st.synonymDictEnabled
-        case "fabOrder": return st.useArtworkV3
+        case "fabPosition", "autoExpand": return st.useArtworkV3
+        case "fabOrder": return st.useArtworkV3 && st.resolvedFabPosition == AppSettingsStore.fabPositionCenter
         case "zoomScale", "threeZoom", "longPressReset": return st.useCustomDoubleTapZoom
         default: return true
         }
@@ -568,6 +578,11 @@ private struct SettingsCategoryView: View {
                 l10n.t(.stOptThemeSystem), l10n.t(.stOptThemeLight), l10n.t(.stOptThemeDark),
             ]).settingRow("themeMode", highlightID)
             subPageRow(l10n.t(.stThemeColor)).settingRow("themeColor", highlightID)
+            // 标签原文亮暗度：白天 / 黑暗各一条，右侧同时显示两条（白天「压暗」、黑暗「提亮」）
+            actionRow(l10n.t(.tagLegibilityBoost), value: String(format: "%@ · %@",
+                TagLegibilitySheet.label(dark: false, value: tagLegibility.light, l10n: l10n),
+                TagLegibilitySheet.label(dark: true, value: tagLegibility.dark, l10n: l10n))) { showTagLegibility = true }
+                .settingRow("tagLegibility", highlightID)
             Picker(l10n.t(.settingsLanguage), selection: Binding(
                 get: { l10n.chosenTag ?? "system" },
                 set: { tag in
@@ -656,7 +671,7 @@ private struct SettingsCategoryView: View {
                 .settingRow("searchSort", highlightID)
             actionRow(l10n.t(.stSearchExitConfirm), hint: l10n.t(.stSearchExitConfirmHint), value: l10n.t(.stNotAvailable)) { showNotAvailable = true }
                 .settingRow("searchExitConfirm", highlightID)
-            Toggle(l10n.t(.stFilterStarSearch), isOn: $st.deleteStarIllust).settingRow("searchBookmarked", highlightID)
+            Toggle(l10n.t(.stDeleteStarFeed), isOn: $st.deleteStarIllust).settingRow("searchBookmarked", highlightID)
         }
         Section {
             Toggle(l10n.t(.stSynonymEnable), isOn: $st.synonymDictEnabled).settingRow("synonymEnable", highlightID)
@@ -670,13 +685,28 @@ private struct SettingsCategoryView: View {
         Section {
             Toggle(l10n.t(.stIllustDetailV3), isOn: $st.useArtworkV3).settingRow("detailV3", highlightID)
             if st.useArtworkV3 {
-                pickerRow(l10n.t(.stFabOrder), selection: Binding(
-                    get: { st.artworkV3FabDownloadOnLeft ? 0 : 1 },
-                    set: { st.artworkV3FabDownloadOnLeft = $0 == 0 }
-                ), options: [l10n.t(.stOptFabDownloadLeft), l10n.t(.stOptFabBookmarkLeft)])
-                .settingRow("fabOrder", highlightID)
+                // V3详情页 悬浮胶囊位置（issue #1090）：居中 / 靠左 / 靠右
+                pickerRow(l10n.t(.artworkV3FabPositionTitle), hint: l10n.t(.artworkV3FabPositionDesc), selection: Binding(
+                    get: { st.resolvedFabPosition },
+                    set: { st.artworkV3FabPosition = $0 }
+                ), options: [
+                    l10n.t(.artworkV3FabPositionCenter), l10n.t(.artworkV3FabPositionLeft), l10n.t(.artworkV3FabPositionRight),
+                ])
+                .settingRow("fabPosition", highlightID)
+                // 胶囊靠边时收藏心固定在外侧，顺序设置不生效，只在居中时露出（#1090）
+                if st.resolvedFabPosition == AppSettingsStore.fabPositionCenter {
+                    pickerRow(l10n.t(.stFabOrder), selection: Binding(
+                        get: { st.artworkV3FabDownloadOnLeft ? 0 : 1 },
+                        set: { st.artworkV3FabDownloadOnLeft = $0 == 0 }
+                    ), options: [l10n.t(.stOptFabDownloadLeft), l10n.t(.stOptFabBookmarkLeft)])
+                    .settingRow("fabOrder", highlightID)
+                }
                 Toggle(l10n.t(.stCommentJumpButton), isOn: $st.artworkV3ShowCommentJumpFab)
                     .listRowBackground(Theme.v3Surface)
+                // V3详情页 多图作品自动展开剩余页（issue #1090），默认关闭
+                hintToggle(l10n.t(.artworkV3AutoExpandTitle), l10n.t(.artworkV3AutoExpandDesc),
+                           isOn: $st.artworkV3AutoExpandMultiPage, hintColor: Theme.v3Text2)
+                    .settingRow("autoExpand", highlightID)
                 Toggle(l10n.t(.artworkV3DetailPanelCollapsed), isOn: $st.detailPanelCollapsedByDefault)
                     .listRowBackground(Theme.v3Surface)
             }
@@ -708,6 +738,9 @@ private struct SettingsCategoryView: View {
             Toggle(l10n.t(.stPrivateStar), isOn: $st.privateStar).settingRow("privateBookmark", highlightID)
             Toggle(l10n.t(.stPrivateFollow), isOn: $st.privateFollow).settingRow("privateFollow", highlightID)
             Toggle(l10n.t(.stHideStarButton), isOn: $st.hideStarButtonAtMyCollection).settingRow("hideBookmarkButton", highlightID)
+            // 收藏和取消收藏共用的触感反馈开关。
+            hintToggle(l10n.t(.settingsLikeHaptic), l10n.t(.settingsLikeHapticDesc), isOn: $st.likeHapticEnable, hintColor: Theme.v3Text2)
+                .settingRow("likeHaptic", highlightID)
             Toggle(l10n.t(.stFilterInvalidBookmarks), isOn: $st.filterInvalidBookmarks).settingRow("invalidBookmarks", highlightID)
             // 收藏库本地镜像。开回来时主动踢一脚引擎，用户不用等下一个空闲心跳。
             Toggle(l10n.t(.settingsBookmarkMirror), isOn: $st.bookmarkMirrorEnabled)
@@ -862,6 +895,20 @@ private struct SettingsCategoryView: View {
     private func pickerRow(_ title: String, selection: Binding<Int>, options: [String]) -> some View {
         Picker(title, selection: selection) {
             ForEach(options.indices, id: \.self) { i in Text(options[i]).tag(i) }
+        }
+        .pickerStyle(.menu)
+        .tint(Theme.brand)
+    }
+
+    /// 带说明行的选择行（M3SetTitle + M3SetDesc + 右侧当前值）。
+    private func pickerRow(_ title: String, hint: String, selection: Binding<Int>, options: [String]) -> some View {
+        Picker(selection: selection) {
+            ForEach(options.indices, id: \.self) { i in Text(options[i]).tag(i) }
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(hint).font(.caption).foregroundStyle(Theme.v3Text2)
+            }
         }
         .pickerStyle(.menu)
         .tint(Theme.brand)

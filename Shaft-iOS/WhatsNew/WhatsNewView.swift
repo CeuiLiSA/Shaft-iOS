@@ -74,6 +74,16 @@ final class WhatsNewViewModel {
         }
     }
 
+    /// 设置「动态过滤已收藏」(#1130)：只影响关注动态（插画、漫画与小说共用），
+    /// 刷新和每次续页时生效；开关在每次映射时读取。
+    private static func hidingBookmarked(_ illusts: [Illust]) -> [Illust] {
+        AppSettingsStore.shared.deleteStarIllust ? illusts.filter { $0.isBookmarked != true } : illusts
+    }
+
+    private static func hidingBookmarked(_ novels: [Novel]) -> [Novel] {
+        AppSettingsStore.shared.deleteStarIllust ? novels.filter { $0.isBookmarked != true } : novels
+    }
+
     // MARK: illusts (FollowingIllustFeedFragment)
 
     private func loadIllusts() async {
@@ -87,7 +97,7 @@ final class WhatsNewViewModel {
         do {
             let resp = try await api.newIllustsFromFollowing(restrict: r)
             guard gen == illustGen else { return }
-            illusts = resp.illusts
+            illusts = Self.hidingBookmarked(resp.illusts)
             illustNext = resp.nextUrl
         } catch {
             guard gen == illustGen else { return }
@@ -102,7 +112,7 @@ final class WhatsNewViewModel {
         defer { illustsLoadingMore = false }
         if let r: IllustResponse = try? await api.nextPage(url) {
             guard gen == illustGen else { return }
-            illusts.append(contentsOf: r.illusts)
+            illusts.append(contentsOf: Self.hidingBookmarked(r.illusts))
             illustNext = r.nextUrl
         }
     }
@@ -120,7 +130,7 @@ final class WhatsNewViewModel {
         do {
             let resp = try await api.newNovelsFromFollowing(restrict: r)
             guard gen == novelGen else { return }
-            novels = resp.novels
+            novels = Self.hidingBookmarked(resp.novels)
             novelNext = resp.nextUrl
         } catch {
             guard gen == novelGen else { return }
@@ -135,7 +145,7 @@ final class WhatsNewViewModel {
         defer { novelsLoadingMore = false }
         if let r: NovelResponse = try? await api.nextPage(url) {
             guard gen == novelGen else { return }
-            novels.append(contentsOf: r.novels)
+            novels.append(contentsOf: Self.hidingBookmarked(r.novels))
             novelNext = r.nextUrl
         }
     }
@@ -421,7 +431,8 @@ private struct SheetToolbar: View {
                 selected: vm.isIllustMode ? 0 : 1,
                 textSize: 16,
                 onSelect: { idx in Task { await vm.setIllustMode(idx == 0) } },
-                onReselect: {}
+                // 再点当前这项 = 仅回顶，不重拉（对齐首页顶栏 tab 的再点回顶，#1154）
+                onReselect: onTapTitle
             )
             .padding(.leading, 8)
             .padding(.vertical, 10)

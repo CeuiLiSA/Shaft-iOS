@@ -54,7 +54,19 @@ final class AppSettingsStore {
     var useFragmentIllust = true { didSet { save(useFragmentIllust, "st_useFragmentIllust") } }
     var useArtworkV3 = false { didSet { save(useArtworkV3, "st_useArtworkV3") } }
     var artworkV3FabDownloadOnLeft = true { didSet { save(artworkV3FabDownloadOnLeft, "st_artworkV3FabDownloadOnLeft") } }
+    /// Upstream `Settings.artworkV3FabPosition` (#1090) — 悬浮「下载 + 收藏」胶囊水平位置。
+    /// 0 居中（默认）/ 1 靠左 / 2 靠右；靠边时收藏心固定在外侧，顺序设置只在居中时生效。
+    var artworkV3FabPosition = 0 { didSet { save(artworkV3FabPosition, "st_artworkV3FabPosition") } }
+    static let fabPositionCenter = 0, fabPositionLeft = 1, fabPositionRight = 2
+    /// 越界值回落到居中（upstream `getArtworkV3FabPosition`）。
+    var resolvedFabPosition: Int {
+        (Self.fabPositionCenter...Self.fabPositionRight).contains(artworkV3FabPosition)
+            ? artworkV3FabPosition : Self.fabPositionCenter
+    }
     var artworkV3ShowCommentJumpFab = false { didSet { save(artworkV3ShowCommentJumpFab, "st_artworkV3ShowCommentJumpFab") } }
+    /// Upstream `Settings.artworkV3AutoExpandMultiPage` (#1090) — V3 详情页多图作品
+    /// 进页即展开全部页，默认关闭。
+    var artworkV3AutoExpandMultiPage = false { didSet { save(artworkV3AutoExpandMultiPage, "st_artworkV3AutoExpandMultiPage") } }
     /// Upstream `Settings.isDetailPanelCollapsedByDefault` (#1044) — seeds the
     /// V3 detail page's collapsible "artwork details" panel.
     var detailPanelCollapsedByDefault = false { didSet { save(detailPanelCollapsedByDefault, "st_detailPanelCollapsedByDefault") } }
@@ -86,6 +98,8 @@ final class AppSettingsStore {
     /// 收藏库本地镜像（upstream `Settings.bookmarkMirrorEnabled`，默认开）。关掉是立即生效的：
     /// 引擎每次 tick 都现读这个开关（正在飞的那一页会跑完，之后不再发新请求）。
     var bookmarkMirrorEnabled = true { didSet { save(bookmarkMirrorEnabled, "st_bookmarkMirrorEnabled") } }
+    /// 收藏按钮振动反馈（upstream `Settings.likeHapticEnable`，默认开，与开关引入前的行为一致）。
+    var likeHapticEnable = true { didSet { save(likeHapticEnable, "st_likeHapticEnable") } }
     var starWithTagSelectAll = false { didSet { save(starWithTagSelectAll, "st_starWithTagSelectAll") } }
     var keepStatusBarWhenViewImage = false { didSet { save(keepStatusBarWhenViewImage, "st_keepStatusBarWhenViewImage") } }
     var synonymDictEnabled = false { didSet { save(synonymDictEnabled, "st_synonymDictEnabled") } }
@@ -137,7 +151,9 @@ final class AppSettingsStore {
         useFragmentIllust = bool("st_useFragmentIllust", true)
         useArtworkV3 = bool("st_useArtworkV3", false)
         artworkV3FabDownloadOnLeft = bool("st_artworkV3FabDownloadOnLeft", true)
+        artworkV3FabPosition = int("st_artworkV3FabPosition", 0)
         artworkV3ShowCommentJumpFab = bool("st_artworkV3ShowCommentJumpFab", false)
+        artworkV3AutoExpandMultiPage = bool("st_artworkV3AutoExpandMultiPage", false)
         detailPanelCollapsedByDefault = bool("st_detailPanelCollapsedByDefault", false)
         themeType = int("st_themeType", 0)
         useStaggeredLayout = bool("st_useStaggeredLayout", true)
@@ -155,6 +171,7 @@ final class AppSettingsStore {
         collapseNovelCardTags = bool("st_collapseNovelCardTags", true)
         hideStarButtonAtMyCollection = bool("st_hideStarButtonAtMyCollection", false)
         bookmarkMirrorEnabled = bool("st_bookmarkMirrorEnabled", true)
+        likeHapticEnable = bool("st_likeHapticEnable", true)
         starWithTagSelectAll = bool("st_starWithTagSelectAll", false)
         keepStatusBarWhenViewImage = bool("st_keepStatusBarWhenViewImage", false)
         synonymDictEnabled = bool("st_synonymDictEnabled", false)
