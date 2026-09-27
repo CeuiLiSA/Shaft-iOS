@@ -120,10 +120,12 @@ actor StickerInstaller {
             if !store.validArchive(package) {
                 let base = completed
                 await progress(.downloading(base, total))
-                let delegate = StickerTransfer(limit: package.size) { bytes in
+                let delegate = StickerTransfer(limit: package.size, followsReleaseRedirects: true) { bytes in
                     Task { await progress(.downloading(base + bytes, total)) }
                 }
-                let (file, response) = try await session.download(from: URL(string: package.url)!, delegate: delegate)
+                // The catalog URL is only the legacy wire / cache identity; the bytes come from
+                // the content-addressed GitHub release asset, resolved by checksum.
+                let (file, response) = try await session.download(from: StickerDownloadSource.url(package), delegate: delegate)
                 defer { try? FileManager.default.removeItem(at: file) }
                 try Self.check(response)
                 try store.installArchive(file, package: package)
@@ -155,14 +157,47 @@ actor StickerInstaller {
     }
 }
 
-/// Separate ephemeral transfer; cookies, tokens and redirects never reach COS.
+/// Content-addressed sticker ZIPs (upstream `StickerDownloadSource`): the legacy
+/// catalog URL is never downloaded.
+enum StickerDownloadSource {
+    static let releaseBase = "https://github.com/CeuiLiSA/Pixiv-Shaft/releases/download/sticker-assets/"
+
+    static func url(_ pkg: StickerPackage) -> URL {
+        URL(string: releaseBase + pkg.sha256 + ".zip")!
+    }
+
+    /// Only the exact release asset on github.com, and GitHub's short-lived signed
+    /// CDN it redirects public release assets to.
+    static func allows(_ url: URL?) -> Bool {
+        guard let url, url.scheme == "https", url.port == nil || url.port == 443,
+              url.user == nil, url.password == nil, url.fragment == nil, let host = url.host else { return false }
+        switch host {
+        case "github.com":
+            let name = url.lastPathComponent
+            return url.query == nil && url.absoluteString == releaseBase + name && name.hasSuffix(".zip")
+                && name.dropLast(4).range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil
+        case "release-assets.githubusercontent.com":
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+/// Separate ephemeral transfer; cookies and tokens never reach the asset hosts, and
+/// redirects are refused except GitHub's release-asset hop.
 private final class StickerTransfer: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     let limit: Int64
+    let followsReleaseRedirects: Bool
     let progress: @Sendable (Int64) -> Void
     private var lastReport = Date.distantPast
-    init(limit: Int64, progress: @escaping @Sendable (Int64) -> Void = { _ in }) { self.limit = limit; self.progress = progress }
+    init(limit: Int64, followsReleaseRedirects: Bool = false, progress: @escaping @Sendable (Int64) -> Void = { _ in }) {
+        self.limit = limit; self.followsReleaseRedirects = followsReleaseRedirects; self.progress = progress
+    }
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
-                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
+                    newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+        completionHandler(followsReleaseRedirects && StickerDownloadSource.allows(request.url) ? request : nil)
+    }
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
                     totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {

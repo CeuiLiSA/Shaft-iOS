@@ -77,6 +77,8 @@ struct StickerCatalog: Codable, Sendable {
                 guard sticker.stickerId > 0, !sticker.media.resourceList.isEmpty else { throw StickerFailure.catalog }
             }
             for pkg in pack.pkgList {
+                // `pkg.url` is the legacy wire / cache identity; the ZIP itself is fetched from
+                // the GitHub release asset by checksum (`StickerDownloadSource`).
                 guard let url = URLComponents(string: pkg.url), url.scheme == "https",
                       url.host == "shaft-1300933917.cos.ap-osaka.myqcloud.com",
                       url.port == nil, url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
