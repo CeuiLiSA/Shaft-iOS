@@ -68,6 +68,19 @@ final class ReaderTextBlockView: UITextView, UITextViewDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
+    /// Selection is long-press only (#1150). Page views are pooled across
+    /// flips, so two quick page-turn taps can land on the same text view and
+    /// the system's double-/triple-tap word selection would pick a word on the
+    /// new page. Multi-tap recognizers only start while a selection is already
+    /// live (where they extend it, as before).
+    override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+        if let tap = g as? UITapGestureRecognizer, tap.numberOfTapsRequired >= 2,
+           selectedRange.length == 0 {
+            return false
+        }
+        return super.gestureRecognizerShouldBegin(g)
+    }
+
     /// Bind a group of consecutive paragraph slices (paged mode). Pixel gaps
     /// between slices become `paragraphSpacing` so positions match the
     /// paginator exactly; first-line indent re-applies per slice flag.
@@ -153,6 +166,29 @@ final class ReaderTextBlockView: UITextView, UITextViewDelegate {
         let absEnd = endSeg.absoluteStart + (r.location + r.length - endSeg.localStart)
         let text = (attributedText.string as NSString).substring(with: r)
         return ReaderTextSelection(absoluteStart: absStart, absoluteEnd: absEnd, text: text)
+    }
+
+    /// Absolute source char under `point` (this view's coordinates); nil when
+    /// the point is outside every laid-out line (TTS double-tap, #1139).
+    func absoluteCharIndex(at point: CGPoint) -> Int? {
+        guard let text = attributedText, text.length > 0 else { return nil }
+        let p = CGPoint(x: point.x - textContainerInset.left, y: point.y - textContainerInset.top)
+        let glyph = layoutManager.glyphIndex(for: p, in: textContainer)
+        let line = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        guard p.y >= line.minY, p.y <= line.maxY else { return nil }
+        let local = min(layoutManager.characterIndexForGlyph(at: glyph), text.length - 1)
+        guard let seg = segment(forLocal: local) else { return nil }
+        return seg.absoluteStart + min(local - seg.localStart, seg.localEnd - seg.localStart)
+    }
+
+    /// Line rect (this view's coordinates) containing absolute char `index`, if it lives here.
+    func lineRect(forAbsoluteChar index: Int) -> CGRect? {
+        guard let seg = segments.first(where: { index >= $0.absoluteStart && index < $0.absoluteStart + ($0.localEnd - $0.localStart) }) else { return nil }
+        let local = seg.localStart + (index - seg.absoluteStart)
+        guard local < (attributedText?.length ?? 0) else { return nil }
+        let glyph = layoutManager.glyphIndexForCharacter(at: local)
+        let rect = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+        return rect.offsetBy(dx: textContainerInset.left, dy: textContainerInset.top)
     }
 
     private func segment(forLocal local: Int) -> Segment? {
@@ -266,6 +302,18 @@ final class ReaderPageView: UIView {
 
     func applyOverlays(_ overlays: [HighlightRange]) {
         textBlocks.forEach { $0.applyOverlayHighlights(overlays) }
+    }
+
+    /// Absolute char under `point` — a text block's character, or a chapter
+    /// title's start (upstream double-tap resolves a chapter to its sourceStart).
+    func absoluteCharIndex(at point: CGPoint) -> Int? {
+        for block in textBlocks where block.frame.contains(point) {
+            if let index = block.absoluteCharIndex(at: block.convert(point, from: self)) { return index }
+        }
+        for element in page?.elements ?? [] {
+            if case .chapter(let c) = element, point.y >= c.top, point.y <= c.bottom { return c.absoluteCharStart }
+        }
+        return nil
     }
 
     private func addChapter(_ c: PageElement.Chapter, style: ReaderTypeStyle, geometry: PageGeometry) {

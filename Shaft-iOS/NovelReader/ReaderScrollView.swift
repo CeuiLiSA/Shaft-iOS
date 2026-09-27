@@ -44,6 +44,13 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
     var onImageTap: ((PageElement.Image) -> Void)?
     var onLinkTap: ((URL) -> Void)?
     var onSelectionAction: ((ReaderSelectionAction, ReaderTextSelection) -> Void)?
+    /// TTS 「双击文字切换朗读位置」(#1139) — see the paged container.
+    var onTextDoubleTap: ((Int) -> Void)?
+    private var singleTap: UITapGestureRecognizer?
+    private var doubleTap: UITapGestureRecognizer?
+
+    /// Finger down or the list still moving — TTS auto-follow waits.
+    var isUserInteracting: Bool { tableView.isTracking || tableView.isDragging || tableView.isDecelerating }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -63,6 +70,13 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
         tap.delegate = self
         tap.cancelsTouchesInView = false
         tableView.addGestureRecognizer(tap)
+        singleTap = tap
+        let double = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
+        double.numberOfTapsRequired = 2
+        double.delegate = self
+        double.cancelsTouchesInView = false
+        tableView.addGestureRecognizer(double)
+        doubleTap = double
     }
 
     @available(*, unavailable)
@@ -213,7 +227,77 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
 
     // MARK: Tap
 
-    override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool { !touchLocked }
+    override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
+        if touchLocked { return false }
+        if g === doubleTap { return onTextDoubleTap != nil && charIndex(at: g.location(in: tableView)) != nil }
+        return true
+    }
+
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRequireFailureOf other: UIGestureRecognizer) -> Bool {
+        g === singleTap && other === doubleTap && onTextDoubleTap != nil
+    }
+
+    @objc private func handleDoubleTap(_ g: UITapGestureRecognizer) {
+        guard let index = charIndex(at: g.location(in: tableView)) else { return }
+        onTextDoubleTap?(index)
+    }
+
+    /// Paragraph char under a table-space point, or a chapter row's start.
+    private func charIndex(at point: CGPoint) -> Int? {
+        guard let indexPath = tableView.indexPathForRow(at: point), rows.indices.contains(indexPath.row),
+              let cell = tableView.cellForRow(at: indexPath) else { return nil }
+        switch rows[indexPath.row] {
+        case .paragraph:
+            guard let p = cell as? ScrollParagraphCell else { return nil }
+            return p.textBlock.absoluteCharIndex(at: p.textBlock.convert(point, from: tableView))
+        case .chapter(_, let start):
+            return start
+        default:
+            return nil
+        }
+    }
+
+    // MARK: TTS follow
+
+    private func rowIndex(forChar charIndex: Int) -> Int? {
+        var target: Int?
+        for (i, row) in rows.enumerated() {
+            if row.sourceStart <= charIndex { target = i } else { break }
+        }
+        return target
+    }
+
+    /// Line rect of `charIndex` in this view's coordinates, when its row is on screen.
+    private func visibleLineRect(forChar charIndex: Int) -> CGRect? {
+        guard let row = rowIndex(forChar: charIndex),
+              let cell = tableView.cellForRow(at: IndexPath(row: row, section: 0)) else { return nil }
+        if let p = cell as? ScrollParagraphCell, let line = p.textBlock.lineRect(forAbsoluteChar: charIndex) {
+            return p.textBlock.convert(line, to: self)
+        }
+        return cell.convert(cell.bounds, to: self)
+    }
+
+    /// Upstream `isCharVisible`: the line holding `charIndex` sits fully inside
+    /// the reading area (between the top/bottom insets).
+    func isCharVisible(_ charIndex: Int) -> Bool {
+        guard let rect = visibleLineRect(forChar: charIndex) else { return false }
+        return rect.minY >= tableView.contentInset.top + topInset && rect.maxY <= bounds.height - tableView.contentInset.bottom
+    }
+
+    /// Upstream `followTtsChar`: bring the spoken line to the top of the
+    /// reading area unless it is already visible or the user is scrolling.
+    func followTtsChar(_ charIndex: Int) {
+        guard !isCharVisible(charIndex), !isUserInteracting, let row = rowIndex(forChar: charIndex) else { return }
+        tableView.scrollToRow(at: IndexPath(row: row, section: 0), at: .top, animated: false)
+        tableView.layoutIfNeeded()
+        if let cell = tableView.cellForRow(at: IndexPath(row: row, section: 0)) as? ScrollParagraphCell,
+           let line = cell.textBlock.lineRect(forAbsoluteChar: charIndex) {
+            let lineTop = cell.textBlock.convert(line, to: cell).minY
+            let maxOffset = tableView.contentSize.height + tableView.contentInset.bottom - tableView.bounds.height
+            tableView.contentOffset.y = min(tableView.contentOffset.y + lineTop, max(maxOffset, -tableView.contentInset.top))
+        }
+        if topInset > 0 { tableView.contentOffset.y -= topInset }
+    }
 
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 

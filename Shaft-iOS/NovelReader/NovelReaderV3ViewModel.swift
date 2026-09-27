@@ -77,6 +77,10 @@ final class NovelReaderV3ViewModel {
             case goToPage(Int, animated: Bool)
             case scrollToChar(Int, animated: Bool)
             case setScrollFraction(Double)
+            /// TTS auto-follow (#1139): paged turns to the page holding the
+            /// char, scroll brings its line into view; both skip while the
+            /// user is touching the reader.
+            case ttsFollow(Int)
         }
     }
 
@@ -478,6 +482,31 @@ final class NovelReaderV3ViewModel {
         cachedNovelAnnotations = store.annotations(for: novelId)
     }
 
+    // MARK: TTS
+
+    /// The spoken range, drawn on top of annotations / search hits when the
+    /// 「高亮正在朗读的文字」 setting is on.
+    private(set) var ttsHighlight: HighlightRange?
+    /// Start of the spoken range (regardless of highlighting) — the scroll
+    /// host reports whether it is on screen for the 「从本页开始朗读」 pill.
+    var ttsFocusChar: Int?
+    var ttsCharOnScreen = false
+
+    func setTtsHighlight(_ range: HighlightRange?) {
+        guard range != ttsHighlight else { return }
+        ttsHighlight = range
+        rebuildOverlays()
+    }
+
+    func followTts(_ charIndex: Int) {
+        send(.ttsFollow(charIndex))
+    }
+
+    /// Paragraph / chapter start under a double-tapped char (upstream `NovelTtsText.paragraphStart`).
+    func ttsParagraphStart(_ charIndex: Int) -> Int? {
+        NovelTtsText.paragraphStart(tokens, charIndex: charIndex)
+    }
+
     private func rebuildOverlays() {
         var result: [HighlightRange] = []
         for a in cachedNovelAnnotations {
@@ -495,6 +524,7 @@ final class NovelReaderV3ViewModel {
                 ))
             }
         }
+        if let ttsHighlight { result.append(ttsHighlight) }
         overlays = result
     }
 

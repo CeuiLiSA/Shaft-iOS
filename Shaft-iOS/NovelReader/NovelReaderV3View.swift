@@ -81,6 +81,10 @@ private struct NovelReaderV3Screen: View {
     @State private var chromeVisible = false
     @State private var activeSheet: ReaderSheet?
     @State private var showMoreMenu = false
+    @State private var tts = NovelTtsPlayer.shared
+    @State private var showTtsSettings = false
+    @State private var lastFollowedTtsRange: Range<Int>?
+    @Environment(\.scenePhase) private var scenePhase
     @Environment(OnboardingStore.self) private var l10n
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -116,6 +120,8 @@ private struct NovelReaderV3Screen: View {
                 loadStateOverlay
 
                 chrome(safe: safe)
+
+                ttsPageAction(safe: safe)
 
                 if let toast = vm.toast {
                     VStack {
@@ -156,8 +162,20 @@ private struct NovelReaderV3Screen: View {
             ReaderJumpButton.labelFormat = { String(format: l10n.t(.nrJumpButtonFmt), $0) }
             await vm.loadIfNeeded()
         }
-        .onAppear { applyScreenEffects() }
+        .onAppear {
+            applyScreenEffects()
+            tts.configureL10n { l10n.t($0) }
+            syncTts()
+        }
         .onDisappear { vm.flushPendingProgress() }
+        .onChange(of: tts.playback) { syncTts() }
+        .onChange(of: settings.ttsHighlight) { lastFollowedTtsRange = nil; syncTts() }
+        .onChange(of: settings.ttsAutoPage) { lastFollowedTtsRange = nil; syncTts() }
+        .onChange(of: theme.styleKey) { syncTts() }
+        .onChange(of: isLoaded) { syncTts() }
+        .onChange(of: tts.lastError?.seq) {
+            if let error = tts.lastError, error.sessionId == ttsSessionId { vm.showToast(error.message) }
+        }
         .onChange(of: settings.keepScreenOn) { applyScreenEffects() }
         .onChange(of: settings.useSystemBrightness) { applyScreenEffects() }
         .onChange(of: settings.customBrightness) { applyScreenEffects() }
@@ -176,6 +194,10 @@ private struct NovelReaderV3Screen: View {
         }
         .confirmationDialog("", isPresented: $showMoreMenu) {
             moreMenuButtons
+        }
+        .sheet(isPresented: $showTtsSettings) {
+            ReaderTtsSettingsSheet(settings: settings, sessionId: ttsSessionId)
+                .presentationDetents([.medium, .large])
         }
     }
 
@@ -198,7 +220,8 @@ private struct NovelReaderV3Screen: View {
                 menuStrings: menuStrings,
                 onCenterTap: { chromeVisible.toggle() },
                 onSelectionAction: handleSelection,
-                onIllustOpen: { activeSheet = .illust($0) }
+                onIllustOpen: { activeSheet = .illust($0) },
+                onTextDoubleTap: ttsDoubleTapHandler
             )
         } else {
             PagedReaderHost(
@@ -207,7 +230,8 @@ private struct NovelReaderV3Screen: View {
                 menuStrings: menuStrings,
                 onCenterTap: { chromeVisible.toggle() },
                 onSelectionAction: handleSelection,
-                onIllustOpen: { activeSheet = .illust($0) }
+                onIllustOpen: { activeSheet = .illust($0) },
+                onTextDoubleTap: ttsDoubleTapHandler
             )
         }
     }
@@ -295,7 +319,7 @@ private struct NovelReaderV3Screen: View {
                         Task { await vm.loadSeriesIfNeeded() }
                     },
                     onSettings: { activeSheet = .settings },
-                    onThemeToggle: { settings.toggleDayNight() },
+                    onThemeToggle: { settings.toggleDayNight(systemIsDark: colorScheme == .dark) },
                     onSearch: {
                         chromeVisible = false
                         vm.searchActive = true
@@ -314,6 +338,12 @@ private struct NovelReaderV3Screen: View {
 
     @ViewBuilder
     private var moreMenuButtons: some View {
+        // Upstream `addReaderMenuItems`: the TTS entries lead the reader's own items.
+        Button(l10n.t(ttsMenuLabel)) { handleTtsAction() }
+        if tts.playback.isActive && tts.playback.sessionId == ttsSessionId {
+            Button(l10n.t(.readerTtsFromPage)) { startTtsFromReader() }
+        }
+        Button(l10n.t(.readerTtsSettings)) { showTtsSettings = true }
         Button(l10n.t(.actionCopyLink)) { vm.copyLink() }
         Button(l10n.t(.nrMenuCopyText)) { vm.copyBodyText() }
         Button(l10n.t(.nrMenuSavePosition)) { vm.addBookmarkAtCurrentPosition() }
@@ -324,6 +354,135 @@ private struct NovelReaderV3Screen: View {
             Button(l10n.t(vm.seriesWatched ? .nrWatchlistRemove : .nrWatchlistAdd)) {
                 Task { await vm.toggleWatchlist() }
             }
+        }
+    }
+
+    // MARK: TTS (#1113 / #1139)
+
+    private var ttsSessionId: String { "novel:\(novelId)" }
+
+    private var ttsState: NovelTtsPlayer.State { tts.playback.state(forSession: ttsSessionId) }
+
+    private var ttsMenuLabel: LocalizedKey {
+        switch ttsState {
+        case .playing: return .readerMenuTtsPause
+        case .paused: return .readerMenuTtsResume
+        default: return tts.playback.isActive ? .readerTtsFromPage : .readerMenuTtsStart
+        }
+    }
+
+    private var currentTtsRange: Range<Int>? {
+        let playback = tts.playback
+        return playback.sessionId == ttsSessionId && playback.isActive ? playback.sourceRange : nil
+    }
+
+    private var ttsDoubleTapHandler: ((Int) -> Void)? {
+        guard settings.ttsDoubleTap, !settings.touchLocked else { return nil }
+        return { index in
+            if let start = vm.ttsParagraphStart(index) { startTtsFromReader(charIndex: start) }
+        }
+    }
+
+    private func handleTtsAction() {
+        switch ttsState {
+        case .playing: tts.pause(sessionId: ttsSessionId)
+        case .paused: tts.resume(sessionId: ttsSessionId)
+        default: startTtsFromReader()
+        }
+    }
+
+    private func startTtsFromReader(charIndex: Int? = nil) {
+        guard isLoaded else { return }
+        let start = charIndex ?? vm.currentCharIndex
+        let tokens = vm.tokens
+        let webTitle = vm.webNovel?.title
+        let title = vm.title
+        let sessionId = ttsSessionId
+        let speed = settings.ttsSpeed, pitch = settings.ttsPitch
+        Task {
+            // Splitting a long text can allocate thousands of short utterances;
+            // keep that work off the main thread.
+            let (language, segments) = await Task.detached(priority: .userInitiated) {
+                let text = NovelTtsText.fromTokens(tokens, title: webTitle, startCharIndex: start)
+                let language = NovelTtsText.detectLanguage(text)
+                return (language, NovelTtsText.segmentsFromTokens(tokens, startCharIndex: start,
+                                                                   maxChars: NovelTtsText.maxChars(forLanguage: language)))
+            }.value
+            guard !segments.isEmpty else {
+                vm.showToast(l10n.t(.readerTtsEmpty))
+                return
+            }
+            tts.start(sessionId: sessionId, title: title, segments: segments,
+                      speed: speed, pitch: pitch, language: language)
+        }
+    }
+
+    /// Upstream `syncTtsState`: repaint the highlight, then turn the page /
+    /// scroll after the spoken range when auto-follow may run.
+    private func syncTts() {
+        let range = currentTtsRange
+        vm.setTtsHighlight(settings.ttsHighlight ? range.map {
+            HighlightRange(absoluteStart: $0.lowerBound, absoluteEnd: $0.upperBound, color: theme.highlightColor)
+        } : nil)
+        vm.ttsFocusChar = range?.lowerBound
+        let canFollow = settings.ttsAutoPage && ttsState == .playing && scenePhase == .active && isLoaded
+        guard canFollow, let range else {
+            lastFollowedTtsRange = nil
+            return
+        }
+        if range != lastFollowedTtsRange {
+            lastFollowedTtsRange = range
+            vm.followTts(range.lowerBound)
+        }
+    }
+
+    /// 「从本页开始朗读」: only while something is being read somewhere other
+    /// than the current page, with the chrome hidden.
+    private var showsTtsPageAction: Bool {
+        let playback = tts.playback
+        guard settings.ttsShowPageAction, playback.isActive, !chromeVisible, isLoaded else { return false }
+        if playback.sessionId != ttsSessionId { return true }
+        guard let range = currentTtsRange else { return false }
+        let onThisPage: Bool
+        if settings.readingDirection == .vertical {
+            onThisPage = vm.ttsCharOnScreen
+        } else if let pages = vm.pagination?.pages, pages.indices.contains(vm.currentPageIndex) {
+            onThisPage = pages[vm.currentPageIndex].hasElement(containing: range.lowerBound)
+        } else {
+            onThisPage = false
+        }
+        return !onThisPage
+    }
+
+    /// Secondary 48pt pill (14 / 600, paddings 20/10), bottom-centred above the
+    /// home indicator + 24. The reader's day/night can differ from the app, so it
+    /// is painted from the reader theme: accent 32/255 over the page background,
+    /// accent 80/255 1pt stroke, text in the body colour.
+    @ViewBuilder
+    private func ttsPageAction(safe: EdgeInsets) -> some View {
+        if showsTtsPageAction {
+            VStack {
+                Spacer()
+                Button { startTtsFromReader() } label: {
+                    Text(l10n.t(.readerTtsFromPage))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color(theme.textColor))
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .frame(minWidth: 48, minHeight: 48)
+                        .background(
+                            Capsule().fill(Color(theme.backgroundColor))
+                                .overlay(Capsule().fill(Color(theme.accentColor).opacity(32 / 255)))
+                        )
+                        .overlay(Capsule().strokeBorder(Color(theme.accentColor).opacity(80 / 255), lineWidth: 1))
+                        .contentShape(.capsule)
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .padding(.bottom, safe.bottom + 24)
+            }
+            .ignoresSafeArea(edges: .bottom)
+            .transition(.opacity)
         }
     }
 
@@ -438,7 +597,7 @@ private struct NovelReaderV3Screen: View {
 
     private func layoutKey(size: CGSize, safe: EdgeInsets) -> String {
         let snap = settings.layoutSnapshot
-        return "\(Int(size.width))x\(Int(size.height))|\(Int(safe.top))-\(Int(safe.bottom))|\(snap.fontSizeSp)|\(snap.lineSpacing)|\(snap.paragraphSpacingLines)|\(snap.horizontalMarginDp)|\(snap.verticalMarginDp)|\(snap.firstLineIndent)|\(snap.letterSpacing)|\(snap.boldText)|\(snap.fontId)|\(snap.fontWeight)|\(snap.readingDirection.rawValue)|\(snap.imagePlacement.rawValue)|\(snap.imageScaleMode.rawValue)|\(theme.id)"
+        return "\(Int(size.width))x\(Int(size.height))|\(Int(safe.top))-\(Int(safe.bottom))|\(snap.fontSizeSp)|\(snap.lineSpacing)|\(snap.paragraphSpacingLines)|\(snap.horizontalMarginDp)|\(snap.verticalMarginDp)|\(snap.firstLineIndent)|\(snap.letterSpacing)|\(snap.boldText)|\(snap.fontId)|\(snap.fontWeight)|\(snap.readingDirection.rawValue)|\(snap.imagePlacement.rawValue)|\(snap.imageScaleMode.rawValue)|\(theme.styleKey)"
     }
 
     private func pushLayout(size: CGSize, safe: EdgeInsets) {
@@ -493,6 +652,8 @@ private struct PagedReaderHost: UIViewRepresentable {
     let onCenterTap: () -> Void
     let onSelectionAction: (ReaderSelectionAction, ReaderTextSelection) -> Void
     let onIllustOpen: (Int64) -> Void
+    /// TTS 「双击文字切换朗读位置」 — nil when the setting is off or touch is locked.
+    let onTextDoubleTap: ((Int) -> Void)?
 
     final class Coordinator {
         var boundRevision = -1
@@ -524,8 +685,10 @@ private struct PagedReaderHost: UIViewRepresentable {
     func updateUIView(_ view: NovelPagedReaderView, context: Context) {
         view.flipMode = settings.flipMode
         view.tapZoneReversed = settings.tapZoneReversed
+        view.tapAllForward = settings.tapAllForward
         view.touchLocked = settings.touchLocked
         view.menuStrings = menuStrings
+        view.onTextDoubleTap = onTextDoubleTap
 
         let overlays = vm.overlays
         if let pagination = vm.pagination {
@@ -550,6 +713,12 @@ private struct PagedReaderHost: UIViewRepresentable {
             switch command.kind {
             case .goToPage(let index, let animated):
                 DispatchQueue.main.async { view.goTo(index: index, animated: animated) }
+            case .ttsFollow(let char):
+                DispatchQueue.main.async {
+                    guard !view.isUserInteracting,
+                          let index = view.pages.firstIndex(where: { $0.hasElement(containing: char) }) else { return }
+                    view.goTo(index: index, animated: false)
+                }
             case .scrollToChar, .setScrollFraction:
                 break
             }
@@ -569,9 +738,20 @@ private struct ScrollReaderHost: UIViewRepresentable {
     let onCenterTap: () -> Void
     let onSelectionAction: (ReaderSelectionAction, ReaderTextSelection) -> Void
     let onIllustOpen: (Int64) -> Void
+    let onTextDoubleTap: ((Int) -> Void)?
 
     final class Coordinator {
         var boundKey = ""
+        var lastTtsChar: Int?
+        weak var view: NovelScrollReaderView?
+        weak var vm: NovelReaderV3ViewModel?
+
+        /// Report whether the spoken line is on screen (drives the 「从本页开始朗读」 pill).
+        @MainActor func reportTtsVisibility() {
+            guard let view, let vm else { return }
+            let onScreen = vm.ttsFocusChar.map { view.isCharVisible($0) } ?? false
+            if vm.ttsCharOnScreen != onScreen { vm.ttsCharOnScreen = onScreen }
+        }
         var lastCommandId = -1
         var lastOverlays: [HighlightRange] = []
     }
@@ -580,9 +760,13 @@ private struct ScrollReaderHost: UIViewRepresentable {
 
     func makeUIView(context: Context) -> NovelScrollReaderView {
         let view = NovelScrollReaderView()
+        let coordinator = context.coordinator
+        coordinator.view = view
+        coordinator.vm = vm
         view.onCenterTap = onCenterTap
-        view.onScrollProgressChanged = { [weak vm] fraction, charIndex in
+        view.onScrollProgressChanged = { [weak vm, weak coordinator] fraction, charIndex in
             vm?.onScrollPositionChanged(fraction: fraction, charIndex: charIndex)
+            coordinator?.reportTtsVisibility()
         }
         view.onJumpTap = { [weak vm] target in
             DispatchQueue.main.async { vm?.handleJumpTap(target) }
@@ -600,8 +784,14 @@ private struct ScrollReaderHost: UIViewRepresentable {
     func updateUIView(_ view: NovelScrollReaderView, context: Context) {
         view.touchLocked = settings.touchLocked
         view.menuStrings = menuStrings
+        view.onTextDoubleTap = onTextDoubleTap
+        if vm.ttsFocusChar != context.coordinator.lastTtsChar {
+            context.coordinator.lastTtsChar = vm.ttsFocusChar
+            let coordinator = context.coordinator
+            DispatchQueue.main.async { coordinator.reportTtsVisibility() }
+        }
 
-        let key = "\(vm.tokens.count)|\(settings.layoutSnapshot.fontSizeSp)|\(settings.layoutSnapshot.lineSpacing)|\(settings.layoutSnapshot.paragraphSpacingLines)|\(settings.layoutSnapshot.horizontalMarginDp)|\(settings.layoutSnapshot.verticalMarginDp)|\(settings.layoutSnapshot.firstLineIndent)|\(settings.layoutSnapshot.letterSpacing)|\(settings.layoutSnapshot.boldText)|\(settings.layoutSnapshot.fontId)|\(settings.layoutSnapshot.fontWeight)|\(style.theme.id)"
+        let key = "\(vm.tokens.count)|\(settings.layoutSnapshot.fontSizeSp)|\(settings.layoutSnapshot.lineSpacing)|\(settings.layoutSnapshot.paragraphSpacingLines)|\(settings.layoutSnapshot.horizontalMarginDp)|\(settings.layoutSnapshot.verticalMarginDp)|\(settings.layoutSnapshot.firstLineIndent)|\(settings.layoutSnapshot.letterSpacing)|\(settings.layoutSnapshot.boldText)|\(settings.layoutSnapshot.fontId)|\(settings.layoutSnapshot.fontWeight)|\(style.theme.styleKey)"
         if key != context.coordinator.boundKey, !vm.tokens.isEmpty {
             context.coordinator.boundKey = key
             let webNovel = vm.webNovel
@@ -631,6 +821,12 @@ private struct ScrollReaderHost: UIViewRepresentable {
                 DispatchQueue.main.async { view.scrollToCharIndex(char, animated: animated) }
             case .setScrollFraction(let fraction):
                 DispatchQueue.main.async { view.setScrollFraction(fraction) }
+            case .ttsFollow(let char):
+                let coordinator = context.coordinator
+                DispatchQueue.main.async {
+                    view.followTtsChar(char)
+                    coordinator.reportTtsVisibility()
+                }
             case .goToPage:
                 break
             }

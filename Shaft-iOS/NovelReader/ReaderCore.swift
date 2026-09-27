@@ -181,6 +181,19 @@ struct ReaderPage {
     func containsChar(_ absoluteCharIndex: Int) -> Bool {
         absoluteCharIndex >= charStart && absoluteCharIndex <= charEnd
     }
+
+    /// Upstream TTS page lookup: some element on this page covers the char.
+    func hasElement(containing c: Int) -> Bool {
+        elements.contains { element in
+            switch element {
+            case .text(let t): return c >= t.absoluteCharStart && c < t.absoluteCharEnd
+            case .chapter(let ch): return c >= ch.absoluteCharStart && c < ch.absoluteCharEnd
+            case .image(let i): return c >= i.absoluteCharStart && c < i.absoluteCharEnd
+            case .space(let sp): return c >= sp.absoluteCharStart && c < sp.absoluteCharEnd
+            case .jump(let j): return c >= j.absoluteCharStart && c < j.absoluteCharEnd
+            }
+        }
+    }
 }
 
 struct PageGeometry: Equatable {

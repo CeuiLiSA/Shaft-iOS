@@ -29,15 +29,28 @@ struct ReaderTheme: Identifiable, Equatable {
     let id: String
     let nameKey: LocalizedKey
     let backgroundColor: UIColor
-    let textColor: UIColor
+    private(set) var textColor: UIColor
     let secondaryTextColor: UIColor
     let accentColor: UIColor
     let linkColor: UIColor
     let selectionColor: UIColor
     let highlightColor: UIColor
     let dividerColor: UIColor
-    let chapterTitleColor: UIColor
+    private(set) var chapterTitleColor: UIColor
     let isDark: Bool
+
+    /// Upstream `preset.copy(textColor = color, chapterTitleColor = color)` — the
+    /// per-theme custom text colour (#1142) repaints body text and chapter titles.
+    func withTextColor(_ color: UIColor) -> ReaderTheme {
+        var copy = self
+        copy.textColor = color
+        copy.chapterTitleColor = color
+        return copy
+    }
+
+    /// Identity for layout / bind caches: `id` alone misses a custom text-colour
+    /// change (equality stays id-based so theme pickers keep working).
+    var styleKey: String { "\(id)#\(String(format: "%06X", textColor.rgb24))" }
 
     static func == (a: ReaderTheme, b: ReaderTheme) -> Bool { a.id == b.id }
 
@@ -200,8 +213,8 @@ struct PresetFont: Identifiable, Equatable {
 
 /// Persisted reader settings — same keys / ranges / defaults as upstream
 /// `ReaderSettings.kt` (MMKV "novel_reader_v3"), stored in UserDefaults with
-/// an `nrv3_` namespace prefix. Volume-key flip / screen-orientation /
-/// TTS settings are Android-only and intentionally not ported.
+/// an `nrv3_` namespace prefix. Volume-key flip / screen-orientation
+/// settings are Android-only and intentionally not ported.
 @MainActor
 @Observable
 final class NovelReaderSettings {
@@ -224,9 +237,17 @@ final class NovelReaderSettings {
 
     // Theme
     var themeId: String { didSet { set(themeId, oldValue, "r_theme_id") } }
-    var followSystemDarkMode: Bool { didSet { set(followSystemDarkMode, oldValue, "r_follow_dark") } }
-    /// Last non-dark theme — restored by the bottom-bar day/night toggle.
-    var lastLightThemeId: String { didSet { set(lastLightThemeId, oldValue, "r_last_light_theme") } }
+    /// 跟随系统暗色（#1132）。打开的那一刻把当前配色记成浅色记忆；开关本身不碰 `themeId`。
+    var followSystemDarkMode: Bool {
+        didSet {
+            guard followSystemDarkMode != oldValue else { return }
+            set(followSystemDarkMode, oldValue, "r_follow_dark")
+            if followSystemDarkMode { lightThemeMemoryId = Self.lightPickOrFallback(themeId) }
+        }
+    }
+    /// 跟随系统暗色时，系统处于浅色侧要用的「浅色记忆」配色（upstream `r_light_theme_memory`），
+    /// 与 `themeId` 相互独立：拨动跟随开关只决定「用不用 themeId」，不修改它。
+    private(set) var lightThemeMemoryId: String { didSet { set(lightThemeMemoryId, oldValue, "r_light_theme_memory") } }
 
     // Brightness
     var useSystemBrightness: Bool { didSet { set(useSystemBrightness, oldValue, "r_sys_brightness") } }
@@ -237,6 +258,8 @@ final class NovelReaderSettings {
     var readingDirection: ReadingDirection { didSet { set(readingDirection.rawValue, oldValue.rawValue, "r_reading_direction") } }
     var flipMode: ReaderFlipMode { didSet { set(flipMode.rawValue, oldValue.rawValue, "r_flip_mode") } }
     var tapZoneReversed: Bool { didSet { set(tapZoneReversed, oldValue, "r_tap_reversed") } }
+    /// 单手模式（#1150）：点击两侧都翻下一页，中间仍呼出菜单。
+    var tapAllForward: Bool { didSet { set(tapAllForward, oldValue, "r_tap_all_forward") } }
     var autoPageIntervalSec: Int { didSet { set(autoPageIntervalSec.clamped(5, 60), oldValue, "r_auto_page_interval") } }
 
     // Screen
@@ -249,6 +272,14 @@ final class NovelReaderSettings {
     var imagePlacement: ImagePlacement { didSet { set(imagePlacement.rawValue, oldValue.rawValue, "r_img_placement") } }
     var imageScaleMode: ImageScaleMode { didSet { set(imageScaleMode.rawValue, oldValue.rawValue, "r_img_scale") } }
     var preloadImageAhead: Int { didSet { set(preloadImageAhead.clamped(0, 8), oldValue, "r_preload_ahead") } }
+
+    // TTS (#1113 / #1139) — upstream `ReaderSettings.tts*`, same keys / defaults.
+    var ttsHighlight: Bool { didSet { set(ttsHighlight, oldValue, "r_tts_highlight") } }
+    var ttsAutoPage: Bool { didSet { set(ttsAutoPage, oldValue, "r_tts_auto_page") } }
+    var ttsDoubleTap: Bool { didSet { set(ttsDoubleTap, oldValue, "r_tts_double_tap") } }
+    var ttsShowPageAction: Bool { didSet { set(ttsShowPageAction, oldValue, "r_tts_page_action") } }
+    var ttsSpeed: Double { didSet { set(ttsSpeed.clamped(0.5, 2.0), oldValue, "r_tts_speed") } }
+    var ttsPitch: Double { didSet { set(ttsPitch.clamped(0.5, 2.0), oldValue, "r_tts_pitch") } }
 
     private init() {
         let d = UserDefaults.standard
@@ -269,13 +300,15 @@ final class NovelReaderSettings {
         fontWeight = i("r_font_weight", 400)
         themeId = s("r_theme_id", ReaderTheme.kraft.id)
         followSystemDarkMode = b("r_follow_dark", false)
-        lastLightThemeId = s("r_last_light_theme", ReaderTheme.kraft.id)
+        // 未记过（旧版本存量）时以当前 themeId 兜底，行为与不开跟随一致。
+        lightThemeMemoryId = Self.lightPickOrFallback(d.string(forKey: Self.prefix + "r_light_theme_memory") ?? s("r_theme_id", ReaderTheme.kraft.id))
         useSystemBrightness = b("r_sys_brightness", true)
         customBrightness = f("r_brightness", 0.5)
         warmFilterStrength = f("r_warm_filter", 0)
         readingDirection = ReadingDirection(rawValue: s("r_reading_direction", "horizontal")) ?? .horizontal
         flipMode = ReaderFlipMode(rawValue: s("r_flip_mode", "simulation")) ?? .simulation
         tapZoneReversed = b("r_tap_reversed", false)
+        tapAllForward = b("r_tap_all_forward", false)
         autoPageIntervalSec = i("r_auto_page_interval", 15)
         immersive = b("r_immersive", true)
         keepScreenOn = b("r_keep_screen_on", true)
@@ -284,6 +317,18 @@ final class NovelReaderSettings {
         imagePlacement = ImagePlacement(rawValue: s("r_img_placement", "center")) ?? .center
         imageScaleMode = ImageScaleMode(rawValue: s("r_img_scale", "fit")) ?? .fit
         preloadImageAhead = i("r_preload_ahead", 2)
+        ttsHighlight = b("r_tts_highlight", true)
+        ttsAutoPage = b("r_tts_auto_page", false)
+        ttsDoubleTap = b("r_tts_double_tap", false)
+        ttsShowPageAction = b("r_tts_page_action", true)
+        ttsSpeed = f("r_tts_speed", 1.0).clamped(0.5, 2.0)
+        ttsPitch = f("r_tts_pitch", 1.0).clamped(0.5, 2.0)
+        for preset in ReaderTheme.presets {
+            let key = Self.prefix + Self.textColorKeyPrefix + preset.id
+            if d.object(forKey: key) != nil {
+                customTextColors[preset.id] = UInt32(truncatingIfNeeded: d.integer(forKey: key)) & 0xFFFFFF
+            }
+        }
     }
 
     private func set<T: Equatable>(_ value: T, _ old: T, _ key: String) {
@@ -291,25 +336,71 @@ final class NovelReaderSettings {
         d.set(value, forKey: Self.prefix + key)
     }
 
-    /// Theme honoring the follow-system-dark override.
+    /// Theme honoring the follow-system-dark override, then the per-theme
+    /// custom text colour (#1142).
+    ///
+    /// 不开跟随用用户选的 `themeId`；开了则由系统决定 —— 系统深色 → 夜间，
+    /// 系统浅色 → `lightThemeMemoryId`（upstream `effectiveTheme`，#1132）。
     func effectiveTheme(systemIsDark: Bool) -> ReaderTheme {
-        let theme = ReaderTheme.preset(id: themeId)
-        if followSystemDarkMode && systemIsDark && !theme.isDark {
-            return .night
+        var theme: ReaderTheme
+        if !followSystemDarkMode {
+            theme = ReaderTheme.preset(id: themeId)
+        } else if systemIsDark {
+            theme = .night
+        } else {
+            theme = ReaderTheme.preset(id: lightThemeMemoryId)
         }
-        return theme
+        guard let rgb = customTextColors[theme.id] else { return theme }
+        return theme.withTextColor(UIColor(argb: 0xFF00_0000 | rgb))
     }
 
-    /// Bottom-bar 夜间/日间 toggle: dark → restore last light theme,
-    /// light → remember it and switch to night.
-    func toggleDayNight() {
-        let theme = ReaderTheme.preset(id: themeId)
-        if theme.isDark {
-            themeId = lastLightThemeId
+    /// 每种阅读配色独立记忆字色（`r_text_color_<presetId>`，0xRRGGBB），避免浅色背景的深字
+    /// 带入夜间模式。Observable 镜像，改动立即重绘翻页与滚动阅读。
+    private(set) var customTextColors: [String: UInt32] = [:]
+
+    func customTextColor(presetId: String) -> UInt32? { customTextColors[presetId] }
+
+    /// 传入打开取色器时的配色 id，系统日夜切换后也不会误写另一套配色。nil 恢复默认。
+    func setTextColor(presetId: String, rgb: UInt32?) {
+        let key = Self.prefix + Self.textColorKeyPrefix + presetId
+        if let rgb {
+            customTextColors[presetId] = rgb & 0xFFFFFF
+            d.set(Int(rgb & 0xFFFFFF), forKey: key)
         } else {
-            lastLightThemeId = themeId
-            themeId = ReaderTheme.night.id
+            customTextColors[presetId] = nil
+            d.removeObject(forKey: key)
         }
+    }
+
+    private static let textColorKeyPrefix = "r_text_color_"
+
+    /// 有效浅色配色：解析出深色预设（夜间 / 炭黑）或无效 id 时降级牛皮纸。
+    private static func lightPickOrFallback(_ id: String?) -> String {
+        guard let id, let preset = ReaderTheme.presets.first(where: { $0.id == id }), !preset.isDark else {
+            return ReaderTheme.kraft.id
+        }
+        return id
+    }
+
+    /// 用户显式选配色的唯一入口（设置面板色块、底栏日夜快捷键都走这里，upstream `onThemePicked`）。
+    ///
+    /// - 选择**会**生效时（跟随开启 + 系统浅色 + 浅色预设）：留在跟随内，同步刷新浅色记忆；
+    /// - 选择**不会**生效时（跟随开启但系统深色，或选了夜间 / 炭黑）：视为一次显式手动覆盖，
+    ///   退出跟随，让这次选择立刻上屏 —— 否则色环会回弹到生效主题，控件变成「点了没反应」。
+    func onThemePicked(_ id: String, systemIsDark: Bool) {
+        // 点的是当前已经生效的配色：不该顺手关掉跟随，也不该动记忆。
+        if id == effectiveTheme(systemIsDark: systemIsDark).id { return }
+        let takesEffect = followSystemDarkMode && !systemIsDark && !ReaderTheme.preset(id: id).isDark
+        if followSystemDarkMode && !takesEffect { followSystemDarkMode = false }
+        if takesEffect { lightThemeMemoryId = id }
+        themeId = id
+    }
+
+    /// 底栏日夜快捷键：目标按「当前生效主题」算（跟随开启时它与 themeId 可能不同），
+    /// 深 → 牛皮纸、浅 → 夜间，与设置面板走同一条 `onThemePicked`。
+    func toggleDayNight(systemIsDark: Bool) {
+        let target = effectiveTheme(systemIsDark: systemIsDark).isDark ? ReaderTheme.kraft.id : ReaderTheme.night.id
+        onThemePicked(target, systemIsDark: systemIsDark)
     }
 
     /// Layout-affecting values bundled for cheap Equatable diffing — when this

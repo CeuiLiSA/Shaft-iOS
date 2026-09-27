@@ -10,6 +10,11 @@ import SwiftUI
 struct ReaderSettingsPanel: View {
     @Environment(OnboardingStore.self) private var l10n
     @Bindable var settings: NovelReaderSettings
+    @Environment(\.colorScheme) private var colorScheme
+    /// The preset whose text colour the open picker edits — captured when the
+    /// picker opens, so a system day/night flip mid-pick can't write the other
+    /// theme (#1142).
+    @State private var textColorTarget: ReaderTheme?
 
     var body: some View {
         NavigationStack {
@@ -24,6 +29,17 @@ struct ReaderSettingsPanel: View {
                 .padding(16)
             }
             .navigationTitle(l10n.t(.nrSettingsTitle))
+            .sheet(item: $textColorTarget) { theme in
+                HSVColorPickerSheet(
+                    title: l10n.t(.nrTextColor),
+                    initialRGB: theme.textColor.rgb24,
+                    textBackground: theme.backgroundColor
+                ) { rgb in
+                    settings.setTextColor(presetId: theme.id, rgb: rgb)
+                }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -73,11 +89,12 @@ struct ReaderSettingsPanel: View {
         section(l10n.t(.nrSectionTheme)) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
+                    // 选中环跟着**生效**主题走（跟随开启时它可能不是 themeId，#1132）。
+                    let effectiveId = settings.effectiveTheme(systemIsDark: colorScheme == .dark).id
                     ForEach(ReaderTheme.presets) { theme in
-                        let selected = settings.themeId == theme.id
+                        let selected = effectiveId == theme.id
                         Button {
-                            settings.themeId = theme.id
-                            if !theme.isDark { settings.lastLightThemeId = theme.id }
+                            settings.onThemePicked(theme.id, systemIsDark: colorScheme == .dark)
                         } label: {
                             VStack(spacing: 6) {
                                 Circle()
@@ -103,12 +120,50 @@ struct ReaderSettingsPanel: View {
                 }
                 .padding(.vertical, 2)
             }
+            textColorRows
             Toggle(l10n.t(.nrFollowDark), isOn: $settings.followSystemDarkMode)
             Toggle(l10n.t(.nrSystemBrightness), isOn: $settings.useSystemBrightness)
             if !settings.useSystemBrightness {
                 floatSlider(l10n.t(.nrCustomBrightness), value: $settings.customBrightness, range: 0.01...1.0)
             }
             floatSlider(l10n.t(.nrWarmFilter), value: $settings.warmFilterStrength, range: 0...0.6)
+        }
+    }
+
+    /// 「文字颜色」(#1142)：配色下方，按当前生效配色记住正文与章节标题的字色；
+    /// 只有该配色存过自定义字色时才露出「恢复默认字色」。
+    @ViewBuilder
+    private var textColorRows: some View {
+        let theme = settings.effectiveTheme(systemIsDark: colorScheme == .dark)
+        Button {
+            textColorTarget = theme
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(l10n.t(.nrTextColor))
+                    .font(.montserratMedium(15))
+                    .foregroundStyle(Theme.v3Text1)
+                Text(HSV.hex(theme.textColor.rgb24))
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.v3Text2)
+                Text(l10n.t(.nrTextColorHint))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.v3Text2)
+            }
+            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        if settings.customTextColor(presetId: theme.id) != nil {
+            Button {
+                settings.setTextColor(presetId: theme.id, rgb: nil)
+            } label: {
+                Text(l10n.t(.nrTextColorReset))
+                    .font(.montserratMedium(14))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -131,6 +186,7 @@ struct ReaderSettingsPanel: View {
                     }
                 }
                 Toggle(l10n.t(.nrTapReversed), isOn: $settings.tapZoneReversed)
+                Toggle(l10n.t(.nrTapAllForward), isOn: $settings.tapAllForward)
             }
             intSlider(l10n.t(.nrAutoPageInterval), value: $settings.autoPageIntervalSec, range: 5...60, suffix: "s")
         }

@@ -449,3 +449,107 @@ struct ReaderExportSheet: View {
         .presentationDetents([.fraction(0.45)])
     }
 }
+
+// MARK: - 朗读设置 (ReaderTtsSettingsDialog, #1139)
+
+/// Upstream `showReaderTtsSettings`: one connected group — the speed row
+/// (「朗读速度 · 1.00x」, a checkable 0.5…2× list) and four switches — then the
+/// 13pt secondary follow hint. Changing speed mid-read re-queues the current
+/// utterance at the new rate, like the Android service.
+struct ReaderTtsSettingsSheet: View {
+    @Bindable var settings: NovelReaderSettings
+    let sessionId: String
+    @Environment(OnboardingStore.self) private var l10n
+    @Environment(\.dismiss) private var dismiss
+
+    private static let speeds: [Double] = [0.5, 0.75, 1, 1.25, 1.5, 2]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    Menu {
+                        Picker(l10n.t(.readerMenuTtsSpeed), selection: Binding(
+                            get: { settings.ttsSpeed },
+                            set: { speed in
+                                settings.ttsSpeed = speed
+                                let player = NovelTtsPlayer.shared
+                                if player.playback.isActive, let id = player.playback.sessionId {
+                                    player.setSpeed(sessionId: id, speed: speed)
+                                }
+                            }
+                        )) {
+                            ForEach(Self.speeds, id: \.self) { Text(speedLabel($0)).tag($0) }
+                        }
+                    } label: {
+                        Text("\(l10n.t(.readerMenuTtsSpeed)) · \(speedLabel(settings.ttsSpeed))")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Theme.v3Text1)
+                            .lineSpacing(15 * 0.4)
+                            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                            .padding(.horizontal, 18)
+                            .contentShape(.rect)
+                    }
+                    .background(rowBackground(0))
+
+                    toggleRow(1, l10n.t(.readerTtsHighlight), $settings.ttsHighlight)
+                    toggleRow(2, l10n.t(.readerTtsAutoPage), $settings.ttsAutoPage)
+                    toggleRow(3, l10n.t(.readerTtsDoubleTap), $settings.ttsDoubleTap)
+                    toggleRow(4, l10n.t(.readerTtsShowPageAction), $settings.ttsShowPageAction)
+
+                    Text(l10n.t(.readerTtsFollowHint))
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.v3Text2)
+                        .lineSpacing(13 * 0.5)
+                        .padding(.horizontal, 4)
+                        .padding(.top, 16)
+                        .padding(.bottom, 4)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+            .navigationTitle(l10n.t(.readerTtsSettings))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(l10n.t(.stSure)) { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func speedLabel(_ speed: Double) -> String {
+        String(format: l10n.t(.readerTtsSpeedValue), speed)
+    }
+
+    private func toggleRow(_ index: Int, _ label: String, _ isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Text(label)
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.v3Text1)
+                .lineSpacing(15 * 0.4)
+        }
+        .tint(Color.accentColor)
+        .frame(minHeight: 56)
+        .padding(.horizontal, 18)
+        .background(rowBackground(index))
+    }
+
+    /// `rowSurface(index, 5)`: card fill + hairline, a connected group — 20pt
+    /// outer corners on the first / last rows, 5pt inner corners between them.
+    private func rowBackground(_ index: Int) -> some View {
+        rowShape(index).fill(Theme.v3CardFill)
+            .overlay(rowShape(index).stroke(Theme.v3CardHairline, lineWidth: 0.5))
+    }
+
+    private func rowShape(_ index: Int) -> UnevenRoundedRectangle {
+        let outer: CGFloat = 20, inner: CGFloat = 5
+        return UnevenRoundedRectangle(
+            topLeadingRadius: index == 0 ? outer : inner,
+            bottomLeadingRadius: index == 4 ? outer : inner,
+            bottomTrailingRadius: index == 4 ? outer : inner,
+            topTrailingRadius: index == 0 ? outer : inner,
+            style: .continuous
+        )
+    }
+}

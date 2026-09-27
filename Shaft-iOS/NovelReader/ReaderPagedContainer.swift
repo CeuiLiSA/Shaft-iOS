@@ -164,6 +164,8 @@ final class NovelPagedReaderView: UIView, UIGestureRecognizerDelegate {
 
     var flipMode: ReaderFlipMode = .simulation
     var tapZoneReversed = false
+    /// One-handed mode: both side zones flip forward; the center still toggles chrome.
+    var tapAllForward = false
     var touchLocked = false
     var menuStrings = ReaderMenuStrings() {
         didSet { allViews.forEach { $0.menuStrings = menuStrings } }
@@ -176,8 +178,16 @@ final class NovelPagedReaderView: UIView, UIGestureRecognizerDelegate {
     var onImageTap: ((PageElement.Image) -> Void)?
     var onLinkTap: ((URL) -> Void)?
     var onSelectionAction: ((ReaderSelectionAction, ReaderTextSelection) -> Void)?
+    /// TTS 「双击文字切换朗读位置」(#1139). Non-nil arms a double-tap recognizer;
+    /// single taps then wait for it to fail (upstream onSingleTapConfirmed).
+    var onTextDoubleTap: ((Int) -> Void)?
+
+    /// A drag or settle animation is in flight — TTS auto-follow waits.
+    var isUserInteracting: Bool { animator.isRunning || dragDirection != 0 }
 
     private var allViews: [ReaderPageView] { [viewA, viewB, viewC] }
+    private var singleTap: UITapGestureRecognizer?
+    private var doubleTap: UITapGestureRecognizer?
 
     // Drag state.
     private var dragDirection: CGFloat = 0 // +1 forward, -1 backward
@@ -216,6 +226,12 @@ final class NovelPagedReaderView: UIView, UIGestureRecognizerDelegate {
         let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
         tap.delegate = self
         addGestureRecognizer(tap)
+        singleTap = tap
+        let double = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
+        double.numberOfTapsRequired = 2
+        double.delegate = self
+        addGestureRecognizer(double)
+        doubleTap = double
     }
 
     @available(*, unavailable)
@@ -293,12 +309,20 @@ final class NovelPagedReaderView: UIView, UIGestureRecognizerDelegate {
 
     override func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool {
         if touchLocked { return false }
+        if g === doubleTap {
+            return onTextDoubleTap != nil && !currentView.hasActiveSelection
+                && currentView.absoluteCharIndex(at: g.location(in: currentView)) != nil
+        }
         if let pan = g as? UIPanGestureRecognizer {
             if currentView.hasActiveSelection || animator.isRunning { return false }
             let v = pan.velocity(in: self)
             return abs(v.x) > abs(v.y)
         }
         return true
+    }
+
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRequireFailureOf other: UIGestureRecognizer) -> Bool {
+        g === singleTap && other === doubleTap && onTextDoubleTap != nil
     }
 
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
@@ -311,6 +335,11 @@ final class NovelPagedReaderView: UIView, UIGestureRecognizerDelegate {
         return true
     }
 
+    @objc private func handleDoubleTap(_ g: UITapGestureRecognizer) {
+        guard !touchLocked, let index = currentView.absoluteCharIndex(at: g.location(in: currentView)) else { return }
+        onTextDoubleTap?(index)
+    }
+
     @objc private func handleTap(_ g: UITapGestureRecognizer) {
         guard !touchLocked else { return }
         if currentView.hasActiveSelection {
@@ -320,9 +349,9 @@ final class NovelPagedReaderView: UIView, UIGestureRecognizerDelegate {
         let x = g.location(in: self).x
         let third = bounds.width / 3
         if x < third {
-            tapZoneReversed ? flipForward() : flipBackward()
+            tapZoneReversed || tapAllForward ? flipForward() : flipBackward()
         } else if x > bounds.width - third {
-            tapZoneReversed ? flipBackward() : flipForward()
+            tapZoneReversed && !tapAllForward ? flipBackward() : flipForward()
         } else {
             onTapCenter?()
         }
