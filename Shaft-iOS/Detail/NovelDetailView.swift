@@ -134,6 +134,7 @@ struct NovelDetailView: View {
     @State private var toolbarTitleVisible = false
     @Environment(OnboardingStore.self) private var l10n
     @Environment(\.openURL) private var openURL
+    @Environment(\.pushRoute) private var pushRoute
     @Environment(\.dismiss) private var dismiss
 
     init(novelId: Int64) {
@@ -216,6 +217,19 @@ struct NovelDetailView: View {
                                             .background(Color(.secondarySystemBackground), in: .capsule)
                                     }
                                     .buttonStyle(.plain)
+                                    .contextMenu {
+                                        Button {
+                                            UIPasteboard.general.string = tag.name
+                                        } label: { Label(l10n.t(.actionCopy), systemImage: "doc.on.doc") }
+                                        // 「该作者相关作品」(#1102) — the author comes from the novel itself.
+                                        if let authorId = novel.user?.id, authorId > 0, let name = tag.name, !name.isEmpty {
+                                            Button {
+                                                pushRoute(.userIllustTag(userId: authorId, tag: name, category: "novels"))
+                                            } label: {
+                                                Label(l10n.t(.tagMenuAuthorWorks), systemImage: "person.crop.rectangle.stack")
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             .padding(.horizontal, 16)

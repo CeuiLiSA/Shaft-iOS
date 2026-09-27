@@ -587,7 +587,7 @@ struct V3TagFilterBar: View {
                 NavigationLink(value: AppRoute.userIllustTag(
                     userId: userId, tag: tag.name ?? "", category: category
                 )) {
-                    chipLabel(text: chipText(tag), color: Theme.v3TagText)
+                    tagChip(tag)
                 }
                 .buttonStyle(.plain)
                 .contextMenu { tagMenu(tag) }
@@ -619,6 +619,21 @@ struct V3TagFilterBar: View {
         var s = tag.name ?? ""
         if let t = tag.translatedName, !t.isEmpty { s += "  \(t)" }
         return s
+    }
+
+    /// Original follows 标签原文亮暗度, translation keeps the un-boosted colour.
+    private func tagChip(_ tag: Tag) -> some View {
+        var text = Text(tag.name ?? "").foregroundColor(TagLegibility.shared.originalText)
+        if let t = tag.translatedName, !t.isEmpty {
+            text = text + Text("  \(t)").foregroundColor(Theme.v3TagText)
+        }
+        return text
+            .font(.system(size: 11.5))
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Theme.v3TagChipFill, in: .capsule)
+            .overlay(Capsule().strokeBorder(Theme.v3TagChipBorder, lineWidth: 1 / UIScreen.main.scale))
     }
 
     private func chipLabel(text: String, color: Color) -> some View {

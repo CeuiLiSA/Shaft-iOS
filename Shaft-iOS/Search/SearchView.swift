@@ -81,6 +81,8 @@ struct SearchView: View {
     @State private var hasSwitchedSearchType = false
     @State private var typePickerFromClipboard = false
 
+    /// History row awaiting the delete confirmation (#1146).
+    @State private var pendingHistoryDelete: SearchHistoryEntry?
     @State private var hints: [AutoCompleteTag] = []
     @State private var hintKeyword = ""
     @State private var hintsVisible = false
@@ -131,6 +133,19 @@ struct SearchView: View {
             titleVisibility: .visible, presenting: dialog
         ) { dialog in
             dialogButtons(dialog)
+        }
+        .alert(
+            l10n.t(.actionDelete),
+            isPresented: Binding(get: { pendingHistoryDelete != nil }, set: { if !$0 { pendingHistoryDelete = nil } }),
+            presenting: pendingHistoryDelete
+        ) { entry in
+            Button(l10n.t(.actionCancel), role: .cancel) {}
+            Button(l10n.t(.actionDelete), role: .destructive) {
+                history.remove(entry)
+                showToast(l10n.t(.searchHistoryDeleted))
+            }
+        } message: { entry in
+            Text(String(format: l10n.t(.searchHistoryDeleteConfirm), entry.keyword))
         }
         .task { await loadTrendingIfNeeded() }
         .task(id: autocompleteRequest) { await runAutocomplete() }
@@ -230,9 +245,9 @@ struct SearchView: View {
             }
             FlowLayout(spacing: 8) {
                 ForEach(history.entries) { entry in
+                    // 删除先二次确认，正文写明目标；确认前不改数据（#1146）。
                     HistoryChip(text: entry.keyword, pinned: false) {
-                        history.remove(entry)
-                        showToast(l10n.t(.searchHistoryDeleted))
+                        pendingHistoryDelete = entry
                     }
                     .onTapGesture { handleHistoryClick(entry) }
                     .onLongPressGesture { dialog = .historyAction(entry) }
@@ -251,7 +266,8 @@ struct SearchView: View {
                     .padding(.vertical, 24)
             } else {
                 FlowLayout(spacing: 8) {
-                    ForEach(Array(trending.prefix(15).enumerated()), id: \.offset) { _, tag in
+                    // 滤掉已屏蔽的标签（pixez#1182）后取前 15 个：先滤后截，屏蔽掉几个也仍然摆满一行。
+                    ForEach(Array(MuteStore.shared.visibleTrendingTags(trending).prefix(15).enumerated()), id: \.offset) { _, tag in
                         HotTagChip(text: hotTagLabel(tag))
                             .onTapGesture {
                                 hideHints()
@@ -1202,9 +1218,26 @@ struct SearchResultsView: View {
     @State private var showUserFilterHint = false
     @State private var historyRecorded = false
     @State private var quotaNotices = BorrowedQuotaNoticeStore.shared
+    @State private var pinnedStore = PinnedTagsStore.shared
+    @State private var pinSnack: PinSnack?
+    @State private var pinScale: CGFloat = 1
+    @State private var pinBusy = false
     @Environment(OnboardingStore.self) private var l10n
+    @Environment(\.pushRoute) private var pushRoute
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     enum Section: Hashable, CaseIterable { case illust, novel, user }
+
+    /// Snackbar after a pin / unpin (`SearchPinController`): 「查看」 opens the
+    /// pinned list, 「撤销」 writes the old row back.
+    private struct PinSnack: Identifiable, Equatable {
+        let id = UUID()
+        let message: String
+        let restore: PinnedTag?
+    }
+
+    private var searchTerms: [String] { SearchTerms.split(word) }
+    private var pinnedMatch: PinnedTag? { pinnedStore.pinnedTag(matching: searchTerms) }
 
     init(word: String, initialSection: String = "illust") {
         self.word = word
@@ -1261,6 +1294,16 @@ struct SearchResultsView: View {
         .navigationTitle("\u{201C}\(word)\u{201D}")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            // 顶栏图钉（pixez#1364「收藏标签组合」）：筛选左侧，一键置顶这次搜索的全部标签。
+            if !searchTerms.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { togglePin() } label: {
+                        Image(systemName: pinnedMatch != nil ? "pin.fill" : "pin")
+                            .scaleEffect(pinScale)
+                    }
+                    .accessibilityLabel(l10n.t(pinnedMatch != nil ? .searchUnpinAction : .searchPinAction))
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     // Upstream keeps the icon on the author tab and emits a
@@ -1330,6 +1373,44 @@ struct SearchResultsView: View {
             }
         }
         .overlay(alignment: .bottom) {
+            if let snack = pinSnack {
+                HStack(spacing: 8) {
+                    Text(snack.message)
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        if let old = snack.restore {
+                            pinnedStore.restore(old)
+                        } else {
+                            pushRoute(.pinnedTags)
+                        }
+                        withAnimation { pinSnack = nil }
+                    } label: {
+                        Text(l10n.t(snack.restore == nil ? .searchPinSnackView : .searchPinSnackUndo))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Theme.v3TextAccent)
+                            .frame(minWidth: 48, minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.leading, 16)
+                .padding(.trailing, 8)
+                .padding(.vertical, 4)
+                .background(.regularMaterial, in: .rect(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.v3CardHairline, lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.16), radius: 12, y: 4)
+                .padding(.horizontal, 14)
+                .padding(.bottom, quotaNotices.notice == nil ? 12 : 82)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .task(id: snack.id) {
+                    // Snackbar.LENGTH_LONG
+                    do { try await Task.sleep(for: .milliseconds(2750)) } catch { return }
+                    withAnimation { if pinSnack?.id == snack.id { pinSnack = nil } }
+                }
+            }
+        }
+        .overlay(alignment: .bottom) {
             if showUserFilterHint {
                 Text(l10n.t(.filterUserUnsupported))
                     .font(.subheadline)
@@ -1379,6 +1460,37 @@ struct SearchResultsView: View {
                 }
             }
         }
+    }
+
+    /// `SearchPinController.toggle`: one tap, no confirmation — both directions
+    /// are reversible. Pin bounces back from 0.6 with one overshoot (420 ms) and
+    /// a confirm haptic; unpin just eases back from 0.85 (200 ms). With Reduce
+    /// Motion only the icon swap and haptic remain.
+    private func togglePin() {
+        let terms = searchTerms
+        guard !terms.isEmpty, !pinBusy else { return }
+        pinBusy = true
+        defer { pinBusy = false }
+        let display = SearchTerms.displayName(terms)
+        if let current = pinnedMatch {
+            pinnedStore.unpin(current.name)
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            animatePin(from: 0.85, pinned: false)
+            withAnimation { pinSnack = PinSnack(message: String(format: l10n.t(.searchUnpinnedSnack), display), restore: current) }
+        } else {
+            // Card preview: the first three illustration results on screen.
+            let previews = vm.illusts.prefix(3).compactMap { $0.imageUrls?.squareMedium ?? $0.imageUrls?.medium }
+            pinnedStore.pin(terms: terms, previewURLs: previews)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            animatePin(from: 0.6, pinned: true)
+            withAnimation { pinSnack = PinSnack(message: String(format: l10n.t(.searchPinnedSnack), display), restore: nil) }
+        }
+    }
+
+    private func animatePin(from scale: CGFloat, pinned: Bool) {
+        guard !reduceMotion else { return }
+        pinScale = scale
+        withAnimation(pinned ? .spring(duration: 0.42, bounce: 0.5) : .easeOut(duration: 0.2)) { pinScale = 1 }
     }
 
     private func label(for s: Section) -> String {
@@ -1473,14 +1585,18 @@ private struct SearchNovelList: View {
     }
 }
 
-private struct PixivWebLoginSheet: View {
+struct PixivWebLoginSheet: View {
+    /// Page to open — the pixiv home by default; the login form when an old
+    /// (possibly stale) cookie would otherwise just show the logged-in home.
+    var url = URL(string: "https://www.pixiv.net/")!
+    var title: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(OnboardingStore.self) private var l10n
 
     var body: some View {
         NavigationStack {
-            PixivWebLoginView(url: URL(string: "https://www.pixiv.net/")!)
-                .navigationTitle(l10n.t(.filterWebLogin))
+            PixivWebLoginView(url: url)
+                .navigationTitle(title ?? l10n.t(.filterWebLogin))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {

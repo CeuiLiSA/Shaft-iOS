@@ -1337,7 +1337,7 @@ private struct NovelRowTagChip: View {
         Text(text)
             .font(.system(size: 11, weight: .medium))
             .lineLimit(1)
-            .foregroundStyle(Theme.v3TagText)
+            .foregroundStyle(TagLegibility.shared.originalText)
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(Theme.v3Surface1, in: .capsule)

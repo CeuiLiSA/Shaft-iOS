@@ -490,6 +490,7 @@ final class HotTagsVM {
 /// illust/novel tab preselected; long-press → the representative illust.
 struct HotTagsGridView: View {
     let vm: HotTagsVM
+    @State private var mute = MuteStore.shared
     private var contentType: String { vm.contentType }
 
     private let columns = [
@@ -506,12 +507,14 @@ struct HotTagsGridView: View {
             } else if vm.tags.isEmpty, vm.isLoading {
                 TagGridSkeleton(columns: 3)
             } else {
+                // 已屏蔽的标签不再摆出来（pixez#1182）；先滤再取头图，头图始终落在第一个可见标签上。
+                let visible = mute.visibleTrendingTags(vm.tags)
                 LazyVStack(spacing: 1) {
-                    if let head = vm.tags.first {
+                    if let head = visible.first {
                         HotTagCell(tag: head, contentType: contentType, heightRatio: 0.66, large: true)
                     }
                     LazyVGrid(columns: columns, spacing: 1) {
-                        ForEach(vm.tags.dropFirst()) { tag in
+                        ForEach(visible.dropFirst()) { tag in
                             HotTagCell(tag: tag, contentType: contentType, heightRatio: 1.0, large: false)
                         }
                     }

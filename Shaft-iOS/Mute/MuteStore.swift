@@ -83,6 +83,20 @@ final class MuteStore {
     }
     func isTagMuted(_ tag: String) -> Bool { mutedTags.contains(tag) }
 
+    /// Upstream `IllustNovelFilter.isTagNameMuted` (pixez#1182): does a bare tag
+    /// name — a hot-tag row / shelf entry with no work attached — hit the
+    /// muted-tag rules? Same whole-name rule as the work tag filter.
+    func isTagNameMuted(_ name: String?) -> Bool {
+        guard let name, !name.isEmpty else { return false }
+        return mutedTags.contains(name)
+    }
+
+    /// Hot tags minus the muted ones — filtered at render time so muting /
+    /// unmuting anywhere re-filters without another request.
+    func visibleTrendingTags(_ tags: [TrendingTag]) -> [TrendingTag] {
+        tags.filter { !isTagNameMuted($0.tag) }
+    }
+
     func toggleUser(_ id: Int64) {
         if mutedUserIDs.contains(id) { mutedUserIDs.remove(id) }
         else { mutedUserIDs.insert(id) }

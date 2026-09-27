@@ -1,6 +1,32 @@
 import SwiftUI
 import Observation
 
+// MARK: - Search terms (tag combinations, pixez#1364)
+
+/// A pinned 「标签组合」 is just a pinned keyword whose text is several
+/// space-joined terms — the same data the search page, history and the
+/// pinned list already use (upstream `PinnedSearchTerms.kt`). A single tag is
+/// the one-term special case, so no second storage path exists.
+enum SearchTerms {
+    /// Same rule as the search box: split on whitespace, drop empties.
+    static func split(_ keyword: String?) -> [String] {
+        guard let keyword else { return [] }
+        return keyword.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+    }
+
+    /// Two term lists name the same combination. pixiv's space is AND, so order
+    /// is irrelevant (「原神 胡桃」 == 「胡桃 原神」); a query containing `OR`
+    /// is order-sensitive and must match exactly.
+    static func same(_ a: [String], _ b: [String]) -> Bool {
+        guard a.count == b.count else { return false }
+        if a.contains("OR") || b.contains("OR") { return a == b }
+        return Set(a) == Set(b)
+    }
+
+    /// 「原神 + 胡桃」 — the combination's display name (card title, snackbars).
+    static func displayName(_ terms: [String]) -> String { terms.joined(separator: " + ") }
+}
+
 // MARK: - Store
 
 /// App-wide truth for pinned ("置顶") search tags, persisted to UserDefaults.
@@ -47,6 +73,31 @@ final class PinnedTagsStore {
             PinnedTag(name: n, translatedName: translatedName, previewURLs: previews, pinnedAt: Date()),
             at: 0
         )
+        save()
+    }
+
+    /// The pinned entry equivalent to `terms` (see `SearchTerms.same`), if any.
+    func pinnedTag(matching terms: [String]) -> PinnedTag? {
+        guard !terms.isEmpty else { return nil }
+        return tags.first { SearchTerms.same(SearchTerms.split($0.name), terms) }
+    }
+
+    /// Pin the current search from the results page with up to three result
+    /// thumbnails as the card preview.
+    func pin(terms: [String], previewURLs: [String]) {
+        let name = terms.joined(separator: " ")
+        guard let n = normalized(name) else { return }
+        tags.removeAll { $0.name == n }
+        tags.insert(PinnedTag(name: n, translatedName: nil, previewURLs: Array(previewURLs.prefix(3)), pinnedAt: Date()), at: 0)
+        save()
+    }
+
+    /// Undo of an unpin: write the old row back as it was — same pin time and
+    /// previews, so it returns to its old place instead of counting as a new pin.
+    func restore(_ tag: PinnedTag) {
+        tags.removeAll { $0.name == tag.name }
+        let index = tags.firstIndex { $0.pinnedAt < tag.pinnedAt } ?? tags.endIndex
+        tags.insert(tag, at: index)
         save()
     }
 
@@ -151,25 +202,49 @@ struct PinnedTagsView: View {
 private struct PinnedTagCard: View {
     let tag: PinnedTag
     let onUnpin: () -> Void
+    @Environment(OnboardingStore.self) private var l10n
+
+    /// Keyword split on spaces; more than one term is a pinned 「标签组合」 (pixez#1364).
+    private var terms: [String] { SearchTerms.split(tag.name) }
+    private var isCombo: Bool { terms.count > 1 }
 
     private var title: String {
         let t = tag.translatedName ?? ""
         return t.isEmpty ? tag.name : t
     }
+    /// Combos always show 「N 个标签的组合」; single tags show the original name
+    /// only when a distinct translation took the title.
     private var showSubtitle: Bool {
+        if isCombo { return true }
         guard let t = tag.translatedName, !t.isEmpty else { return false }
         return t != tag.name
+    }
+
+    /// 「原神 + 胡桃」 with each joining 「+」 in `textAccent`, so the terms read apart.
+    private var comboTitle: Text {
+        terms.enumerated().reduce(Text("")) { text, pair in
+            let (index, term) = pair
+            let joined = index == 0 ? text : text + Text(" ") + Text("+").foregroundColor(Theme.v3TextAccent) + Text(" ")
+            return joined + Text(term)
+        }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("#\(title)")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(.primary)
+                    if isCombo {
+                        comboTitle
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                    } else {
+                        Text("#\(title)")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.primary)
+                    }
                     if showSubtitle {
-                        Text(tag.name)
+                        Text(isCombo ? String(format: l10n.t(.pinnedTagComboCountFmt), terms.count) : tag.name)
                             .font(.system(size: 14))
                             .foregroundStyle(.secondary)
                     }
