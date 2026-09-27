@@ -475,4 +475,55 @@ enum LocalizedKey: String, CaseIterable, Sendable {
     case bookmarkFilterTagSearchHint, bookmarkFilterTagModeAll, bookmarkFilterTagModeAny, bookmarkFilterTagEmpty
     case bookmarkFilterAuthorEmpty, bookmarkShelfPublicIllust, bookmarkShelfPrivateIllust, bookmarkShelfPublicNovel
     case bookmarkShelfPrivateNovel
+
+    // MARK: 收藏振动反馈 (Android settings_like_haptic*)
+    case settingsLikeHaptic, settingsLikeHapticDesc
+
+    // MARK: V3 详情多图自动展开 (Android artwork_v3_auto_expand_*, #1090)
+    case artworkV3AutoExpandTitle, artworkV3AutoExpandDesc
+
+    // MARK: V3 悬浮胶囊位置 (Android artwork_v3_fab_position_*, #1090)
+    case artworkV3FabPositionTitle, artworkV3FabPositionDesc, artworkV3FabPositionCenter, artworkV3FabPositionLeft, artworkV3FabPositionRight
+
+    // MARK: 小说阅读器单手模式 (Android setting_tap_all_forward, #1150)
+    case nrTapAllForward
+
+    // MARK: HSV/HEX 取色器 + 阅读器文字颜色 (Android custom_theme_color_* / setting_text_color*, #1142)
+    case customThemeColorTitle, customThemeColorHexLabel, customThemeColorHexHint, customThemeColorHint, nrTextColor, nrTextColorHint, nrTextColorReset
+
+    // MARK: 小说朗读 TTS (Android reader_tts_* / reader_menu_tts_*, #1113 #1139)
+    case readerMenuTtsStart, readerMenuTtsPause, readerMenuTtsResume, readerMenuTtsSpeed, readerTtsSpeedValue, readerTtsTitle, readerTtsProgress, readerTtsEmpty, readerTtsInitFailed, readerTtsLanguageUnavailable, readerTtsSettings, readerTtsFromPage, readerTtsHighlight, readerTtsAutoPage, readerTtsDoubleTap, readerTtsShowPageAction, readerTtsFollowHint
+
+    // MARK: 搜索结果页图钉 / 标签组合 (Android search_pin* / pinned_tag_combo_count, pixez#1364)
+    case searchPinAction, searchUnpinAction, searchPinnedSnack, searchUnpinnedSnack, searchPinSnackView, searchPinSnackUndo, pinnedTagComboCountFmt
+
+    // MARK: 搜索历史删除确认 (Android search_history_delete_confirm, #1146)
+    case searchHistoryDeleteConfirm
+
+    // MARK: 标签菜单「该作者相关作品」 (Android tag_menu_author_works, #1102)
+    case tagMenuAuthorWorks
+
+    // MARK: 官网发现 (Android web_discovery_* / string_390 / 440 / 441 / street_web_login_confirm, #1121)
+    case webDiscoveryLoginNeeded, webDiscoveryWebLogin, webDiscoveryModeAll, webDiscoveryModeSafe, webDiscoveryModeR18, webDiscoveryGoLogin
+
+    // MARK: 下载空间不足暂停 (Android download_paused_low_storage, pixez#1361)
+    case downloadPausedLowStorage
+
+    // MARK: 关注库 + V3 本地库筛选面板 (Android following_* / bookmark_filter_group_* 等, 2026-09-25)
+    case followingLibraryMenuEntry, followingLibraryOpenClassic, followingLibrarySearchHint, followingLibraryEmpty, followingLibraryEmptyFiltered, followingLibrarySyncing, followingLibrarySyncQueued, followingLibraryTotalCount, followingLibraryFilterApply, bookmarkLibraryTotalCount, followingSortFollowedNewest, followingSortFollowedOldest, followingSortActiveNewest, followingSortActiveOldest, followingSortNameAsc, followingFilterSectionYear, followingFilterTagHint, followingMirrorReadyTitle, followingMirrorReadyMessage, bookmarkFilterGroupWorks, bookmarkFilterGroupPopularityTime, bookmarkFilterGroupTime, bookmarkFilterActiveCount, bookmarkFilterNoneActive, bookmarkFilterTagModeLabel, bookmarkShelfPublicUser, bookmarkShelfPrivateUser, followingLibraryTitle
+
+    // MARK: 标签原文亮暗度 (Android tag_legibility_boost_*)
+    case tagLegibilityBoost, tagLegibilityBoostHint, tagLegibilityBoostLight, tagLegibilityBoostDark, tagLegibilityBoostNoneLight, tagLegibilityBoostNoneDark, tagLegibilityBoostPercentLight, tagLegibilityBoostPercentDark, tagLegibilityBoostPreviewTag
+
+    // MARK: 动态过滤已收藏 (Android delete_star_illust, #1130)
+    case stDeleteStarFeed
+
+    // MARK: 收藏库边同步边浏览 (Android bookmark_chip_syncing, #1109)
+    case bookmarkChipSyncing
+
+    // MARK: 平板侧边导航栏 (Android rail_*, #1087)
+    case railBookmarks, railDownloads, railOpenMenu
+
+    // MARK: 平板推荐页页头 (Android recommend)
+    case railRecommendTitle
 }
