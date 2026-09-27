@@ -21,6 +21,19 @@ struct WaterfallGrid<Item: Identifiable, Cell: View>: View {
     let cell: (Item) -> Cell
 
     @State private var columnByID: [Item.ID: Int] = [:]
+    /// Column count the cached assignments were made for — a cache from another
+    /// count (e.g. the first pass before the width was known) is ignored.
+    @State private var cachedColumns = 0
+    /// The grid's own content width — split view / slide-over / the tablet rail
+    /// all make it narrower than the screen.
+    @State private var contentWidth: CGFloat = 0
+
+    /// Columns actually laid out: phones keep the 「每行几列」 setting; tablets size
+    /// cards like the setting does on a phone and fit as many as the width takes
+    /// (`AdaptiveStaggerColumns`, #1087).
+    private var effectiveColumns: Int {
+        AdaptiveStaggerColumns.columns(contentWidth: contentWidth, base: columns)
+    }
 
     init(
         items: [Item],
@@ -37,7 +50,8 @@ struct WaterfallGrid<Item: Identifiable, Cell: View>: View {
     }
 
     var body: some View {
-        let buckets = distribute()
+        let columns = effectiveColumns
+        let buckets = distribute(columns: columns)
         HStack(alignment: .top, spacing: spacing) {
             ForEach(0..<columns, id: \.self) { col in
                 LazyVStack(spacing: spacing) {
@@ -48,6 +62,9 @@ struct WaterfallGrid<Item: Identifiable, Cell: View>: View {
                 .frame(maxWidth: .infinity)
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
+        // A new column count re-deals every card; stale assignments would pile
+        // everything into the old columns.
         .onChange(of: items.map(\.id)) { _, ids in
             // Drop assignments for items that left the list, so the cache
             // doesn't grow unbounded across many refreshes.
@@ -56,15 +73,16 @@ struct WaterfallGrid<Item: Identifiable, Cell: View>: View {
         }
     }
 
-    private func distribute() -> [[Item]] {
+    private func distribute(columns: Int) -> [[Item]] {
         var heights = [Double](repeating: 0, count: columns)
         var buckets = [[Item]](repeating: [], count: columns)
         var newAssignments: [Item.ID: Int] = [:]
 
+        let cache = cachedColumns == columns ? columnByID : [:]
         for item in items {
             let h = estimatedRelativeHeight(item)
             let idx: Int
-            if let cached = columnByID[item.id] {
+            if let cached = cache[item.id] {
                 idx = min(max(cached, 0), columns - 1)
             } else {
                 // Argmin: pick the shortest column.
@@ -84,11 +102,41 @@ struct WaterfallGrid<Item: Identifiable, Cell: View>: View {
         // @State during view evaluation.
         if !newAssignments.isEmpty {
             Task { @MainActor in
+                // A new column count re-deals every card; drop the old deal first.
+                if cachedColumns != columns {
+                    columnByID = [:]
+                    cachedColumns = columns
+                }
                 for (id, col) in newAssignments where columnByID[id] == nil {
                     columnByID[id] = col
                 }
             }
         }
         return buckets
+    }
+}
+
+
+/// 瀑布流按列表实际宽度决定列数（平板重排，upstream `AdaptiveStaggerColumns`, #1087）。
+///
+/// 「每行几列」设置（2/3/4）描述的是**卡片大小**：在 360pt 宽的手机上排几列。列表变宽时
+/// 保持卡片的物理尺寸，按宽度多排几列；窄于参考宽度时不少于设置值。只在平板上生效
+/// （设备最小边 ≥ 600pt），手机横竖屏与以前一致。
+/// `columns = floor((contentWidth + gap) / (minCardWidth + gap))`。
+enum AdaptiveStaggerColumns {
+    private static let referenceWidth: CGFloat = 360
+    private static let gap: CGFloat = 8
+
+    static var isTablet: Bool {
+        let bounds = UIScreen.main.bounds
+        return min(bounds.width, bounds.height) >= 600
+    }
+
+    static func columns(contentWidth: CGFloat, base: Int) -> Int {
+        let base = max(base, 1)
+        guard isTablet, contentWidth > 0 else { return base }
+        let minCard = referenceWidth / CGFloat(base)
+        let fit = Int((contentWidth + gap) / (minCard + gap))
+        return max(base, fit)
     }
 }

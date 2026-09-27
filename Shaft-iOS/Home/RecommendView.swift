@@ -103,6 +103,8 @@ struct RecommendView: View {
     @State private var subTab: SubTab = .recommended
     @State private var vm = RecommendViewModel()
     @Environment(OnboardingStore.self) private var l10n
+    @Environment(\.homeRailMode) private var railMode
+    @Environment(\.pushRoute) private var pushRoute
 
     enum SubTab: Hashable, CaseIterable {
         case recommended, hotTag
@@ -137,11 +139,57 @@ struct RecommendView: View {
         // floating tab bar) instead of stopping above it.
         .ignoresSafeArea(.container, edges: .bottom)
         .safeAreaInset(edge: .top, spacing: 0) {
-            PagerTabBar(
-                titles: SubTab.allCases.map { ($0, title($0)) },
-                selection: $subTab
-            )
+            if railMode {
+                wideHeader
+            } else {
+                PagerTabBar(
+                    titles: SubTab.allCases.map { ($0, title($0)) },
+                    selection: $subTab
+                )
+            }
         }
+        .toolbar(railMode ? .hidden : .automatic, for: .navigationBar)
+    }
+
+    /// Wide window (tablet rail showing, #1087): the phone toolbar + pager strip
+    /// become the V3 header shared with 发现 / 动态 — 「推荐」 24 bold title row
+    /// (56pt, paddings 18/16, title inset 6) with search, then the 「推荐作品 /
+    /// 热门标签」 segmented toggle (16pt) inset 20.
+    private var wideHeader: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                Text(l10n.t(.railRecommendTitle))
+                    .font(.system(size: 24, weight: .bold))
+                    .tracking(24 * -0.02)
+                    .foregroundStyle(Theme.v3Text1)
+                    .padding(.leading, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button { pushRoute(.search) } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(Theme.v3Text1)
+                        .frame(width: 44, height: 44)
+                        .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(l10n.t(.searchTitle))
+            }
+            .padding(.leading, 18)
+            .padding(.trailing, 16)
+            .frame(height: 56)
+
+            SegmentedToggle(
+                titles: SubTab.allCases.map(title),
+                selected: SubTab.allCases.firstIndex(of: subTab) ?? 0,
+                textSize: 16,
+                onSelect: { subTab = SubTab.allCases[$0] },
+                onReselect: {}
+            )
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.v3Bg)
     }
 }
 
@@ -210,6 +258,7 @@ struct RecommendedWorksView: View {
 
 struct PopularTagsView: View {
     let vm: RecommendViewModel
+    @State private var mute = MuteStore.shared
 
     // Upstream uses a bare GridLayoutManager(ctx, 3): no item spacing, no
     // outer margins — the tag tiles butt up against each other edge to edge.
@@ -229,7 +278,8 @@ struct PopularTagsView: View {
                 TagGridSkeleton(columns: 3)
             } else {
                 LazyVGrid(columns: columns, spacing: 0) {
-                    ForEach(vm.trendingTags) { tag in
+                    // 已屏蔽的标签不再摆出来（pixez#1182）。
+                    ForEach(mute.visibleTrendingTags(vm.trendingTags)) { tag in
                         NavigationLink(value: AppRoute.tagResults(tag: tag.tag ?? "")) {
                             TagGridCell(tag: tag)
                         }

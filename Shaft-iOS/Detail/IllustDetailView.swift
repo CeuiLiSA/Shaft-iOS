@@ -241,7 +241,9 @@ struct IllustDetailView: View {
     /// page body per scroll tick. Boxed, only the rare `actionBarVisible` flip
     /// invalidates the view.
     @State private var scrollAnchor = ScrollAnchor()
-    @State private var pagesExpanded = false
+    /// 设置「多图自动展开」(#1090) 打开时进页即展开态：折叠态从一开始就不存在，
+    /// 没有「展开剩余 X 张」覆盖层；右上角「收起」胶囊直接出现（无入场动效）。
+    @State private var pagesExpanded = AppSettingsStore.shared.artworkV3AutoExpandMultiPage
     /// `ArtworkV3Fragment.detailPanelExpanded` — seeded from the setting (#1044),
     /// then owned by the page so scrolling away and back doesn't reset it.
     @State private var detailPanelExpanded = !AppSettingsStore.shared.detailPanelCollapsedByDefault
@@ -386,6 +388,103 @@ struct IllustDetailView: View {
     }
 
     var body: some View {
+        GeometryReader { geo in
+            // 平板（设备最小边 ≥ 600）且窗口够宽：作品舞台 + 信息栏的新排版（#1087）；
+            // 分屏 / 台前调度窄窗口回到手机排版。
+            if AdaptiveStaggerColumns.isTablet, geo.size.width >= 600, let illust = vm.illust {
+                tabletBody(illust: illust, size: CGSize(
+                    width: geo.size.width + geo.safeAreaInsets.leading + geo.safeAreaInsets.trailing,
+                    height: geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
+                ))
+            } else {
+                phoneBody
+            }
+        }
+        .modifier(detailPresentations)
+    }
+
+    // MARK: Tablet (ArtworkTabletStage, #1087)
+
+    /// Window wider than tall: stage leading, info column trailing (36 % of the
+    /// window, clamped 400–520pt, never more than half). Otherwise the stage
+    /// takes the top 52 % and the info column sits below. The column is the page
+    /// colour at 92 % over the blurred ambient artwork, rounded 28pt on the side
+    /// facing the stage; its sections and actions are the phone ones.
+    @ViewBuilder
+    private func tabletBody(illust: Illust, size: CGSize) -> some View {
+        let sideBySide = size.width > size.height
+        let infoWidth = min(max(size.width * 0.36, 400), 520, size.width / 2)
+        let stage = ArtworkTabletStage(
+            illust: illust,
+            pages: IllustPages.pages(for: illust),
+            forceOriginal: vm.forceOriginalPreview,
+            sideBySide: sideBySide,
+            onBack: { dismiss() },
+            onMore: { showMenu = true },
+            onOpenReader: { showComicReader = true },
+            onOpenViewer: { index in viewerIndex = index; showViewer = true }
+        )
+        ZStack {
+            ArtworkTabletBackdrop(url: illust.imageUrls?.squareMedium.flatMap(URL.init(string:)))
+            if sideBySide {
+                HStack(spacing: 0) {
+                    stage
+                    tabletInfoColumn(illust: illust, panel: UnevenRoundedRectangle(
+                        topLeadingRadius: 28, bottomLeadingRadius: 28, style: .continuous))
+                        .frame(width: infoWidth)
+                }
+            } else {
+                VStack(spacing: 0) {
+                    stage.frame(height: size.height * 0.52)
+                    tabletInfoColumn(illust: illust, panel: UnevenRoundedRectangle(
+                        topLeadingRadius: 28, topTrailingRadius: 28, style: .continuous))
+                }
+            }
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .overlay {
+            if isMuted(illust) {
+                MuteMaskOverlay(
+                    illust: illust,
+                    illustMuted: mute.isIllustMuted(illustId),
+                    userMuted: illust.user.map { mute.isUserMuted($0.id) } ?? false,
+                    onUnmuteIllust: { mute.setIllustMuted(illustId, false) },
+                    onUnmuteUser: { if let u = illust.user { mute.toggleUser(u.id) } },
+                    onLeave: { dismiss() }
+                )
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private func tabletInfoColumn<S: Shape>(illust: Illust, panel: S) -> some View {
+        ScrollViewReader { scrollProxy in
+            ZStack(alignment: .bottom) {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        infoSections(for: illust)
+                    }
+                    .padding(.top, 8)
+                }
+                BottomActionBar(
+                    vm: vm,
+                    onShowBookmarkSheet: { showBookmarkSheet = true },
+                    onJumpToComments: {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            scrollProxy.scrollTo(Self.commentsSectionID, anchor: .top)
+                        }
+                    }
+                )
+            }
+        }
+        // The panel runs edge to edge (under the status bar / home indicator);
+        // the scroll content keeps its own safe-area inset.
+        .background(panel.fill(Theme.v3Bg.opacity(0.92)).ignoresSafeArea(edges: [.top, .bottom]))
+    }
+
+    // MARK: Phone
+
+    private var phoneBody: some View {
         ScrollViewReader { scrollProxy in
             ZStack(alignment: .bottom) {
                 ScrollView {
@@ -474,6 +573,13 @@ struct IllustDetailView: View {
                 }
             }
         }
+    }
+
+    /// Loading, presentations and dialogs shared by the phone and tablet layouts.
+    private var detailPresentations: DetailPresentations { DetailPresentations(host: self) }
+
+    fileprivate func presentations<V: View>(_ content: V) -> some View {
+        content
         .task {
             await vm.loadIfNeeded()
             if let i = vm.illust { HistoryStore.shared.record(illust: i) }
@@ -487,7 +593,8 @@ struct IllustDetailView: View {
             // zooms back to the matching inline page (center fallback when
             // it's collapsed).
             ImageViewerView(pages: vm.illust.map(IllustPages.pages(for:)) ?? [],
-                            index: $viewerIndex)
+                            index: $viewerIndex,
+                            ugoiraIllustId: vm.illust?.type == "ugoira" ? vm.illust?.id : nil)
                 .navigationTransition(.zoom(sourceID: viewerIndex, in: viewerZoom))
         }
         .fullScreenCover(isPresented: $showComicReader) {
@@ -600,6 +707,13 @@ struct IllustDetailView: View {
             // toolbar (see `body`), not an in-list button — 1:1 with V3.
         }
 
+        infoSections(for: illust)
+    }
+
+    /// Everything below the pages. On a tablet (#1087) this is the whole info
+    /// column; the artwork itself lives in `ArtworkTabletStage`.
+    @ViewBuilder
+    private func infoSections(for illust: Illust) -> some View {
         // Order below is `ArtworkV3FeedSource.buildArtworkHeaderItems`:
         // hero / (series) / artist / (desc) / tags / stats / detail panel /
         // comments / author works / related header + related waterfall.
@@ -628,7 +742,8 @@ struct IllustDetailView: View {
 
         // Upstream emits the tag block unconditionally (it is the stable anchor
         // the late-arriving caption is inserted before).
-        V3TagsSection(tags: illust.tags ?? [], previewURL: illust.imageUrls?.squareMedium)
+        V3TagsSection(tags: illust.tags ?? [], previewURL: illust.imageUrls?.squareMedium,
+                      authorId: illust.user?.id, isManga: illust.type == "manga")
 
         V3StatsCard(illust: illust)
 
@@ -649,6 +764,11 @@ struct IllustDetailView: View {
 
         Color.clear.frame(height: 96) // clearance for the floating action pill
     }
+}
+
+private struct DetailPresentations: ViewModifier {
+    let host: IllustDetailView
+    func body(content: Content) -> some View { host.presentations(content) }
 }
 
 // MARK: - Pages (collapsible, stretchy first page; rest emitted lazily by content(for:))
@@ -1251,8 +1371,15 @@ private struct V3TagsSection: View {
     /// Square thumb of the host work, stored as the pin preview (mirrors
     /// upstream `buildPinnedTagPreviewJson`) when a tag is pinned via long-press.
     var previewURL: String?
+    /// Author of the host work (#1102): the tag menu offers that author's works
+    /// under the tag. Taken from the work itself — no tag stats are fetched on
+    /// entry or when the menu opens.
+    var authorId: Int64?
+    var isManga = false
     @State private var pinned = PinnedTagsStore.shared
+    @State private var legibility = TagLegibility.shared
     @Environment(OnboardingStore.self) private var l10n
+    @Environment(\.pushRoute) private var pushRoute
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1260,9 +1387,10 @@ private struct V3TagsSection: View {
             FlowLayout(spacing: 8) {
                 ForEach(Array(tags.enumerated()), id: \.offset) { _, tag in
                     NavigationLink(value: AppRoute.tagResults(tag: tag.name ?? "")) {
-                        Text(chipText(tag))
+                        // Only the original follows 标签原文亮暗度; the translation keeps
+                        // the un-boosted tag colour (upstream textTagAux).
+                        chipText(tag)
                             .font(.system(size: 13))
-                            .foregroundStyle(Theme.v3TagText)
                             .lineLimit(1)
                             .padding(.horizontal, 14).padding(.vertical, 7)
                             .background(Theme.v3TagChipFill, in: .capsule)
@@ -1283,6 +1411,14 @@ private struct V3TagsSection: View {
                             Label(isPinned ? l10n.t(.actionUnpinTag) : l10n.t(.actionPinTag),
                                   systemImage: isPinned ? "pin.slash" : "pin")
                         }
+                        // 「该作者相关作品」— last, only when the work has an author.
+                        if let authorId, authorId > 0, let name = tag.name, !name.isEmpty {
+                            Button {
+                                pushRoute(.userIllustTag(userId: authorId, tag: name, category: isManga ? "manga" : "illusts"))
+                            } label: {
+                                Label(l10n.t(.tagMenuAuthorWorks), systemImage: "person.crop.rectangle.stack")
+                            }
+                        }
                     }
                 }
             }
@@ -1291,9 +1427,11 @@ private struct V3TagsSection: View {
         .padding(.bottom, 18)
     }
 
-    private func chipText(_ tag: Tag) -> String {
-        var out = "# " + (tag.name ?? "")
-        if let t = tag.translatedName, !t.isEmpty { out += "  " + t }
+    private func chipText(_ tag: Tag) -> Text {
+        var out = Text("# " + (tag.name ?? "")).foregroundColor(legibility.originalText)
+        if let t = tag.translatedName, !t.isEmpty {
+            out = out + Text("  " + t).foregroundColor(Theme.v3TagText)
+        }
         return out
     }
 }
@@ -2015,28 +2153,45 @@ private struct BottomActionBar: View {
     }
 
     var body: some View {
+        let position = settings.resolvedFabPosition
         HStack(spacing: 0) {
-            // `applyDownloadOrderPreference`: the bookmark half moves to the
-            // left when the user prefers it there; the comment segment always
-            // stays right-most.
-            if settings.artworkV3FabDownloadOnLeft {
+            // `applyLayoutPreference` (#1090): centred, the order follows the
+            // download / bookmark preference; pinned to an edge, the bookmark
+            // heart sits on the outer (screen-edge) end and the rest mirror, so
+            // the comment segment lands on the inner end.
+            if position == AppSettingsStore.fabPositionRight {
+                if settings.artworkV3ShowCommentJumpFab {
+                    commentButton
+                    divider
+                }
                 downloadButton
                 divider
                 bookmarkButton
             } else {
-                bookmarkButton
-                divider
-                downloadButton
-            }
-            if settings.artworkV3ShowCommentJumpFab {
-                divider
-                commentButton
+                if position == AppSettingsStore.fabPositionLeft || !settings.artworkV3FabDownloadOnLeft {
+                    bookmarkButton
+                    divider
+                    downloadButton
+                } else {
+                    downloadButton
+                    divider
+                    bookmarkButton
+                }
+                if settings.artworkV3ShowCommentJumpFab {
+                    divider
+                    commentButton
+                }
             }
         }
         .frame(height: 48)
         .padding(.horizontal, 6)
         .background(Theme.v3CardFill.opacity(0.80), in: .capsule)
         .shadow(color: .black.opacity(0.25), radius: 8, y: 3)   // elevation 12dp
+        // 靠边时离屏幕边 20dp（与二级大图页那一行的左右留白一致）；横屏的
+        // 刘海 / 灵动岛由安全区让开，外侧收藏心不会被压住。
+        .frame(maxWidth: .infinity, alignment: Self.alignment(for: position))
+        .padding(.leading, position == AppSettingsStore.fabPositionLeft ? 20 : 0)
+        .padding(.trailing, position == AppSettingsStore.fabPositionRight ? 20 : 0)
         .padding(.bottom, 24)                                   // V3FabBarController: inset + 24dp
         // Long-press on the download half → the four-resolution picker
         // (`WitDialog.MenuDialogBuilder` over the `resolution_*` strings).
@@ -2051,6 +2206,14 @@ private struct BottomActionBar: View {
         }
     }
 
+    private static func alignment(for position: Int) -> Alignment {
+        switch position {
+        case AppSettingsStore.fabPositionLeft: return .leading
+        case AppSettingsStore.fabPositionRight: return .trailing
+        default: return .center
+        }
+    }
+
     private var divider: some View {
         Theme.v3FloatingPillContent.opacity(0.20)
             .frame(width: 1, height: 24)
@@ -2061,7 +2224,8 @@ private struct BottomActionBar: View {
 
     private var downloadButton: some View {
         Button {
-            Task { await runDownload(.original) }
+            // Tap = the 默认图片清晰度 setting; long-press picks a size on the spot.
+            Task { await runDownload(.default) }
         } label: {
             Group {
                 switch download {
@@ -2092,31 +2256,16 @@ private struct BottomActionBar: View {
         .simultaneousGesture(LongPressGesture().onEnded { _ in showResolutionPicker = true })
     }
 
-    /// The four `Params.IMAGE_RESOLUTION_*` buckets the long-press menu offers.
-    private enum DownloadResolution {
-        case original, large, medium, squareMedium
-
-        func url(_ page: IllustPageURLs, illust: Illust, index: Int) -> URL? {
-            switch self {
-            case .original: return page.original ?? page.large
-            case .large: return page.large ?? page.original
-            case .medium, .squareMedium:
-                // `meta_pages` carries the small variants; single-page works
-                // fall back to the work-level `image_urls`.
-                let urls = illust.metaPages?.indices.contains(index) == true
-                    ? illust.metaPages?[index].imageUrls
-                    : illust.imageUrls
-                let s = self == .medium ? urls?.medium : urls?.squareMedium
-                return s.flatMap(URL.init(string:)) ?? page.large ?? page.original
-            }
-        }
-    }
-
-    private func runDownload(_ resolution: DownloadResolution) async {
+    private func runDownload(_ resolution: ImageResolution) async {
         guard let illust = vm.illust else { return }
-        let pages = IllustPages.pages(for: illust)
-        let urls = pages.enumerated().compactMap { resolution.url($1, illust: illust, index: $0) }
+        let urls = resolution.urls(for: illust)
         guard !urls.isEmpty else { return }
+        // Low storage pauses every download and says so once (pixez#1361).
+        guard StorageSpaceGuard.hasRoomForDownload() else {
+            DownloadManager.shared.pauseForLowStorage()
+            await flashFailed()
+            return
+        }
         guard await PhotoLibrarySaver.requestAuthorization() else { await flashFailed(); return }
 
         // `isAutoPostLikeWhenDownload`: bookmark the work as the download starts.
@@ -2156,7 +2305,7 @@ private struct BottomActionBar: View {
                 await vm.toggleBookmark()
                 // `isAutoDownloadAfterStar`: bookmarking pulls every page down.
                 if willBookmark, settings.autoDownloadAfterStar {
-                    await runDownload(.original)
+                    await runDownload(.default)
                 }
             }
         } label: {

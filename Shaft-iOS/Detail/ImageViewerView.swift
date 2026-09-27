@@ -9,6 +9,9 @@ import UIKit
 struct ImageViewerView: View {
     let pages: [IllustPageURLs]
     @Binding var index: Int
+    /// Ugoira (#1122): page 0 plays the animation with the same pinch / pan /
+    /// double-tap zoom as still pages, and keeps playing while zoomed.
+    var ugoiraIllustId: Int64? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var saveStatus: SaveStatus = .idle
@@ -34,8 +37,16 @@ struct ImageViewerView: View {
             Color.black.ignoresSafeArea()
             TabView(selection: $index) {
                 ForEach(Array(pages.enumerated()), id: \.offset) { i, page in
-                    ZoomImagePage(large: page.large, original: page.original ?? page.large) {
-                        withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+                    Group {
+                        if i == 0, let ugoiraIllustId {
+                            ZoomableUgoiraPage(illustId: ugoiraIllustId, fallbackURL: page.large ?? page.original) {
+                                withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+                            }
+                        } else {
+                            ZoomImagePage(large: page.large, original: page.original ?? page.large) {
+                                withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+                            }
+                        }
                     }
                     .tag(i)
                 }
@@ -223,5 +234,79 @@ enum PhotoLibrarySaver {
         try await PHPhotoLibrary.shared().performChanges {
             PHAssetCreationRequest.forAsset().addResource(with: .photo, data: data, options: nil)
         }
+    }
+}
+
+
+/// Ugoira page of the viewer (upstream `UgoiraPlayerView` zoom, #1122): pinch to
+/// zoom, pan once zoomed (fit-size drags go back to the pager), double tap
+/// toggles 1× ↔ 2.5×, single tap toggles the chrome. The play / loading
+/// overlays stay pinned to the canvas, not scaled with the picture.
+private struct ZoomableUgoiraPage: View {
+    let illustId: Int64
+    let fallbackURL: URL?
+    let onSingleTap: () -> Void
+
+    @State private var scale: CGFloat = 1
+    @State private var baseScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var baseOffset: CGSize = .zero
+
+    private static let maxScale: CGFloat = 4
+    private static let doubleTapScale: CGFloat = 2.5
+
+    var body: some View {
+        GeometryReader { geo in
+            UgoiraView(illustId: illustId, fallbackURL: fallbackURL, contentMode: .fit)
+                .allowsHitTesting(false)
+                .scaleEffect(scale)
+                .offset(offset)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .contentShape(.rect)
+                .gesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            scale = min(max(baseScale * value.magnification, 1), Self.maxScale)
+                        }
+                        .onEnded { _ in
+                            baseScale = scale
+                            if scale <= 1.01 { reset() } else { clampOffset(geo.size) }
+                        }
+                )
+                // Only claim drags while zoomed; at fit size they belong to the pager.
+                .simultaneousGesture(
+                    DragGesture()
+                        .onChanged { value in
+                            guard scale > 1 else { return }
+                            offset = CGSize(width: baseOffset.width + value.translation.width,
+                                            height: baseOffset.height + value.translation.height)
+                        }
+                        .onEnded { _ in
+                            guard scale > 1 else { return }
+                            clampOffset(geo.size)
+                        },
+                    including: scale > 1 ? .all : .subviews
+                )
+                .onTapGesture(count: 2) {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        if scale > 1 { reset() } else { scale = Self.doubleTapScale; baseScale = scale }
+                    }
+                }
+                .onTapGesture(count: 1, perform: onSingleTap)
+        }
+    }
+
+    private func reset() {
+        scale = 1; baseScale = 1; offset = .zero; baseOffset = .zero
+    }
+
+    /// Keep the zoomed picture covering the canvas edges it can reach.
+    private func clampOffset(_ size: CGSize) {
+        let maxX = size.width * (scale - 1) / 2
+        let maxY = size.height * (scale - 1) / 2
+        withAnimation(.easeOut(duration: 0.2)) {
+            offset = CGSize(width: min(max(offset.width, -maxX), maxX), height: min(max(offset.height, -maxY), maxY))
+        }
+        baseOffset = offset
     }
 }
