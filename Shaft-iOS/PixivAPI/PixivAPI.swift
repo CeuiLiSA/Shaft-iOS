@@ -512,12 +512,14 @@ actor PixivAPI {
         try await get(path: "/v1/search/illust", query: filter.queryItems(word: word, isNovel: false))
     }
 
+    /// `today` lets the borrowed-search cache key and this request resolve a
+    /// relative period against the same day.
     func searchIllust(
-        word: String, filter: SearchFilter, accessToken: String
+        word: String, filter: SearchFilter, accessToken: String, today: Date = Date()
     ) async throws -> IllustResponse {
         try await getExplicit(
             path: "/v1/search/illust",
-            query: filter.queryItems(word: word, isNovel: false),
+            query: filter.queryItems(word: word, isNovel: false, today: today),
             accessToken: accessToken
         )
     }
@@ -540,12 +542,14 @@ actor PixivAPI {
         word: String,
         filter: SearchFilter,
         accessToken: String,
-        omitDefaultTarget: Bool = false
+        omitDefaultTarget: Bool = false,
+        today: Date = Date()
     ) async throws -> NovelResponse {
         try await getExplicit(
             path: "/v1/search/novel",
             query: filter.queryItems(
-                word: word, isNovel: true, omitDefaultNovelTarget: omitDefaultTarget
+                word: word, isNovel: true, today: today,
+                omitDefaultNovelTarget: omitDefaultTarget
             ),
             accessToken: accessToken
         )

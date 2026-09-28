@@ -132,6 +132,24 @@ private struct RateLimitResponse: Codable {
 
 private struct RemoteConfigResponse: Codable {
     let nana7miSearchEnabled: Bool?
+    /// Whether `/v1/account/nana7mi` and the search cache accept `requestId`.
+    /// Absent means an older server whose strict body rejects the field.
+    let nana7miRequestIdEnabled: Bool?
+}
+
+struct BorrowedRemoteConfig: Sendable, Equatable {
+    var searchEnabled: Bool?
+    var requestIDEnabled: Bool
+}
+
+struct BorrowedSearchCacheLookupRequest: Encodable, Sendable {
+    let uid: Int64
+    let kind: String
+    let key: String
+    let maxAgeMs: Int64
+    let page: String
+    /// Omitted when nil: without it the server bypasses the cache entirely.
+    let requestId: String?
 }
 
 private struct OnlineAck: Codable { let ok: Bool; let uid: Int64? }
@@ -153,7 +171,7 @@ actor PixshaftAccountClient {
         session = URLSession(configuration: config)
     }
 
-    func remoteConfig(uid: Int64) async throws -> Bool? {
+    func remoteConfig(uid: Int64) async throws -> BorrowedRemoteConfig {
         var components = URLComponents(
             url: baseURL.appendingPathComponent("/v1/config"),
             resolvingAgainstBaseURL: false
@@ -172,13 +190,20 @@ actor PixshaftAccountClient {
               (200..<300).contains(http.statusCode) else {
             throw PixshaftError.http((response as? HTTPURLResponse)?.statusCode ?? -1)
         }
-        return try JSONDecoder().decode(RemoteConfigResponse.self, from: data).nana7miSearchEnabled
+        let wire = try JSONDecoder().decode(RemoteConfigResponse.self, from: data)
+        // Capability negotiation is fail-closed: an absent field is a real
+        // answer from an older server, unlike the search kill switch.
+        return .init(
+            searchEnabled: wire.nana7miSearchEnabled,
+            requestIDEnabled: wire.nana7miRequestIdEnabled == true
+        )
     }
 
-    func fetchNana7mi(uid: Int64) async -> BorrowedFetchResult {
+    func fetchNana7mi(uid: Int64, requestID: String? = nil) async -> BorrowedFetchResult {
         guard uid > 0 else { return .invalidRequest }
+        struct Body: Encodable { let uid: Int64; let requestId: String? }
         do {
-            let body = try JSONEncoder().encode(["uid": uid])
+            let body = try JSONEncoder().encode(Body(uid: uid, requestId: requestID))
             let (data, http) = try await send(path: "/v1/account/nana7mi", body: body)
             switch http.statusCode {
             case 404:
@@ -239,6 +264,22 @@ actor PixshaftAccountClient {
         guard ack.ok, ack.uid == uid else { throw PixshaftError.rejected }
     }
 
+    /// Borrowed-search cache lookup. Any status is returned, never thrown: the
+    /// caller treats everything but a clean hit as a miss.
+    func searchCacheLookup(_ request: BorrowedSearchCacheLookupRequest) async throws -> (Data, Int) {
+        let (data, http) = try await send(
+            path: "/v1/account/nana7mi/search-cache/lookup",
+            body: JSONEncoder().encode(request)
+        )
+        return (data, http.statusCode)
+    }
+
+    /// Fill one page with a miss's receipt. `body` is the complete store request.
+    func searchCacheStore(body: Data) async throws -> (Data, Int) {
+        let (data, http) = try await send(path: "/v1/account/nana7mi/search-cache/store", body: body)
+        return (data, http.statusCode)
+    }
+
     private func send(path: String, body: Data) async throws -> (Data, HTTPURLResponse) {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = "POST"
@@ -268,6 +309,9 @@ actor BorrowedSearchRemoteConfig {
     static let shared = BorrowedSearchRemoteConfig()
     private var inFlight: [Int64: Task<Void, Never>] = [:]
     private var memory: [Int64: Bool] = [:]
+    /// Memory-only, like Android's `nana7miRequestIdEnabled`: a remembered
+    /// `true` must never make a request carry `requestId` to an older server.
+    private var requestIDMemory: [Int64: Bool] = [:]
     /// Mirrors Android's single `fetchedForUid`: switching A → B → A must
     /// refresh A again instead of treating any historical process read as fresh.
     private var fetchedForUID: Int64?
@@ -288,20 +332,33 @@ actor BorrowedSearchRemoteConfig {
         }
         let task = Task<Void, Never> {
             do {
-                let value = try await PixshaftAccountClient.shared.remoteConfig(uid: uid) ?? cached
-                self.finishRefresh(uid: uid, value: value, succeeded: true)
+                let config = try await PixshaftAccountClient.shared.remoteConfig(uid: uid)
+                self.finishRefresh(
+                    uid: uid, value: config.searchEnabled ?? cached,
+                    requestIDEnabled: config.requestIDEnabled, succeeded: true
+                )
             } catch {
-                self.finishRefresh(uid: uid, value: cached, succeeded: false)
+                self.finishRefresh(uid: uid, value: cached, requestIDEnabled: false, succeeded: false)
             }
         }
         inFlight[uid] = task
         return cached
     }
 
-    private func finishRefresh(uid: Int64, value: Bool, succeeded: Bool) {
+    /// Whether this uid's server accepts the request-id protocol the search
+    /// cache requires. False until this process has heard the server say so,
+    /// so the first search after a launch goes without the cache.
+    func requestIDEnabled(uid: Int64) -> Bool {
+        guard uid > 0 else { return false }
+        _ = enabled(uid: uid)
+        return requestIDMemory[uid] ?? false
+    }
+
+    private func finishRefresh(uid: Int64, value: Bool, requestIDEnabled: Bool, succeeded: Bool) {
         inFlight[uid] = nil
         memory[uid] = value
         if succeeded {
+            requestIDMemory[uid] = requestIDEnabled
             fetchedForUID = uid
             failedAt[uid] = nil
             UserDefaults.standard.set(value, forKey: key(uid))
@@ -444,13 +501,63 @@ enum BorrowedSessionError: Error {
 actor BorrowedAccountSession {
     private(set) var payload: BorrowedAccountPayload?
     private(set) var borrowedAccountLost = false
+    /// True when this session's first page came out of the search cache: the
+    /// cursor is Premium-only, but nothing has been borrowed yet. A page turn
+    /// that misses the cache must borrow then, never continue with the
+    /// signed-in account. It lives on the session so a late lookup can only
+    /// mark the generation it belongs to.
+    private(set) var cursorFromCache = false
+    /// The paid cached first page's id; a cached-cursor miss exchanges it for an
+    /// account instead of starting a second search.
+    private(set) var cachedFirstRequestID: String?
+    /// The cached first page was billed under the request-id protocol, so a
+    /// later handoff must never drop its id.
+    private(set) var cachedFirstRequestIDRequired = false
+    /// Who started this generation; page turns look up and borrow for them.
+    private(set) var requesterUID: Int64 = 0
+    /// Cache tolerance set by the first page and kept by its page turns: paging
+    /// past midnight must not switch the same list to another rule.
+    private(set) var cacheMaxAgeMS = BorrowedSearchCache.maxAgeFreshMS
     private let oauth = PixivOAuthClient(config: .pixivAndroid)
     private static let validMS: Int64 = 55 * 60 * 1_000
 
-    func fetchReady(requesterUID: Int64) async -> BorrowedFetchResult {
+    func beginFirstPage(requesterUID: Int64, cacheMaxAgeMS: Int64) {
+        self.requesterUID = requesterUID
+        self.cacheMaxAgeMS = cacheMaxAgeMS
+    }
+
+    func markCursorFromCache(requestID: String?, requestIDProtocolEnabled: Bool) {
+        precondition(
+            !requestIDProtocolEnabled || requestID != nil,
+            "request-id protocol enabled without a paid first-page id"
+        )
+        cursorFromCache = true
+        cachedFirstRequestID = requestID
+        cachedFirstRequestIDRequired = requestIDProtocolEnabled
+    }
+
+    /// Borrow for a cursor whose first page came out of the cache. The paid
+    /// first-page id goes first so the server hands over an account without a
+    /// second search charge. It honours that id only for 30 minutes after the
+    /// hit; past that the dispatch answers 409 `request_id_conflict`, which means
+    /// "needs a fresh search charge", not "no account" — so retry once with a
+    /// fresh id rather than silently ending pagination on the first miss.
+    func fetchReadyForCachedCursor() async throws -> BorrowedFetchResult {
+        let paidRequestID = cachedFirstRequestID
+        if cachedFirstRequestIDRequired, paidRequestID == nil {
+            throw BorrowedSessionError.unavailable("cached_cursor_lost_paid_request_id")
+        }
+        let first = await fetchReady(requesterUID: requesterUID, requestID: paidRequestID)
+        guard paidRequestID != nil, case .httpFailure(409) = first else { return first }
+        borrowedLog.warning("stage=fetch result=paid_request_id_rejected action=retry_fresh_search")
+        if Task.isCancelled { return .networkFailure("cancelled") }
+        return await fetchReady(requesterUID: requesterUID, requestID: BorrowedSearchCache.newRequestID())
+    }
+
+    func fetchReady(requesterUID: Int64, requestID: String? = nil) async -> BorrowedFetchResult {
         await BorrowedAccountReportOutbox.shared.flush()
         if Task.isCancelled { return .networkFailure("cancelled") }
-        let fetched = await PixshaftAccountClient.shared.fetchNana7mi(uid: requesterUID)
+        let fetched = await PixshaftAccountClient.shared.fetchNana7mi(uid: requesterUID, requestID: requestID)
         if Task.isCancelled { return .networkFailure("cancelled") }
         if case .rateLimited = fetched {
             await BorrowedQuotaNoticeStore.shared.report(fetched)
@@ -621,17 +728,47 @@ actor SearchRequestCoordinator {
             return try await api.searchIllust(word: word, filter: filter)
         }
 
+        // Ask pixshaft before borrowing: the same request somebody (or we) just
+        // sent is served as is — no dispatch, no renew, no Pixiv request. The key
+        // covers every query item the borrowed request below sends.
+        let today = Date()
+        let cacheKey = BorrowedSearchCache.firstPageKey(
+            kind: .illust,
+            params: BorrowedSearchCache.params(of: filter.queryItems(word: word, isNovel: false, today: today))
+        )
+        let cacheMaxAgeMS = Self.cacheMaxAgeMS(filter, today: today)
+        await session.beginFirstPage(requesterUID: requesterUID, cacheMaxAgeMS: cacheMaxAgeMS)
+        let requestIDEnabled = await BorrowedSearchRemoteConfig.shared.requestIDEnabled(uid: requesterUID)
+        let firstRequestID = requestIDEnabled ? BorrowedSearchCache.newRequestID() : nil
+        if let cached = await BorrowedSearchCacheClient.shared.lookup(
+            IllustResponse.self, kind: .illust, key: cacheKey, page: .first,
+            requestID: firstRequestID, maxAgeMS: cacheMaxAgeMS,
+            requesterUID: requesterUID, stage: "official_search"
+        ) {
+            // The server already billed this hit as one search.
+            await session.markCursorFromCache(
+                requestID: firstRequestID, requestIDProtocolEnabled: requestIDEnabled
+            )
+            return await Self.withViewerBookmarkState(cached)
+        }
+
         do {
             let borrowed = try await BorrowedSearchSerial.shared.run { [api, session] in
-                let result = await session.fetchReady(requesterUID: requesterUID)
+                let result = await session.fetchReady(requesterUID: requesterUID, requestID: firstRequestID)
                 try Task.checkCancellation()
                 guard case .success = result else {
                     throw BorrowedSessionError.unavailable(result.reason)
                 }
                 return try await session.request { token in
-                    try await api.searchIllust(word: word, filter: filter, accessToken: token)
+                    try await api.searchIllust(word: word, filter: filter, accessToken: token, today: today)
                 }
             }
+            // Only the official page the borrowed account fetched is a fill; a
+            // fallback page (preview / own account) is a different thing.
+            await BorrowedSearchCacheClient.shared.store(
+                borrowed, kind: .illust, key: cacheKey,
+                requesterUID: requesterUID, stage: "official_search"
+            )
             return await Self.withViewerBookmarkState(borrowed)
         } catch is BorrowedSessionError {
             return wantsSort
@@ -673,24 +810,53 @@ actor SearchRequestCoordinator {
         if selectedPreview || (wantsSort && !enabled) { return try await own(true) }
         guard enabled, !selectedPreview, wantsSort || wantsBookmark else { return try await own(false) }
 
+        // See firstIllust. The key also covers "an empty default-target page is
+        // re-sent without search_target": it decides which page these
+        // parameters finally produce.
+        let today = Date()
+        let titleFallback = safeFilter.target == .partialTags
+        let cacheKey = BorrowedSearchCache.firstPageKey(
+            kind: .novel,
+            params: BorrowedSearchCache.params(of: safeFilter.queryItems(word: word, isNovel: true, today: today))
+                + [("title_fallback", titleFallback ? "true" : "false")]
+        )
+        let cacheMaxAgeMS = Self.cacheMaxAgeMS(safeFilter, today: today)
+        await session.beginFirstPage(requesterUID: requesterUID, cacheMaxAgeMS: cacheMaxAgeMS)
+        let requestIDEnabled = await BorrowedSearchRemoteConfig.shared.requestIDEnabled(uid: requesterUID)
+        let firstRequestID = requestIDEnabled ? BorrowedSearchCache.newRequestID() : nil
+        if let cached = await BorrowedSearchCacheClient.shared.lookup(
+            NovelResponse.self, kind: .novel, key: cacheKey, page: .first,
+            requestID: firstRequestID, maxAgeMS: cacheMaxAgeMS,
+            requesterUID: requesterUID, stage: "novel_official_search"
+        ) {
+            await session.markCursorFromCache(
+                requestID: firstRequestID, requestIDProtocolEnabled: requestIDEnabled
+            )
+            return await Self.withViewerBookmarkState(cached)
+        }
+
         do {
             let borrowed = try await BorrowedSearchSerial.shared.run { [api, session] in
-                let result = await session.fetchReady(requesterUID: requesterUID)
+                let result = await session.fetchReady(requesterUID: requesterUID, requestID: firstRequestID)
                 try Task.checkCancellation()
                 guard case .success = result else {
                     throw BorrowedSessionError.unavailable(result.reason)
                 }
                 return try await session.request { token in
                     let first = try await api.searchNovel(
-                        word: word, filter: safeFilter, accessToken: token
+                        word: word, filter: safeFilter, accessToken: token, today: today
                     )
-                    guard safeFilter.target == .partialTags, first.novels.isEmpty else { return first }
+                    guard titleFallback, first.novels.isEmpty else { return first }
                     return try await api.searchNovel(
                         word: word, filter: safeFilter, accessToken: token,
-                        omitDefaultTarget: true
+                        omitDefaultTarget: true, today: today
                     )
                 }
             }
+            await BorrowedSearchCacheClient.shared.store(
+                borrowed, kind: .novel, key: cacheKey,
+                requesterUID: requesterUID, stage: "novel_official_search"
+            )
             return await Self.withViewerBookmarkState(borrowed)
         } catch is BorrowedSessionError {
             return try await own(wantsSort)
@@ -700,14 +866,12 @@ actor SearchRequestCoordinator {
     func nextIllust(_ url: String) async throws -> IllustResponse {
         let session = illustBorrow
         if await session.borrowedAccountLost { return .init(illusts: [], nextUrl: nil) }
-        guard await session.payload != nil else { return try await api.nextPage(url) }
+        let borrowed = await session.payload != nil
+        let cursorFromCache = await session.cursorFromCache
+        guard borrowed || cursorFromCache else { return try await api.nextPage(url) }
         do {
-            let borrowed: IllustResponse = try await BorrowedSearchSerial.shared.run { [api, session] in
-                try await session.request { token in
-                    try await api.nextPage(url, accessToken: token)
-                }
-            }
-            return await Self.withViewerBookmarkState(borrowed)
+            let page: IllustResponse = try await borrowedNextPage(url, kind: .illust, session: session)
+            return await Self.withViewerBookmarkState(page)
         } catch is BorrowedSessionError {
             return .init(illusts: [], nextUrl: nil)
         }
@@ -716,17 +880,60 @@ actor SearchRequestCoordinator {
     func nextNovel(_ url: String) async throws -> NovelResponse {
         let session = novelBorrow
         if await session.borrowedAccountLost { return .init(novels: [], nextUrl: nil) }
-        guard await session.payload != nil else { return try await api.nextPage(url) }
+        let borrowed = await session.payload != nil
+        let cursorFromCache = await session.cursorFromCache
+        guard borrowed || cursorFromCache else { return try await api.nextPage(url) }
         do {
-            let borrowed: NovelResponse = try await BorrowedSearchSerial.shared.run { [api, session] in
-                try await session.request { token in
-                    try await api.nextPage(url, accessToken: token)
-                }
-            }
-            return await Self.withViewerBookmarkState(borrowed)
+            let page: NovelResponse = try await borrowedNextPage(url, kind: .novel, session: session)
+            return await Self.withViewerBookmarkState(page)
         } catch is BorrowedSessionError {
             return .init(novels: [], nextUrl: nil)
         }
+    }
+
+    /// A Premium-only cursor: ask the cache first (a page someone else already
+    /// turned is served as is), then fetch with the borrowed account. When the
+    /// first page came from the cache nothing is borrowed yet, so borrow now.
+    /// A `BorrowedSessionError` ends pagination: the cursor must never be
+    /// continued with the signed-in account.
+    private func borrowedNextPage<T: BorrowedSearchPage>(
+        _ url: String, kind: BorrowedSearchCache.Kind, session: BorrowedAccountSession
+    ) async throws -> T {
+        let requesterUID = await session.requesterUID
+        let stage = kind == .illust ? "official_search_next" : "novel_official_search_next"
+        let cacheKey = BorrowedSearchCache.nextPageKey(kind: kind, nextURL: url)
+        let requestIDEnabled = await BorrowedSearchRemoteConfig.shared.requestIDEnabled(uid: requesterUID)
+        if let cached = await BorrowedSearchCacheClient.shared.lookup(
+            T.self, kind: kind, key: cacheKey, page: .next,
+            requestID: requestIDEnabled ? BorrowedSearchCache.newRequestID() : nil,
+            maxAgeMS: await session.cacheMaxAgeMS,
+            requesterUID: requesterUID, stage: stage
+        ) {
+            // The server already billed this hit as one page turn.
+            return cached
+        }
+        let page: T = try await BorrowedSearchSerial.shared.run { [api, session] in
+            if await session.payload == nil {
+                borrowedLog.debug("stage=\(stage, privacy: .public) event=borrow_for_cached_cursor")
+                let result = try await session.fetchReadyForCachedCursor()
+                try Task.checkCancellation()
+                guard case .success(let value) = result, !value.expired else {
+                    throw BorrowedSessionError.unavailable(result.reason)
+                }
+            }
+            return try await session.request { token in
+                try await api.nextPage(url, accessToken: token)
+            }
+        }
+        await BorrowedSearchCacheClient.shared.store(
+            page, kind: kind, key: cacheKey, requesterUID: requesterUID, stage: stage
+        )
+        return page
+    }
+
+    private static func cacheMaxAgeMS(_ filter: SearchFilter, today: Date) -> Int64 {
+        let (start, end) = filter.resolvedDates(today: today) ?? (nil, nil)
+        return BorrowedSearchCache.maxAgeMS(sort: filter.sort, startDate: start, endDate: end, today: today)
     }
 
     // MARK: Viewer bookmark state (#1063)
