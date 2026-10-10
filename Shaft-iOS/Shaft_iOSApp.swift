@@ -7,6 +7,7 @@ struct Shaft_iOSApp: App {
         // Load the image route before PixivImageCache/URLSession can be built.
         // Settings changes are persisted and intentionally apply on next launch.
         ImageHostManager.hydrate()
+        _ = ImageTransferPolicy.active
     }
 
     var body: some Scene {

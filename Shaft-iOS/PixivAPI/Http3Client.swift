@@ -31,10 +31,14 @@ actor Http3Pool {
     /// returns would let concurrent callers slip through and duplicate).
     private var connecting: [String: Task<Http3Connection, Error>] = [:]
 
-    func data(for request: URLRequest, host: String, ip: String) async throws -> (Data, URLResponse) {
+    func data(for request: URLRequest, host: String, ip: String, transfer: TransferActivity? = nil,
+              idleSeconds: TimeInterval? = nil,
+              onTransfer: @Sendable @escaping (ImageTransferProgress) -> Void = { _ in }) async throws -> (Data, URLResponse) {
         let connection = try await connection(host: host, ip: ip)
         do {
-            return try await connection.request(request)
+            try Task.checkCancellation()
+            transfer?.report(ImageTransferProgress())
+            return try await connection.request(request, transfer: transfer, idleSeconds: idleSeconds, onTransfer: onTransfer)
         } catch {
             // Drop the connection only if it actually died; a single stream
             // timeout shouldn't tear down everyone else's in-flight requests.
@@ -45,7 +49,12 @@ actor Http3Pool {
 
     private func connection(host: String, ip: String) async throws -> Http3Connection {
         if let task = connecting[host] {
-            if let conn = try? await task.value, conn.isAlive { return conn }
+            do {
+                let conn = try await CancellableTaskWaiter<Http3Connection>().value(of: task)
+                if conn.isAlive { return conn }
+            } catch {
+                if Task.isCancelled { throw CancellationError() }
+            }
             connecting[host] = nil                       // dead/failed — rebuild
         }
         let task = Task { () -> Http3Connection in
@@ -55,11 +64,47 @@ actor Http3Pool {
         }
         connecting[host] = task
         do {
-            return try await task.value
+            return try await CancellableTaskWaiter<Http3Connection>().value(of: task)
         } catch {
+            if Task.isCancelled { throw CancellationError() }
             connecting[host] = nil
             throw error
         }
+    }
+}
+
+/// Cancels only this consumer's wait, leaving the shared QUIC handshake alive.
+/// A bounded UI request must not wait 25 seconds for another consumer's handshake.
+final class CancellableTaskWaiter<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Value, Error>?
+    private var result: Result<Value, Error>?
+    func value(of task: Task<Value, Error>) async throws -> Value {
+        try await wait { await task.result }
+    }
+    func value(of task: Task<Value, Never>) async throws -> Value {
+        try await wait { .success(await task.value) }
+    }
+    private func wait(_ operation: @Sendable @escaping () async -> Result<Value, Error>) async throws -> Value {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let start = lock.withLock { () -> Bool in
+                    if let result { continuation.resume(with: result); return false }
+                    self.continuation = continuation
+                    return true
+                }
+                if start { Task.detached { self.finish(await operation()) } }
+            }
+        } onCancel: { self.finish(.failure(CancellationError())) }
+    }
+    private func finish(_ value: Result<Value, Error>) {
+        let pending = lock.withLock { () -> CheckedContinuation<Value, Error>? in
+            guard result == nil else { return nil }
+            result = value
+            defer { continuation = nil }
+            return continuation
+        }
+        pending?.resume(with: value)
     }
 }
 
@@ -67,7 +112,7 @@ actor Http3Pool {
 
 final class Http3Connection: @unchecked Sendable {
 
-    enum Http3Error: Error { case connectFailed, streamFailed, noStatus, timeout }
+    enum Http3Error: Error, Equatable { case connectFailed, streamFailed, noStatus, timeout }
 
     private let host: String
     private let ip: String
@@ -209,29 +254,44 @@ final class Http3Connection: @unchecked Sendable {
 
     // MARK: Request
 
-    /// Opens one bidirectional stream, sends the request, reads the response.
-    /// Bounded by a 25 s timeout that cancels just this stream (not the shared
-    /// connection) so one slow request can't starve the others.
-    func request(_ request: URLRequest) async throws -> (Data, URLResponse) {
+    /// Image streams use an idle budget; API streams keep their total deadline.
+    func request(_ request: URLRequest, transfer: TransferActivity? = nil, idleSeconds: TimeInterval? = nil,
+                 onTransfer: @Sendable @escaping (ImageTransferProgress) -> Void = { _ in }) async throws -> (Data, URLResponse) {
+        try Task.checkCancellation()
         let options = NWProtocolQUIC.Options()
         options.direction = .bidirectional
         guard let group, let stream = NWConnection(from: group, using: options) else { throw Http3Error.streamFailed }
         defer { stream.cancel() }
-
-        return try await withThrowingTaskGroup(of: (Data, URLResponse).self) { tg in
-            tg.addTask { try await self.exchange(stream, request) }
-            tg.addTask {
-                try await Task.sleep(nanoseconds: 25 * 1_000_000_000)
-                stream.cancel()
-                throw Http3Error.timeout
+        let activity = transfer ?? TransferActivity()
+        do { return try await withTaskCancellationHandler {
+            try await withThrowingTaskGroup(of: (Data, URLResponse).self) { group in
+                group.addTask { try await self.exchange(stream, request, transfer: activity, onTransfer: onTransfer) }
+                group.addTask {
+                    if let transfer, let idleSeconds {
+                        let start = ProcessInfo.processInfo.systemUptime
+                        while true {
+                            try await Task.sleep(for: .milliseconds(200))
+                            let now = ProcessInfo.processInfo.systemUptime
+                            if transfer.idle(now: now) >= idleSeconds || now - start >= 15 * 60 { break }
+                        }
+                    } else { try await Task.sleep(for: .seconds(25)) }
+                    activity.markTimedOut()
+                    stream.cancel()
+                    throw Http3Error.timeout
+                }
+                defer { group.cancelAll() }
+                return try await group.next()!
             }
-            let result = try await tg.next()!
-            tg.cancelAll()
-            return result
+        } onCancel: { stream.cancel() }
+        } catch {
+            if Task.isCancelled { throw CancellationError() }
+            if activity.timedOut { throw Http3Error.timeout }
+            throw error
         }
     }
 
-    private func exchange(_ stream: NWConnection, _ request: URLRequest) async throws -> (Data, URLResponse) {
+    private func exchange(_ stream: NWConnection, _ request: URLRequest, transfer: TransferActivity?,
+                          onTransfer: @Sendable @escaping (ImageTransferProgress) -> Void) async throws -> (Data, URLResponse) {
         try await awaitReady(stream)   // bidi streams do reach .ready
 
         var out: [UInt8] = []
@@ -246,7 +306,7 @@ final class Http3Connection: @unchecked Sendable {
         }
         try await send(stream, Data(out), isComplete: true)         // FIN (.finalMessage)
 
-        let raw = try await receiveAll(stream)
+        let raw = try await receiveAll(stream, transfer: transfer, onTransfer: onTransfer)
         let (status, headers, body) = parse(raw)
         guard status > 0, let url = request.url else { throw Http3Error.noStatus }
 
@@ -366,12 +426,24 @@ final class Http3Connection: @unchecked Sendable {
         }
     }
 
-    private func receiveAll(_ conn: NWConnection) async throws -> Data {
+    private func receiveAll(_ conn: NWConnection, transfer: TransferActivity?,
+                            onTransfer: @Sendable (ImageTransferProgress) -> Void) async throws -> Data {
         var acc = Data()
+        var progress = HTTP3TransferProgress()
+        var lastReport: TimeInterval = 0
         while true {
             let (chunk, done) = try await receiveOnce(conn)
-            if let chunk, !chunk.isEmpty { acc.append(chunk) }
+            if let chunk, !chunk.isEmpty {
+                acc.append(chunk)
+                let now = ProcessInfo.processInfo.systemUptime
+                try progress.append(chunk, now: now)
+                transfer?.report(progress.value)
+                if now - lastReport >= 0.2 { lastReport = now; onTransfer(progress.value) }
+            }
             if done || chunk == nil { break }
+        }
+        guard progress.complete, progress.value.expected.map({ $0 == progress.value.received }) ?? true else {
+            throw URLError(.badServerResponse)
         }
         return acc
     }

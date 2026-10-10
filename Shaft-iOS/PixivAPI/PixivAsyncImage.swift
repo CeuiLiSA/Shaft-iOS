@@ -104,28 +104,9 @@ final class PixivImageCache {
     static let shared = PixivImageCache()
 
     private let cache = NSCache<NSString, UIImage>()
-    private let session: URLSession
-    /// Snapshotted with the session: when set, CDN requests are rewritten
-    /// host→IP for direct connection (see `DirectConnection`).
-    private let directConnect: Bool
-
     init() {
         cache.countLimit = 200
-        cache.totalCostLimit = 64 * 1024 * 1024  // ~64 MB of decoded images
-        let cfg = URLSessionConfiguration.default
-        cfg.timeoutIntervalForRequest = 15
-        // Disk-only HTTP cache: cold launches reuse encoded bytes from earlier
-        // sessions instead of re-downloading the whole feed. memoryCapacity 0
-        // because decoded images already dedup via NSCache — an in-memory
-        // URLCache would double-cache the encoded bytes.
-        cfg.urlCache = URLCache(memoryCapacity: 0, diskCapacity: 256 * 1024 * 1024)
-        // Pixiv CDN image URLs are immutable (content changes get new paths) —
-        // serve straight from disk without revalidation round-trips.
-        cfg.requestCachePolicy = .returnCacheDataElseLoad
-        // Mirror Android: mirror/custom hosts use normal DNS + TLS/SNI.
-        self.directConnect = DirectConnection.isEnabled && !ImageHostManager.requiresStandardClient()
-        self.session = directConnect ? DirectConnection.makeSession(cfg)
-                                     : URLSession(configuration: cfg)
+        cache.totalCostLimit = 64 * 1024 * 1024
     }
 
     private func routed(_ url: URL) -> URL {
@@ -153,31 +134,20 @@ final class PixivImageCache {
         FileManager.default.fileExists(atPath: diskURL(for: ImageHostManager.rewrite(url)).path)
     }
 
-    private var inflightLoads: [URL: Task<UIImage?, Never>] = [:]
-
     func load(_ url: URL) async -> UIImage? {
         let url = routed(url)
-        if let cached = cache.object(forKey: url.absoluteString as NSString) {
-            return cached
+        if let cached = cache.object(forKey: url.absoluteString as NSString) { return cached }
+        guard let data = await loadData(url), !Task.isCancelled else { return nil }
+        let image = await Self.decodeThumbnail(data)
+        guard !Task.isCancelled else { return nil }
+        if let image { cache.setObject(image, forKey: url.absoluteString as NSString, cost: cost(image, 0)) }
+        else {
+            // A proxy can return a login/error page with HTTP 200. Keep a
+            // failed decode from poisoning every later visit to this URL.
+            let file = diskURL(for: url)
+            await Self.diskFiles.remove(file, ifMatching: data)
         }
-        // One download+decode per URL no matter how many cells/pages want it
-        // (waterfall cell + detail hero share the same `large` URL).
-        if let inflight = inflightLoads[url] {
-            return await inflight.value
-        }
-        let task = Task { [session, directConnect] () -> UIImage? in
-            guard let (data, _) = try? await DirectConnection.data(
-                for: .pixivImage(url), using: session, directConnect: directConnect
-            ) else { return nil }
-            return await Self.decodeThumbnail(data)
-        }
-        inflightLoads[url] = task
-        let img = await task.value
-        inflightLoads.removeValue(forKey: url)
-        if let img {
-            cache.setObject(img, forKey: url.absoluteString as NSString, cost: cost(img, 0))
-        }
-        return img
+        return image
     }
 
     /// Fully decodes (and, for oversized sources, downsamples) off the main
@@ -238,6 +208,7 @@ final class PixivImageCache {
     // MARK: Raw-bytes disk cache (zoom viewer + lossless save)
 
     private nonisolated static let diskLimit = 512 * 1024 * 1024
+    private nonisolated static let diskFiles = ImageCacheFiles()
 
     private nonisolated static let diskDir: URL = {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -263,64 +234,89 @@ final class PixivImageCache {
     /// Concurrent calls for the same URL share one download: a late joiner
     /// (e.g. the zoom viewer opened while the detail hero is still fetching)
     /// is replayed the current progress immediately and continues from there.
-    func loadData(_ url: URL,
+    func loadData(_ url: URL, forDownload: Bool = false,
+                  onTransfer: @MainActor @escaping (ImageTransferProgress) -> Void = { _ in },
                   onProgress: @MainActor @escaping (Double) -> Void = { _ in }) async -> Data? {
+        guard !Task.isCancelled else { return nil }
         let url = routed(url)
         let file = diskURL(for: url)
-        if let data = try? Data(contentsOf: file, options: .mappedIfSafe) {
+        if let data = await Self.diskFiles.read(file) {
+            guard !Task.isCancelled else { return nil }
+            onTransfer(ImageTransferProgress(received: Int64(data.count), expected: Int64(data.count), complete: true))
+            onProgress(1)
             return data
         }
-
+        let retry = forDownload && ImageTransferPolicy.active.customized
         let download: InflightDataDownload
         if let existing = inflightData[url] {
             download = existing
+            if retry { download.options.enableRetry() }
+            if !forDownload { download.options.includeDisplay() }
         } else {
-            download = InflightDataDownload()
+            download = InflightDataDownload(retry: retry, display: !forDownload)
             inflightData[url] = download
             let req = URLRequest.pixivImage(url)
-            // Strong captures: the task → download cycle lasts only until the
-            // download finishes; `self` is the long-lived singleton.
             download.task = Task.detached(priority: .userInitiated) { [self, download] in
-                let downloader = ProgressImageDownloader { p in
-                    Task { @MainActor in download.report(p) }
+                let downloader = ProgressImageDownloader(options: download.options) { progress in
+                    Task { @MainActor in download.report(progress) }
                 }
                 let data = await downloader.run(req)
-                if let data { try? data.write(to: file) }
-                await MainActor.run { _ = inflightData.removeValue(forKey: url) }
-                return data
+                if let data, !Task.isCancelled { await Self.diskFiles.write(data, to: file) }
+                await MainActor.run {
+                    download.finish(data)
+                    if inflightData[url] === download { inflightData[url] = nil }
+                }
             }
         }
-
-        let observerID = download.addObserver(onProgress)
-        let data = await download.task.value
-        download.removeObserver(observerID)
-        return data
+        let observerID = UUID()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if Task.isCancelled { continuation.resume(returning: nil); return }
+                download.addObserver(observerID, continuation: continuation, callback: { progress in
+                    onTransfer(progress)
+                    if let fraction = progress.fraction { onProgress(fraction) }
+                })
+            }
+        } onCancel: {
+            Task { @MainActor in
+                download.cancelObserver(observerID)
+                if download.isEmpty {
+                    download.task.cancel()
+                    if self.inflightData[url] === download { self.inflightData[url] = nil }
+                }
+            }
+        }
     }
 
-    /// One shared original-bytes download with progress fan-out to every page
-    /// that's watching it.
     @MainActor
     private final class InflightDataDownload {
-        var task: Task<Data?, Never>!
-        private var progress: Double = 0
-        private var nextID = 0
-        private var observers: [Int: @MainActor (Double) -> Void] = [:]
-
-        func addObserver(_ cb: @MainActor @escaping (Double) -> Void) -> Int {
-            let id = nextID
-            nextID += 1
-            observers[id] = cb
-            cb(progress)
-            return id
+        let options: ImageTransferOptions
+        var task: Task<Void, Never>!
+        private var progress = ImageTransferProgress()
+        private var observers: [UUID: (CheckedContinuation<Data?, Never>, @MainActor (ImageTransferProgress) -> Void)] = [:]
+        private var finished = false
+        private var result: Data?
+        var isEmpty: Bool { observers.isEmpty }
+        init(retry: Bool, display: Bool) { options = ImageTransferOptions(retry: retry, display: display) }
+        func addObserver(_ id: UUID, continuation: CheckedContinuation<Data?, Never>,
+                         callback: @MainActor @escaping (ImageTransferProgress) -> Void) {
+            callback(progress)
+            if finished { continuation.resume(returning: result) }
+            else { observers[id] = (continuation, callback) }
         }
-
-        func removeObserver(_ id: Int) {
-            observers.removeValue(forKey: id)
+        func cancelObserver(_ id: UUID) { observers.removeValue(forKey: id)?.0.resume(returning: nil) }
+        func report(_ value: ImageTransferProgress) {
+            guard !finished else { return }
+            progress = value
+            for observer in observers.values { observer.1(value) }
         }
-
-        func report(_ p: Double) {
-            progress = p
-            for cb in observers.values { cb(p) }
+        func finish(_ data: Data?) {
+            guard !finished else { return }
+            finished = true
+            result = data
+            let pending = observers.values
+            observers.removeAll()
+            for observer in pending { observer.0.resume(returning: data) }
         }
     }
 
@@ -347,90 +343,129 @@ final class PixivImageCache {
     }
 }
 
-/// Delegate-based image download that reports byte progress. Backs `loadData`'s
-/// `original` fetches; everything else goes through `load`, whose
-/// `URLSession.data` gives no incremental progress. Cancelling the awaiting
-/// task cancels the underlying download.
-private final class ProgressImageDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    private let onProgress: @Sendable (Double) -> Void
+/// Serial disk access also keeps a failed old decode from deleting the bytes
+/// of a newer successful transfer. No filesystem work runs on the main actor.
+private actor ImageCacheFiles {
+    func read(_ file: URL) -> Data? { try? Data(contentsOf: file, options: .mappedIfSafe) }
+    func write(_ data: Data, to file: URL) {
+        guard !Task.isCancelled else { return }
+        try? data.write(to: file, options: .atomic)
+    }
+    func remove(_ file: URL, ifMatching data: Data) {
+        guard read(file) == data else { return }
+        try? FileManager.default.removeItem(at: file)
+    }
+}
+
+/// Each instance belongs to one shared transfer. Delegate state is serialized;
+/// cancellation may arrive on any executor and only touches the locked task.
+final class ProgressImageDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    private let options: ImageTransferOptions
+    private let onProgress: @Sendable (ImageTransferProgress) -> Void
+    private let configuration: URLSessionConfiguration?
+    private let lock = NSLock()
+    private var currentTask: URLSessionDownloadTask?
+    private var cancelled = false
     private var continuation: CheckedContinuation<Data?, Never>?
     private var finished = false
-    /// This downloader owns its session delegate (`self`), so it can't share
-    /// `DirectConnection`'s — it rewrites the request and runs the same trust
-    /// decision in `didReceive challenge` below.
-    private let directConnect = DirectConnection.isEnabledAtLaunch
-        && !ImageHostManager.requiresStandardClient()
-
-    init(onProgress: @escaping @Sendable (Double) -> Void) {
+    private var progress = ImageTransferProgress()
+    private var lastReportUptime: TimeInterval = 0
+    private var request: URLRequest?
+    init(options: ImageTransferOptions, configuration: URLSessionConfiguration? = nil,
+         onProgress: @escaping @Sendable (ImageTransferProgress) -> Void) {
+        self.options = options
+        self.configuration = configuration
         self.onProgress = onProgress
     }
 
     func run(_ request: URLRequest) async -> Data? {
-        // Direct connect routes over HTTP/3, which has no incremental byte
-        // progress — fetch whole, then report 100%.
-        if directConnect {
-            let data = try? await DirectConnection.data(
-                for: request, using: URLSession.shared, directConnect: true
-            ).0
-            if data != nil { onProgress(1.0) }
-            return data
+        if configuration == nil && DirectConnection.imageDirectConnectAtLaunch {
+            var attempts = 0
+            while !Task.isCancelled {
+                let activity = TransferActivity()
+                let attempt = attempts
+                do {
+                    let (data, response) = try await DirectConnection.data(
+                        for: request, using: URLSession.shared, directConnect: true,
+                        transfer: activity, idleSeconds: options.policy.idleSeconds,
+                        onTransfer: { [onProgress] value in
+                            var value = value; value.retryCount = attempt; onProgress(value)
+                        })
+                    guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode), !data.isEmpty else { return nil }
+                    onProgress(ImageTransferProgress(received: Int64(data.count), expected: Int64(data.count), complete: true, retryCount: attempts))
+                    return data
+                } catch {
+                    guard !Task.isCancelled, ImageTransferPolicy.shouldRetry(error: error,
+                        received: activity.received, attempts: attempts, enabled: options.allowsRetry) else { return nil }
+                    attempts += 1
+                }
+            }
+            return nil
         }
-        let cfg = URLSessionConfiguration.default
-        cfg.timeoutIntervalForRequest = 30
-        cfg.urlCache = nil  // originals persist in our own disk cache
+        self.request = request
+        let cfg = configuration ?? URLSessionConfiguration.default
+        cfg.timeoutIntervalForRequest = options.policy.idleSeconds
+        cfg.timeoutIntervalForResource = 15 * 60
+        cfg.urlCache = nil
         cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
-        let session = URLSession(configuration: cfg, delegate: self, delegateQueue: nil)
-        let task = session.downloadTask(with: request)
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        let session = URLSession(configuration: cfg, delegate: self, delegateQueue: queue)
         return await withTaskCancellationHandler {
-            await withCheckedContinuation { (cont: CheckedContinuation<Data?, Never>) in
-                self.continuation = cont
-                task.resume()
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation
+                self.launch(session.downloadTask(with: request))
             }
         } onCancel: {
-            task.cancel()
+            self.lock.withLock { self.cancelled = true; self.currentTask?.cancel() }
         }
     }
 
+    private func launch(_ task: URLSessionDownloadTask) {
+        lock.withLock {
+            currentTask = task
+            if cancelled { task.cancel() } else { task.resume() }
+        }
+    }
     private func finish(_ data: Data?, _ session: URLSession) {
         guard !finished else { return }
         finished = true
         continuation?.resume(returning: data)
         continuation = nil
+        lock.withLock { currentTask = nil }
         session.finishTasksAndInvalidate()
     }
-
-    /// Last progress forwarded; delegate callbacks arrive per network chunk
-    /// (hundreds/sec on fast Wi-Fi) and each forwarded value hops to the main
-    /// actor and re-renders SwiftUI — throttle to whole-percent steps.
-    private var lastReportedProgress: Double = -1
-
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
-                    totalBytesExpectedToWrite: Int64) {
-        guard totalBytesExpectedToWrite > 0 else { return }
-        let p = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-        guard p - lastReportedProgress >= 0.01 || p >= 1 else { return }
-        lastReportedProgress = p
-        onProgress(p)
+                    didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        let now = ProcessInfo.processInfo.systemUptime
+        progress.received = totalBytesWritten
+        progress.expected = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : nil
+        if bytesWritten > 0 { progress.lastByteUptime = now }
+        if now - lastReportUptime >= 0.2 {
+            lastReportUptime = now
+            onProgress(progress)
+        }
     }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
-                    didFinishDownloadingTo location: URL) {
-        // Must read the temp file synchronously — it's removed when this returns.
-        finish(try? Data(contentsOf: location), session)
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        guard let http = downloadTask.response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+              let data = try? Data(contentsOf: location), !data.isEmpty else { finish(nil, session); return }
+        progress.received = Int64(data.count)
+        progress.expected = Int64(data.count)
+        progress.complete = true
+        onProgress(progress)
+        finish(data, session)
     }
-
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if error != nil { finish(nil, session) }
-    }
-
-    /// Re-anchors cert validation to the real host for direct-connect (IP
-    /// literal) downloads; a no-op otherwise. See `DirectConnection.handle`.
-    func urlSession(_ session: URLSession, task: URLSessionTask,
-                    didReceive challenge: URLAuthenticationChallenge,
-                    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        let (disposition, credential) = DirectConnection.handle(challenge, task: task)
-        completionHandler(disposition, credential)
+        guard !finished else { return }
+        if let error, !lock.withLock({ cancelled }),
+           ImageTransferPolicy.shouldRetry(error: error, received: progress.received,
+               attempts: progress.retryCount, enabled: options.allowsRetry), let request {
+            progress.retryCount += 1
+            progress.lastByteUptime = ProcessInfo.processInfo.systemUptime
+            onProgress(progress)
+            let resume = (error as NSError).userInfo[NSURLSessionDownloadTaskResumeData] as? Data
+            launch(resume.map(session.downloadTask(withResumeData:)) ?? session.downloadTask(with: request))
+        } else { finish(nil, session) }
     }
 }
 

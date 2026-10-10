@@ -13,19 +13,35 @@ final class NetworkReachability: @unchecked Sendable {
     private let monitor = NWPathMonitor()
     private let lock = NSLock()
     private var online = true
+    private var unmetered = false
+    private var wifi = false
+    private var initialized = false
 
     var isOnline: Bool { lock.withLock { online } }
+    var isUnmetered: Bool { lock.withLock { unmetered } }
+    var isWiFi: Bool { lock.withLock { wifi } }
+    var hasInitialPath: Bool { lock.withLock { initialized } }
 
     private init() {
         monitor.pathUpdateHandler = { [weak self] path in
             guard let self else { return }
             let up = path.status == .satisfied
+            let cheap = up && !path.isExpensive && !path.isConstrained
+            let wifi = up && path.usesInterfaceType(.wifi)
             let changed = self.lock.withLock { () -> Bool in
                 let c = self.online != up
                 self.online = up
+                self.unmetered = cheap
+                self.wifi = wifi
+                self.initialized = true
                 return c
             }
-            Task { @MainActor in NetworkState.shared.isOnline = up }
+            Task { @MainActor in
+                NetworkState.shared.isOnline = up
+                NetworkState.shared.isUnmetered = cheap
+                NetworkState.shared.isWiFi = wifi
+                DownloadManager.shared.networkChanged()
+            }
             // 掉网时引擎每个 tick 直接返回 Idle 睡到兜底心跳；恢复联网要主动踢一脚，
             // 否则最长要等 15 分钟才会接着补页。
             if changed { BookmarkMirrorService.shared.kick(up ? "network online" : "network offline") }
@@ -42,6 +58,8 @@ final class NetworkReachability: @unchecked Sendable {
 final class NetworkState {
     static let shared = NetworkState()
     var isOnline = true
+    var isUnmetered = false
+    var isWiFi = false
     private init() {
         NetworkReachability.shared.warmUp()
     }

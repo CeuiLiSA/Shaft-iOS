@@ -151,11 +151,13 @@ enum DirectConnection {
     /// supplied session.
     static func data(for request: URLRequest,
                      using session: URLSession,
-                     directConnect: Bool) async throws -> (Data, URLResponse) {
+                     directConnect: Bool, transfer: TransferActivity? = nil, idleSeconds: TimeInterval? = nil,
+                     onTransfer: @Sendable @escaping (ImageTransferProgress) -> Void = { _ in }) async throws -> (Data, URLResponse) {
         if directConnect,
            let host = request.url?.host,
            let target = http3Targets[host] {
-            return try await Http3Pool.shared.data(for: request, host: target.sni, ip: target.ip)
+            return try await Http3Pool.shared.data(for: request, host: target.sni, ip: target.ip,
+                                                 transfer: transfer, idleSeconds: idleSeconds, onTransfer: onTransfer)
         }
         return try await session.data(for: directConnect ? rewrite(request) : request)
     }

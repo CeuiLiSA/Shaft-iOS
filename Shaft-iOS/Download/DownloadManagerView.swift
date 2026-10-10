@@ -168,6 +168,14 @@ private struct DownloadQueueTab: View {
                                     Button { manager.retry(item.id) } label: {
                                         Label(l10n.t(.actionRetry), systemImage: "arrow.clockwise")
                                     }.tint(.blue)
+                                } else if item.status == .downloading {
+                                    Button { manager.pause(item.id) } label: {
+                                        Label(l10n.t(.dlPauseAll), systemImage: "pause")
+                                    }.tint(.orange)
+                                } else {
+                                    Button { manager.resume(item.id) } label: {
+                                        Label(l10n.t(.dlResumeAll), systemImage: "play")
+                                    }.tint(.blue)
                                 }
                             }
                     }
@@ -188,8 +196,9 @@ private struct DownloadQueueTab: View {
     private var bottomBar: some View {
         HStack(spacing: 8) {
             DLActionButton(
-                title: manager.isPaused ? l10n.t(.dlQueueResume) : l10n.t(.dlQueuePause)
-            ) { manager.togglePause() }
+                title: manager.hasOnlyFailed ? l10n.t(.actionRetry) : manager.shouldResumeAll ? l10n.t(.dlQueueResume) : l10n.t(.dlQueuePause),
+                disabled: manager.queue.isEmpty
+            ) { if manager.hasOnlyFailed { manager.retryFailed() } else { manager.togglePause() } }
             DLActionButton(
                 title: l10n.t(.dlQueueRetryFailed),
                 disabled: manager.failedCount == 0
@@ -254,7 +263,7 @@ private struct DownloadActiveTab: View {
             } else {
                 List {
                     ForEach(manager.activeRows) { item in
-                        ActiveRow(item: item, paused: manager.isPaused) { manager.remove(item.id) }
+                        ActiveRow(item: item) { manager.remove(item.id) }
                             .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
                     }
                 }
@@ -284,8 +293,9 @@ private struct DownloadActiveTab: View {
     private var bottomBar: some View {
         HStack(spacing: 8) {
             DLActionButton(
-                title: manager.isPaused ? l10n.t(.dlResumeAll) : l10n.t(.dlPauseAll)
-            ) { manager.togglePause() }
+                title: manager.hasOnlyFailed ? l10n.t(.actionRetry) : manager.shouldResumeAll ? l10n.t(.dlResumeAll) : l10n.t(.dlPauseAll),
+                disabled: manager.queue.isEmpty
+            ) { if manager.hasOnlyFailed { manager.retryFailed() } else { manager.togglePause() } }
             DLActionButton(
                 title: l10n.t(.dlQueueClearAll),
                 role: .destructive,
@@ -299,7 +309,6 @@ private struct DownloadActiveTab: View {
 
 private struct ActiveRow: View {
     let item: DownloadItem
-    let paused: Bool
     let onCancel: () -> Void
     @Environment(OnboardingStore.self) private var l10n
 
@@ -308,14 +317,30 @@ private struct ActiveRow: View {
             DLThumb(urlString: item.info.thumbnailURL)
             VStack(alignment: .leading, spacing: 6) {
                 Text(item.info.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                ProgressView(value: min(max(item.progress, 0), 1))
-                    .tint(paused ? .orange : (item.info.kind == .ugoira ? .purple : .blue))
+                if item.info.kind != .ugoira, item.transfer?.fraction == nil {
+                    ProgressView().tint(.blue)
+                } else {
+                    ProgressView(value: min(max(item.progress, 0), 1))
+                        .tint(item.info.kind == .ugoira ? .purple : .blue)
+                }
+                if let transfer = item.transfer {
+                    TimelineView(.periodic(from: .now, by: 1)) { _ in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(transfer.expected.map { "\(ByteCountFormatter.string(fromByteCount: transfer.received, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: $0, countStyle: .file))" }
+                                ?? l10n.t(.dlmgrActiveSizeUnknown))
+                            if let seconds = transfer.stalledSeconds(now: ProcessInfo.processInfo.systemUptime, threshold: ImageTransferPolicy.active.idleSeconds) {
+                                Text(String(format: l10n.t(.dlmgrActiveSizeStalled), seconds, Int(ImageTransferPolicy.active.idleSeconds)))
+                                    .foregroundStyle(.orange)
+                            }
+                        }.font(.caption)
+                    }
+                }
                 HStack(spacing: 8) {
                     Text(detailText)
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 0)
-                    Text("\(Int(item.progress * 100))%")
+                    Text(item.info.kind != .ugoira && item.transfer?.fraction == nil ? "—" : "\(Int(item.progress * 100))%")
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
@@ -330,7 +355,6 @@ private struct ActiveRow: View {
     }
 
     private var detailText: String {
-        if paused { return l10n.t(.dlActivePaused) }
         if item.info.kind == .ugoira {
             let phase = item.ugoiraPhase ?? .queued
             return "UGOIRA · \(l10n.t(phase.label))"

@@ -93,6 +93,8 @@ struct DownloadItem: Identifiable, Codable, Hashable, Sendable {
     var retryCount: Int = 0
     var error: String? = nil
     var ugoiraPhase: UgoiraPhase? = nil
+    var transfer: ImageTransferProgress? = nil
+    var userPaused: Bool? = nil
 
     var id: Int64 { info.id }
 }
@@ -217,7 +219,14 @@ final class DownloadManager {
 
     private(set) var queue: [DownloadItem] = []
     private(set) var done: [DoneRecord] = []
-    var isPaused = false { didSet { guard !isLoading else { return }; if !isPaused { pump() }; persistFlags() } }
+    var isPaused = false {
+        didSet {
+            guard !isLoading else { return }
+            if isPaused { manualStarts.removeAll(); for id in queue.map(\.id) { pause(id, user: false) } }
+            else { resumeWaitingItems() }
+            persistFlags()
+        }
+    }
     var doneLayout: DoneLayoutMode = .list { didSet { guard !isLoading else { return }; persistFlags() } }
 
     /// One-shot 「存储空间不足，已暂停全部下载」 notice, shown app-wide.
@@ -230,6 +239,10 @@ final class DownloadManager {
 
     @ObservationIgnored private var lastLowStorageNoticeAt: Date?
     @ObservationIgnored private var runningTasks: [Int64: Task<Void, Never>] = [:]
+    @ObservationIgnored private var jobTokens: [Int64: UUID] = [:]
+    @ObservationIgnored private var manualStarts = Set<Int64>()
+    @ObservationIgnored private var wasWiFi = NetworkReachability.shared.isWiFi
+    @ObservationIgnored private var lastMode = 0
     @ObservationIgnored private var seqCounter: Int64 = 0
     @ObservationIgnored private var isLoading = false
     @ObservationIgnored private let api = PixivAPI.make(tokenProvider: AuthTokenProvider.shared)
@@ -251,17 +264,43 @@ final class DownloadManager {
     /// Done cards are grouped by illust id (one card per work).
     var doneCards: [DoneRecord] { done.sorted { $0.savedAt > $1.savedAt } }
 
-    private init() {
+    struct Services {
+        var authorize: @MainActor () async -> Bool = { await PhotoLibrarySaver.requestAuthorization() }
+        var loadImage: @MainActor (URL, @escaping @MainActor (ImageTransferProgress) -> Void, @escaping @MainActor (Double) -> Void) async -> Data? = {
+            await PixivImageCache.shared.loadData($0, forDownload: true, onTransfer: $1, onProgress: $2)
+        }
+        var save: @MainActor (Data) async throws -> Void = { try await PhotoLibrarySaver.save(data: $0) }
+        var fetchUgoira: @MainActor (Int64, PixivAPI, @escaping @Sendable (ImageTransferProgress) -> Void,
+                          @escaping @Sendable (DownloadItem.UgoiraPhase) -> Void) async throws -> [UgoiraGIF.Frame] = {
+            try await UgoiraGIF.fetchFrames(illustId: $0, api: $1, onTransfer: $2, onPhase: $3)
+        }
+        var mode: @MainActor () -> Int = { AppSettingsStore.shared.downloadLimitType }
+        var wifi: @MainActor () -> Bool = { NetworkReachability.shared.isWiFi }
+        var hasRoom: () -> Bool = { StorageSpaceGuard.hasRoomForDownload() }
+    }
+    @ObservationIgnored private let services: Services
+    @ObservationIgnored private let directoryOverride: URL?
+    @ObservationIgnored private let defaults: UserDefaults
+    init(directory: URL? = nil, defaults: UserDefaults = .standard, services: Services = Services(), autostart: Bool = true) {
+        self.directoryOverride = directory
+        self.defaults = defaults
+        self.services = services
+        wasWiFi = services.wifi()
+        lastMode = services.mode()
         load()
         // Anything caught mid-flight by a kill resumes from PENDING.
         for i in queue.indices where queue[i].status == .downloading {
             queue[i].status = .pending
-            queue[i].progress = 0
+            queue[i].progress = Double(queue[i].pagesDone) / Double(queue[i].info.pageCount)
             queue[i].currentPage = 0
-            queue[i].pagesDone = 0
+            queue[i].transfer = nil
+            queue[i].userPaused = false
             queue[i].ugoiraPhase = nil
         }
-        pump()
+        if services.mode() == 2 {
+            for i in queue.indices where queue[i].status == .pending { queue[i].status = .paused; queue[i].userPaused = false }
+        }
+        if autostart { pump() }
     }
 
     // MARK: Enqueue
@@ -269,13 +308,17 @@ final class DownloadManager {
     /// Add works to the queue (skipping ones already queued). Returns how many
     /// were newly added. Resumes draining unless the user paused.
     @discardableResult
-    func enqueue(_ illusts: [Illust]) -> Int {
-        let existing = Set(queue.map(\.id))
+    func enqueue(_ illusts: [Illust], resolution: ImageResolution? = nil) -> Int {
+        var existing = Set(queue.map(\.id))
         var added = 0
-        let resolution = ImageResolution.default
+        let resolution = resolution ?? ImageResolution.default
         for illust in illusts where !existing.contains(illust.id) {
             seqCounter += 1
-            queue.append(DownloadItem(info: DownloadWorkInfo(illust: illust, resolution: resolution), seq: seqCounter))
+            var item = DownloadItem(info: DownloadWorkInfo(illust: illust, resolution: resolution), seq: seqCounter)
+            item.userPaused = false
+            if isPaused || services.mode() == 2 { item.status = .paused }
+            queue.append(item)
+            existing.insert(illust.id)
             added += 1
         }
         if added > 0 { persist(); pump() }
@@ -284,7 +327,70 @@ final class DownloadManager {
 
     // MARK: Queue controls
 
-    func togglePause() { isPaused.toggle() }
+    var hasOnlyFailed: Bool { !queue.isEmpty && queue.allSatisfy { $0.status == .failed } }
+    var shouldResumeAll: Bool { activeRows.isEmpty && (isPaused || (!queue.isEmpty && queue.allSatisfy {
+        $0.status == .paused || $0.status == .failed || ($0.status == .pending && !mayStart($0.id))
+    })) }
+    func togglePause() {
+        if shouldResumeAll {
+            if isPaused { isPaused = false } else { resumeWaitingItems() }
+        } else { isPaused = true }
+    }
+    private func resumeWaitingItems() {
+        for i in queue.indices where queue[i].status == .paused { queue[i].status = .pending; queue[i].userPaused = false }
+        if services.mode() != 0 { manualStarts.formUnion(queue.filter { $0.status == .pending }.map(\.id)) }
+        persist(); pump()
+    }
+    func pause(_ id: Int64, user: Bool = true) {
+        guard let i = queue.firstIndex(where: { $0.id == id }), queue[i].status != .failed else { return }
+        manualStarts.remove(id)
+        queue[i].status = .paused
+        queue[i].userPaused = user || queue[i].userPaused == true
+        runningTasks[id]?.cancel()
+        persist()
+    }
+    func resume(_ id: Int64) {
+        guard let i = queue.firstIndex(where: { $0.id == id }), queue[i].status == .paused || queue[i].status == .pending else { return }
+        manualStarts.insert(id)
+        queue[i].userPaused = false
+        queue[i].status = .pending
+        persist(); pump()
+    }
+    func networkChanged() {
+        let wifi = services.wifi()
+        if wasWiFi && !wifi && services.mode() == 1 { manualStarts.removeAll() }
+        wasWiFi = wifi
+        for i in queue.indices where queue[i].status == .downloading && !mayStart(queue[i].id) {
+            queue[i].status = .pending
+            runningTasks[queue[i].id]?.cancel()
+        }
+        persist(); pump()
+    }
+    func preferencesChanged() {
+        let mode = services.mode()
+        if mode != lastMode {
+            lastMode = mode
+            manualStarts.removeAll()
+            for i in queue.indices where queue[i].status != .failed {
+                if mode == 2 {
+                    if queue[i].status != .paused { queue[i].userPaused = false }
+                    queue[i].status = .paused
+                    runningTasks[queue[i].id]?.cancel()
+                } else if queue[i].status == .paused && queue[i].userPaused == false && !isPaused {
+                    queue[i].status = .pending
+                }
+            }
+        }
+        networkChanged()
+    }
+    private func mayStart(_ id: Int64) -> Bool {
+        DownloadStartPolicy.allows(mode: services.mode(),
+            wifi: services.wifi(), manuallyAllowed: manualStarts.contains(id), globallyPaused: isPaused)
+    }
+    private func owns(_ id: Int64, _ token: UUID) -> Bool { jobTokens[id] == token }
+    private func transferring(_ id: Int64, _ token: UUID) -> Bool {
+        owns(id, token) && queue.first(where: { $0.id == id })?.status == .downloading
+    }
 
     /// Pause the whole queue for low storage and tell the user once
     /// (`StorageSpaceGuard.pauseDownloadsForLowStorage`). Concurrent hits within
@@ -295,7 +401,7 @@ final class DownloadManager {
         let now = Date()
         if let last = lastLowStorageNoticeAt, now.timeIntervalSince(last) < 2 { return }
         lastLowStorageNoticeAt = now
-        lowStorageNotice = LowStorageNotice(freeBytes: max(StorageSpaceGuard.freeBytes() ?? 0, 0))
+        if DownloadNoticeKind.lowStorage.enabled { lowStorageNotice = LowStorageNotice(freeBytes: max(StorageSpaceGuard.freeBytes() ?? 0, 0)) }
     }
 
     func consumeLowStorageNotice(_ id: UUID) {
@@ -306,6 +412,7 @@ final class DownloadManager {
         for i in queue.indices where queue[i].status == .failed {
             queue[i].status = .pending
             queue[i].error = nil
+            manualStarts.insert(queue[i].id)
         }
         persist()
         pump()
@@ -315,6 +422,7 @@ final class DownloadManager {
         guard let i = queue.firstIndex(where: { $0.id == id }), queue[i].status == .failed else { return }
         queue[i].status = .pending
         queue[i].error = nil
+        manualStarts.insert(id)
         persist()
         pump()
     }
@@ -323,6 +431,8 @@ final class DownloadManager {
     func remove(_ id: Int64) {
         runningTasks[id]?.cancel()
         runningTasks[id] = nil
+        jobTokens[id] = nil
+        manualStarts.remove(id)
         queue.removeAll { $0.id == id }
         persist()
         pump()
@@ -332,6 +442,8 @@ final class DownloadManager {
     func clearQueue() {
         for t in runningTasks.values { t.cancel() }
         runningTasks.removeAll()
+        jobTokens.removeAll()
+        manualStarts.removeAll()
         queue.removeAll()
         persist()
     }
@@ -348,8 +460,7 @@ final class DownloadManager {
         persistDone()
     }
 
-    /// Record a completed download that bypassed the queue (e.g. the detail-page
-    /// FAB, which downloads immediately). Keeps the Done tab a complete history.
+    /// Record a completed download that bypassed the queue. Keeps Done history complete.
     func recordCompleted(_ illust: Illust) {
         let info = DownloadWorkInfo(illust: illust)
         appendDone(info: info)
@@ -358,10 +469,9 @@ final class DownloadManager {
     // MARK: Drain loop
 
     private func pump() {
-        guard !isPaused else { return }
         let limit = max(1, min(AppSettingsStore.shared.maxConcurrentDownloads, 5))
         while runningTasks.count < limit,
-              let next = queue.first(where: { $0.status == .pending }) {
+              let next = queue.first(where: { $0.status == .pending && runningTasks[$0.id] == nil && mayStart($0.id) }) {
             start(next.id)
         }
     }
@@ -369,99 +479,110 @@ final class DownloadManager {
     private func start(_ id: Int64) {
         guard runningTasks[id] == nil, let i = queue.firstIndex(where: { $0.id == id }) else { return }
         queue[i].status = .downloading
+        queue[i].transfer = nil
         queue[i].error = nil
         queue[i].ugoiraPhase = queue[i].info.kind == .ugoira ? .queued : nil
         let item = queue[i]
+        let token = UUID()
+        jobTokens[id] = token
         runningTasks[id] = Task { [weak self] in
-            await self?.run(item)
-            self?.runningTasks[id] = nil
-            self?.pump()
+            guard let self else { return }
+            await self.run(item, token: token)
+            guard self.owns(id, token) else { return }
+            self.runningTasks[id] = nil
+            self.jobTokens[id] = nil
+            self.pump()
         }
     }
 
-    private func run(_ item: DownloadItem) async {
-        guard await PhotoLibrarySaver.requestAuthorization() else {
-            fail(item.id, "Photos access denied"); return
+    private func run(_ item: DownloadItem, token: UUID) async {
+        guard await services.authorize() else {
+            if transferring(item.id, token) { fail(item.id, "Photos access denied") }; return
         }
-        if item.info.kind == .ugoira {
-            await runUgoira(item)
-        } else {
-            await runImages(item)
-        }
+        guard !Task.isCancelled, transferring(item.id, token) else { return }
+        if item.info.kind == .ugoira { await runUgoira(item, token: token) }
+        else { await runImages(item, token: token) }
     }
 
-    private func runImages(_ item: DownloadItem) async {
+    private func runImages(_ item: DownloadItem, token: UUID) async {
         let urls = item.info.pageURLs.compactMap(URL.init(string:))
         guard !urls.isEmpty else { fail(item.id, "No image URL"); return }
         let total = urls.count
-        var i = 0
+        var i = min(max(item.pagesDone, 0), urls.count)
         while i < urls.count {
             let url = urls[i]
-            await parkWhilePaused()
-            if Task.isCancelled { return }
+            if Task.isCancelled || !transferring(item.id, token) { return }
             // Check free space before every page (pixez#1361); the item stays
             // in flight and resumes from this page on 「全部继续」.
-            if !StorageSpaceGuard.hasRoomForDownload() {
+            if !services.hasRoom() {
                 pauseForLowStorage()
-                continue
+                return
             }
             mutate(item.id) { $0.currentPage = i + 1 }
             let page = i
-            let data = await PixivImageCache.shared.loadData(url) { [weak self] p in
-                self?.mutate(item.id, throttled: true) {
+            let data = await services.loadImage(url, { [weak self] transfer in
+                guard let self, self.transferring(item.id, token) else { return }
+                self.mutate(item.id) { $0.transfer = transfer; $0.retryCount = transfer.retryCount }
+            }, { [weak self] p in
+                guard let self, self.transferring(item.id, token) else { return }
+                self.mutate(item.id, throttled: true) {
                     $0.progress = (Double(page) + p) / Double(total)
                 }
-            }
-            if Task.isCancelled { return }
+            })
+            if Task.isCancelled || !transferring(item.id, token) { return }
             guard let data else { fail(item.id, "Couldn't load image"); return }
-            do { try await PhotoLibrarySaver.save(data: data) }
+            do { try await services.save(data) }
             catch {
                 // The disk filled up mid-save: stop everything and retry this
                 // page later instead of failing page after page.
-                if StorageSpaceGuard.isOutOfSpace(error) || !StorageSpaceGuard.hasRoomForDownload() {
+                if Task.isCancelled || !transferring(item.id, token) { return }
+                if StorageSpaceGuard.isOutOfSpace(error) || !services.hasRoom() {
                     pauseForLowStorage()
-                    continue
+                    return
                 }
                 fail(item.id, error.localizedDescription); return
             }
+            guard owns(item.id, token) else { return }
             mutate(item.id) { $0.pagesDone = page + 1; $0.progress = Double(page + 1) / Double(total) }
+            persist()
             i += 1
         }
+        guard !Task.isCancelled, transferring(item.id, token) else { return }
         complete(item.id, info: item.info)
     }
 
-    private func runUgoira(_ item: DownloadItem) async {
+    private func runUgoira(_ item: DownloadItem, token: UUID) async {
         let id = item.id
-        await parkWhilePaused()
-        if Task.isCancelled { return }
-        // Ugoira never goes page by page — gate the whole work up front.
-        while !StorageSpaceGuard.hasRoomForDownload() {
-            pauseForLowStorage()
-            await parkWhilePaused()
-            if Task.isCancelled { return }
-        }
+        guard !Task.isCancelled, transferring(id, token) else { return }
+        // Photos commits cannot be cancelled. A pause may have arrived while
+        // the previous job's GIF was being committed, just like a saved page.
+        if item.pagesDone >= 1 { complete(id, info: item.info); return }
+        if !services.hasRoom() { pauseForLowStorage(); return }
         do {
-            let frames = try await UgoiraGIF.fetchFrames(illustId: id, api: api) { [weak self] phase in
-                Task { @MainActor in self?.mutate(id) { $0.ugoiraPhase = phase } }
-            }
-            if Task.isCancelled { return }
+            let frames = try await services.fetchUgoira(id, api, { [weak self] transfer in
+                Task { @MainActor in
+                    guard let self, self.transferring(id, token) else { return }
+                    self.mutate(id) { $0.transfer = transfer; $0.retryCount = transfer.retryCount; $0.progress = (transfer.fraction ?? 0) * 0.5 }
+                }
+            }, { [weak self] phase in
+                Task { @MainActor in
+                    guard let self, self.transferring(id, token) else { return }
+                    self.mutate(id) { $0.ugoiraPhase = phase }
+                }
+            })
+            if Task.isCancelled || !transferring(id, token) { return }
             mutate(id) { $0.ugoiraPhase = .encoding; $0.progress = 0.5 }
             let gif = try await UgoiraGIF.encode(frames)
-            if Task.isCancelled { return }
-            try await PhotoLibrarySaver.save(data: gif)
-            mutate(id) { $0.progress = 1 }
+            if Task.isCancelled || !transferring(id, token) { return }
+            try await services.save(gif)
+            guard owns(id, token) else { return }
+            mutate(id) { $0.pagesDone = 1; $0.progress = 1 }
+            persist()
+            guard !Task.isCancelled, transferring(id, token) else { return }
             complete(id, info: item.info)
         } catch {
+            guard !Task.isCancelled, transferring(id, token) else { return }
             fail(id, error.localizedDescription)
-        }
-    }
-
-    /// Hold an in-flight task between pages while the queue is paused — the iOS
-    /// stand-in for upstream `Manager.stopAll()`, which suspends active transfers
-    /// (we can't interrupt a page mid-flight, so we gate at page boundaries).
-    private func parkWhilePaused() async {
-        while isPaused && !Task.isCancelled {
-            try? await Task.sleep(nanoseconds: 250_000_000)
         }
     }
 
@@ -487,6 +608,7 @@ final class DownloadManager {
 
     private func complete(_ id: Int64, info: DownloadWorkInfo) {
         lastProgressWrite[id] = nil
+        manualStarts.remove(id)
         queue.removeAll { $0.id == id }
         appendDone(info: info)
         persist()
@@ -511,7 +633,7 @@ final class DownloadManager {
 
     @ObservationIgnored private lazy var dir: URL = {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let d = base.appendingPathComponent("Downloads", isDirectory: true)
+        let d = directoryOverride ?? base.appendingPathComponent("Downloads", isDirectory: true)
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         return d
     }()
@@ -530,8 +652,8 @@ final class DownloadManager {
            let records = try? JSONDecoder().decode([DoneRecord].self, from: data) {
             done = records
         }
-        isPaused = UserDefaults.standard.bool(forKey: "dl_isPaused")
-        doneLayout = DoneLayoutMode(rawValue: UserDefaults.standard.integer(forKey: "dl_doneLayout")) ?? .list
+        isPaused = defaults.bool(forKey: "dl_isPaused")
+        doneLayout = DoneLayoutMode(rawValue: defaults.integer(forKey: "dl_doneLayout")) ?? .list
     }
 
     private func persist() {
@@ -555,8 +677,8 @@ final class DownloadManager {
     }
 
     private func persistFlags() {
-        UserDefaults.standard.set(isPaused, forKey: "dl_isPaused")
-        UserDefaults.standard.set(doneLayout.rawValue, forKey: "dl_doneLayout")
+        defaults.set(isPaused, forKey: "dl_isPaused")
+        defaults.set(doneLayout.rawValue, forKey: "dl_doneLayout")
     }
 }
 

@@ -2,7 +2,8 @@ import Foundation
 
 enum LocalizedStrings {
     static func string(for key: LocalizedKey, tag: String) -> String {
-        table[tag]?[key] ?? table["en"]?[key] ?? key.rawValue
+        OctoberPortStrings.table[tag]?[key] ?? table[tag]?[key]
+            ?? OctoberPortStrings.table["en"]?[key] ?? table["en"]?[key] ?? key.rawValue
     }
 
     private static let table: [String: [LocalizedKey: String]] = [

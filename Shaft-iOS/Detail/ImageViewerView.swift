@@ -14,6 +14,7 @@ struct ImageViewerView: View {
     var ugoiraIllustId: Int64? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(OnboardingStore.self) private var l10n
     @State private var saveStatus: SaveStatus = .idle
     @State private var showControls = true
 
@@ -75,7 +76,7 @@ struct ImageViewerView: View {
                         Image(systemName: saveAllButtonIcon)
                             .font(.title3)
                             .foregroundStyle(.white)
-                            .frame(width: 36, height: 36)
+                            .frame(width: 44, height: 44)
                             .background(.black.opacity(0.5), in: .circle)
                     }
                     .disabled(saveStatus.isInFlight)
@@ -87,16 +88,17 @@ struct ImageViewerView: View {
                     Image(systemName: saveButtonIcon)
                         .font(.title3)
                         .foregroundStyle(.white)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 44, height: 44)
                         .background(.black.opacity(0.5), in: .circle)
                 }
                 .disabled(saveStatus.isInFlight)
+                .accessibilityLabel(l10n.t(.crLongPressSave))
 
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
                         .font(.title3.bold())
                         .foregroundStyle(.white)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 44, height: 44)
                         .background(.black.opacity(0.5), in: .circle)
                 }
             }
@@ -113,7 +115,7 @@ struct ImageViewerView: View {
                     .background(.black.opacity(0.7), in: .capsule)
                     .padding(.top, 60)
                     .padding(.horizontal, 16)
-            } else if case .failed(let msg) = saveStatus {
+            } else if case .failed(let msg) = saveStatus, DownloadNoticeKind.failed.enabled {
                 Text(msg)
                     .font(.caption)
                     .foregroundStyle(.white)
@@ -135,11 +137,12 @@ struct ImageViewerView: View {
         }
     }
 
+    private static let saveImageIcon = UIImage(systemName: "photo.badge.arrow.down") == nil ? "square.and.arrow.down" : "photo.badge.arrow.down"
     private var saveButtonIcon: String {
         switch saveStatus {
-        case .idle, .failed:               return "square.and.arrow.down"
+        case .idle, .failed:               return Self.saveImageIcon
         case .saving:                      return "ellipsis"
-        case .savingAll:                   return "square.and.arrow.down"
+        case .savingAll:                   return Self.saveImageIcon
         case .saved:                       return "checkmark"
         }
     }
@@ -184,7 +187,7 @@ struct ImageViewerView: View {
     /// Writes the original encoded bytes — no re-encode, pixel-identical to
     /// what pixiv serves (same as Shaft's saveImageToGallery).
     private func saveOne(_ url: URL, alreadyAuthorized: Bool = false) async -> Bool {
-        guard let data = await PixivImageCache.shared.loadData(url) else {
+        guard let data = await PixivImageCache.shared.loadData(url, forDownload: true) else {
             saveStatus = .failed("Couldn't load image")
             return false
         }

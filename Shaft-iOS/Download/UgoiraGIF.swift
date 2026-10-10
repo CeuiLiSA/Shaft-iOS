@@ -31,6 +31,7 @@ enum UgoiraGIF {
     static func fetchFrames(
         illustId: Int64,
         api: PixivAPI,
+        onTransfer: @Sendable @escaping (ImageTransferProgress) -> Void = { _ in },
         onPhase: @Sendable @escaping (DownloadItem.UgoiraPhase) -> Void
     ) async throws -> [Frame] {
         onPhase(.meta)
@@ -43,9 +44,11 @@ enum UgoiraGIF {
             ($0.file ?? "", $0.delay ?? 100)
         }
         onPhase(.frames)
-        let (data, _) = try await DirectConnection.data(
-            for: .pixivImage(zipURL), using: DirectConnection.shared,
-            directConnect: DirectConnection.imageDirectConnectAtLaunch)
+        guard let data = await PixivImageCache.shared.loadData(zipURL, forDownload: true, onTransfer: onTransfer) else {
+            try Task.checkCancellation()
+            throw URLError(.badServerResponse)
+        }
+        try Task.checkCancellation()
         let files = try ZipReader.unpackAll(data)
         let frames = order.compactMap { ref -> Frame? in
             guard let bytes = files[ref.file] else { return nil }

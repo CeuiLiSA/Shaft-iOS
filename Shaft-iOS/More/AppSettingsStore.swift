@@ -12,6 +12,7 @@ final class AppSettingsStore {
     static let shared = AppSettingsStore()
 
     @ObservationIgnored private let defaults = UserDefaults.standard
+    @ObservationIgnored private var reloading = true
 
     // MARK: Network (网络)
     var directConnect = false { didSet { save(directConnect, "st_directConnect") } }
@@ -31,6 +32,8 @@ final class AppSettingsStore {
     var filterRankBookmarked = true { didSet { save(filterRankBookmarked, "st_filterRankBookmarked") } }
     var filterInvalidBookmarks = false { didSet { save(filterInvalidBookmarks, "st_filterInvalidBookmarks") } }
     var deleteAIIllust = false { didSet { save(deleteAIIllust, "st_deleteAIIllust") } }
+    var aiBlockExemptAuthorIds: [Int64] = [] { didSet { save(aiBlockExemptAuthorIds, "st_aiBlockExemptAuthorIds") } }
+    var aiBlockExemptDisabledIds: Set<Int64> = [] { didSet { save(aiBlockExemptDisabledIds.sorted(), "st_aiBlockExemptDisabledIds") } }
     var toastDownloadResult = true { didSet { save(toastDownloadResult, "st_toastDownloadResult") } }
     /// 0 = 无限制, 1…9 = 500/1000/2000/5000/7500/10000/20000/50000/100000 人收藏
     var searchFilterIndex = 0 { didSet { save(searchFilterIndex, "st_searchFilter") } }
@@ -73,6 +76,12 @@ final class AppSettingsStore {
     /// 0 跟随系统 / 1 浅色 / 2 深色
     var themeType = 0 { didSet { save(themeType, "st_themeType") } }
     var useStaggeredLayout = true { didSet { save(useStaggeredLayout, "st_useStaggeredLayout") } }
+    var illustListLayout = 0 { didSet { save(illustListLayout, "st_illustListLayout") } }
+    var showIllustCardBookmarkButton = true { didSet { save(showIllustCardBookmarkButton, "st_showIllustCardBookmarkButton") } }
+    var scrollEdgeHapticEnable = true { didSet { save(scrollEdgeHapticEnable, "st_scrollEdgeHapticEnable") } }
+    var imageReadTimeoutSeconds = 0 { didSet { save(imageReadTimeoutSeconds, "st_imageReadTimeoutSeconds") } }
+    var imageLoadRetryOnStall = false { didSet { save(imageLoadRetryOnStall, "st_imageLoadRetryOnStall") } }
+    var mutedDownloadToasts: Set<String> = [] { didSet { save(Array(mutedDownloadToasts).sorted(), "st_mutedDownloadToasts") } }
 
     // MARK: Download (下载)
     /// 0 Pictures / 1 Downloads / 2 SAF
@@ -86,8 +95,14 @@ final class AppSettingsStore {
     var pageIndexFrom1 = false { didSet { save(pageIndexFrom1, "st_pageIndexFrom1") } }
     var illustLongPressDownload = false { didSet { save(illustLongPressDownload, "st_illustLongPressDownload") } }
     /// 0 无限制 / 1 仅 Wi-Fi / 2 不自动下载
-    var downloadLimitType = 0 { didSet { save(downloadLimitType, "st_downloadLimitType") } }
-    var maxConcurrentDownloads = 1 { didSet { save(maxConcurrentDownloads, "st_maxConcurrentDownloads") } }
+    var downloadLimitType = 0 { didSet {
+        save(downloadLimitType, "st_downloadLimitType")
+        if !reloading { DownloadManager.shared.preferencesChanged() }
+    } }
+    var maxConcurrentDownloads = 1 { didSet {
+        save(maxConcurrentDownloads, "st_maxConcurrentDownloads")
+        if !reloading { DownloadManager.shared.preferencesChanged() }
+    } }
 
     // MARK: Personalization (个性化)
     var privateStar = false { didSet { save(privateStar, "st_privateStar") } }
@@ -128,7 +143,12 @@ final class AppSettingsStore {
         "ZoomOut", "Stack", "Tablet", "Drawer",
     ]
 
-    private init() {
+    private init() { reload() }
+
+    /// Rehydrate the observed singleton after restoring a backup.
+    func reload() {
+        reloading = true
+        defer { reloading = false }
         directConnect = bool("st_directConnect", false)
         useSecureDns = bool("st_useSecureDns", true)
         imageHostMode = int("st_imageHostMode", 0)
@@ -141,6 +161,8 @@ final class AppSettingsStore {
         filterRankBookmarked = bool("st_filterRankBookmarked", true)
         filterInvalidBookmarks = bool("st_filterInvalidBookmarks", false)
         deleteAIIllust = bool("st_deleteAIIllust", false)
+        aiBlockExemptAuthorIds = AIExemptAuthors.normalized(defaults.array(forKey: "st_aiBlockExemptAuthorIds") as? [Int64] ?? [])
+        aiBlockExemptDisabledIds = Set(defaults.array(forKey: "st_aiBlockExemptDisabledIds") as? [Int64] ?? []).intersection(aiBlockExemptAuthorIds)
         toastDownloadResult = bool("st_toastDownloadResult", true)
         searchFilterIndex = int("st_searchFilter", 0)
         searchSortIndex = SearchDefaults.index(of: SearchDefaults.sort)
@@ -157,6 +179,16 @@ final class AppSettingsStore {
         detailPanelCollapsedByDefault = bool("st_detailPanelCollapsedByDefault", false)
         themeType = int("st_themeType", 0)
         useStaggeredLayout = bool("st_useStaggeredLayout", true)
+        illustListLayout = int("st_illustListLayout", 0)
+        showIllustCardBookmarkButton = bool("st_showIllustCardBookmarkButton", true)
+        scrollEdgeHapticEnable = bool("st_scrollEdgeHapticEnable", true)
+        imageReadTimeoutSeconds = int("st_imageReadTimeoutSeconds", 0)
+        imageLoadRetryOnStall = bool("st_imageLoadRetryOnStall", false)
+        mutedDownloadToasts = Set(defaults.stringArray(forKey: "st_mutedDownloadToasts") ?? [])
+        if !bool("st_downloadToastsMigrated", false) {
+            mutedDownloadToasts = DownloadNoticeKind.migratedMuted(mutedDownloadToasts, legacyEnabled: bool("st_toastDownloadResult", true), migrated: false)
+            defaults.set(true, forKey: "st_downloadToastsMigrated")
+        }
         storageChoice = int("st_storageChoice", 0)
         overwritePolicy = int("st_overwritePolicy", 0)
         defaultNovelFormatIndex = int("st_defaultNovelExportFormat", 0)
