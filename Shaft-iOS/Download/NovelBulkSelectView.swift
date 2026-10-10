@@ -169,9 +169,9 @@ struct NovelBulkSelectView: View {
                 progress = (done, total)
             }
             progress = nil
-            flash(failures.isEmpty
+            if DownloadNoticeKind.novelBatchResult.enabled { flash(failures.isEmpty
                   ? l10n.t(.batchDownloadAllOk)
-                  : l10n.t(.batchDownloadSomeFailedFmt, "\(failures.count)"))
+                  : l10n.t(.batchDownloadSomeFailedFmt, "\(failures.count)")) }
         }
     }
 
@@ -189,10 +189,11 @@ struct NovelBulkSelectView: View {
         if case .add = op { add = true } else { add = false }
         let targets = add ? toBookmark : toUnbookmark
         progress = (0, targets.count)
+        BookmarkHaptics.commit(bookmarking: add)
         Task {
             var failed = 0
             for (i, novel) in targets.enumerated() {
-                do { try await store.toggleBookmark(novel: novel) } catch { failed += 1 }
+                do { try await store.toggleBookmark(novel: novel, feedback: false) } catch { failed += 1 }
                 progress = (i + 1, targets.count)
             }
             progress = nil

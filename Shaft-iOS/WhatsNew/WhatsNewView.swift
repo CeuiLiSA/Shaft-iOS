@@ -206,7 +206,9 @@ struct WhatsNewView: View {
                 }
                 .ignoresSafeArea()
             }
-            .refreshable { await vm.refreshActiveList() }
+            .preserveIllustScrollPosition()
+        .scrollEdgeFeedback()
+        .refreshable { await vm.refreshActiveList() }
             .task { await vm.start() }
         }
     }
@@ -232,7 +234,8 @@ struct WhatsNewView: View {
                     items: visible,
                     columns: mute.waterfallColumns,
                     spacing: 8,
-                    estimatedRelativeHeight: { $0.waterfallImageHeightRatio }
+                    estimatedRelativeHeight: { $0.waterfallImageHeightRatio },
+                        aspectRatio: { $0.imageAspectRatio }
                 ) { illust in
                     NavigationLink(value: illust) {
                         IllustWaterfallCell(illust: illust)

@@ -466,6 +466,8 @@ struct UserProfileView: View {
                 .onPreferenceChange(V3ProfileScrollOffsetKey.self) { scrollOffset = $0 }
                 .onPreferenceChange(V3ProfileTabBarYKey.self) { tabBarGlobalY = $0 }
                 .onPreferenceChange(V3ProfileHeaderHeightKey.self) { headerHeight = $0 }
+                .preserveIllustScrollPosition()
+                .scrollEdgeFeedback()
                 .refreshable { await vm.refreshDetail() }
                 .ignoresSafeArea(.container, edges: .top)
 
@@ -1353,9 +1355,8 @@ private struct NovelRowBookmarkButton: View {
     var body: some View {
         let bookmarked = store.isBookmarked(novel)
         Button {
-            BookmarkHaptics.commit(bookmarking: !bookmarked)
             Task {
-                do { try await store.toggleBookmark(novel: novel) } catch { BookmarkHaptics.failed() }
+                try? await store.toggleBookmark(novel: novel)
             }
         } label: {
             Image(systemName: "heart.fill")

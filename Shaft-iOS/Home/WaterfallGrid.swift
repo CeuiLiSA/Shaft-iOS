@@ -18,6 +18,7 @@ struct WaterfallGrid<Item: Identifiable, Cell: View>: View {
     /// Estimated relative cell height in *units of column width*. The exact
     /// scale doesn't matter — only ratios — but ~`1/aspect + label` is right.
     let estimatedRelativeHeight: (Item) -> Double
+    let aspectRatio: ((Item) -> Double)?
     let cell: (Item) -> Cell
 
     @State private var columnByID: [Item.ID: Int] = [:]
@@ -40,25 +41,63 @@ struct WaterfallGrid<Item: Identifiable, Cell: View>: View {
         columns: Int = 2,
         spacing: CGFloat = 8,
         estimatedRelativeHeight: @escaping (Item) -> Double,
+        aspectRatio: ((Item) -> Double)? = nil,
         @ViewBuilder cell: @escaping (Item) -> Cell
     ) {
         self.items = items
         self.columns = max(1, columns)
         self.spacing = spacing
         self.estimatedRelativeHeight = estimatedRelativeHeight
+        self.aspectRatio = aspectRatio
         self.cell = cell
     }
 
     var body: some View {
+        switch IllustListLayout.current {
+        case .masonry: masonry
+        case .grid:
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: spacing), count: effectiveColumns), spacing: spacing) {
+                ForEach(items) { cell($0).id($0.id) }
+            }
+            .scrollTargetLayout()
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
+        case .single:
+            LazyVStack(spacing: spacing) { ForEach(items) { cell($0).id($0.id) } }
+                .scrollTargetLayout()
+        case .justified:
+            justified
+        }
+    }
+
+    private var justified: some View {
+        let width = max(contentWidth, 1)
+        let ratios = items.map { aspectRatio?($0) ?? 1 / max(estimatedRelativeHeight($0), 0.01) }
+        let rows = JustifiedRows.make(aspectRatios: ratios, width: Double(width),
+                                     targetHeight: Double(width) / Double(effectiveColumns), spacing: Double(spacing))
+        return LazyVStack(alignment: .leading, spacing: spacing) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(alignment: .top, spacing: spacing) {
+                    ForEach(Array(row.indices.enumerated()), id: \.element) { column, index in
+                        cell(items[index]).id(items[index].id).frame(width: row.widths[column], height: row.height).clipped()
+                    }
+                }.scrollTargetLayout()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { contentWidth = $0 }
+    }
+
+    @ViewBuilder private var masonry: some View {
         let columns = effectiveColumns
         let buckets = distribute(columns: columns)
         HStack(alignment: .top, spacing: spacing) {
             ForEach(0..<columns, id: \.self) { col in
                 LazyVStack(spacing: spacing) {
                     ForEach(buckets[col]) { item in
-                        cell(item)
+                        cell(item).id(item.id)
                     }
                 }
+                .scrollTargetLayout()
                 .frame(maxWidth: .infinity)
             }
         }

@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var onboarding = OnboardingStore()
     @State private var auth = AuthViewModel()
+    @State private var appLock = AppLockController.shared
     @Environment(\.scenePhase) private var phase
 
     var body: some View {
@@ -20,6 +21,9 @@ struct ContentView: View {
                     .transition(.opacity)
             }
         }
+        .allowsHitTesting(!appLock.isLocked && !appLock.privacyShield)
+        .accessibilityHidden(appLock.isLocked || appLock.privacyShield)
+        .appLockPresentation(controller: appLock)
         .environment(onboarding)
         .environment(\.locale, onboarding.currentLocale)
         .onOpenURL { url in ReferralLinkStore.shared.receive(url) }

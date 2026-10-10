@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct Shaft_iOSApp: App {
+    @Environment(\.scenePhase) private var phase
     init() {
         AppFonts.register()
         // Load the image route before PixivImageCache/URLSession can be built.
@@ -22,6 +23,19 @@ struct Shaft_iOSApp: App {
             RootView()
             #endif
         }
+        .onChange(of: phase, initial: true) { _, value in
+            AppLockController.shared.update(value)
+            if value == .active { unlockAutomatically() }
+        }
+        .onChange(of: AppLockController.shared.authenticating) { _, authenticating in
+            if !authenticating, phase == .active { unlockAutomatically() }
+        }
+    }
+    private func unlockAutomatically() {
+        // An authentication dialog makes the app inactive. Its task must
+        // survive that transition; only entering the background invalidates it.
+        let reason = OnboardingStore().t(.applockPromptTitle, "Pixiv-Shaft")
+        Task { await AppLockController.shared.unlockAutomatically(reason: reason) }
     }
 }
 

@@ -104,8 +104,8 @@ final class InteractionStore {
 
     // MARK: Bookmark mutations (optimistic; revert + rethrow on failure)
 
-    func toggleBookmark(_ illust: Illust, restrict: String? = nil) async throws {
-        try await setBookmarked(!isBookmarked(illust), id: illust.id, restrict: restrict, tags: [], illust: illust)
+    func toggleBookmark(_ illust: Illust, restrict: String? = nil, feedback: Bool = true) async throws {
+        try await setBookmarked(!isBookmarked(illust), id: illust.id, restrict: restrict, tags: [], illust: illust, feedback: feedback)
     }
 
     /// Bookmark with explicit restrict + tags (the tag-sheet path). Re-applies
@@ -118,8 +118,9 @@ final class InteractionStore {
     /// concurrent toggle for the same id was already in flight). `illust` (when
     /// known) is forwarded as the event payload.
     @discardableResult
-    private func setBookmarked(_ target: Bool, id: Int64, restrict: String?, tags: [String], illust: Illust? = nil) async throws -> Bool {
+    private func setBookmarked(_ target: Bool, id: Int64, restrict: String?, tags: [String], illust: Illust? = nil, feedback: Bool = true) async throws -> Bool {
         guard !bookmarkBusy.contains(id) else { return false }
+        if feedback { BookmarkHaptics.commit(bookmarking: target) }
         bookmarkBusy.insert(id)
         defer { bookmarkBusy.remove(id) }
         let previous = illustBookmarked[id]
@@ -133,6 +134,7 @@ final class InteractionStore {
                 _ = try await api.unbookmarkIllust(id)
             }
         } catch {
+            if feedback { BookmarkHaptics.failed() }
             if let previous {
                 illustBookmarked[id] = previous
             } else {
@@ -169,8 +171,8 @@ final class InteractionStore {
 
     /// Novel-card heart (upstream `NovelFeedFragment.toggleNovelLike`): flips the
     /// color at the tap, reverts on failure.
-    func toggleBookmark(novel: Novel, restrict: String? = nil) async throws {
-        try await setNovelBookmarked(!isBookmarked(novel), id: novel.id, restrict: restrict, tags: [], novel: novel)
+    func toggleBookmark(novel: Novel, restrict: String? = nil, feedback: Bool = true) async throws {
+        try await setNovelBookmarked(!isBookmarked(novel), id: novel.id, restrict: restrict, tags: [], novel: novel, feedback: feedback)
     }
 
     func bookmark(novelId: Int64, restrict: String, tags: [String], novel: Novel? = nil) async throws {
@@ -178,8 +180,9 @@ final class InteractionStore {
     }
 
     @discardableResult
-    private func setNovelBookmarked(_ target: Bool, id: Int64, restrict: String?, tags: [String], novel: Novel?) async throws -> Bool {
+    private func setNovelBookmarked(_ target: Bool, id: Int64, restrict: String?, tags: [String], novel: Novel?, feedback: Bool = true) async throws -> Bool {
         guard !novelBookmarkBusy.contains(id) else { return false }
+        if feedback { BookmarkHaptics.commit(bookmarking: target) }
         novelBookmarkBusy.insert(id)
         defer { novelBookmarkBusy.remove(id) }
         let previous = novelBookmarked[id]
@@ -193,6 +196,7 @@ final class InteractionStore {
                 _ = try await api.unbookmarkNovel(id)
             }
         } catch {
+            if feedback { BookmarkHaptics.failed() }
             if let previous {
                 novelBookmarked[id] = previous
             } else {
@@ -230,6 +234,7 @@ final class InteractionStore {
     func setFollowed(_ target: Bool, id: Int64, restrict: String? = nil, user: PixivUser? = nil) async throws -> Bool {
         guard !followBusy.contains(id) else { return false }
         followBusy.insert(id)
+        BookmarkHaptics.commit(bookmarking: target)
         defer { followBusy.remove(id) }
         let previous = userFollowed[id]
         userFollowed[id] = target
@@ -250,6 +255,7 @@ final class InteractionStore {
             } else {
                 userFollowed.removeValue(forKey: id)
             }
+            BookmarkHaptics.failed()
             throw error
         }
         // Visibility follows the mutation and outranks any later server read.

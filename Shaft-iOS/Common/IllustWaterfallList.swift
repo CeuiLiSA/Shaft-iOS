@@ -1,6 +1,9 @@
 import SwiftUI
 
 extension Illust {
+    var imageAspectRatio: Double {
+        max(Double(width ?? 1), 1) / max(Double(height ?? 1), 1)
+    }
     /// Waterfall cell image height in column-width units — parity with
     /// upstream `IAdapter` (`MIN_HEIGHT_RATIO = 0.6`, `MAX_HEIGHT_RATIO = 2.0`):
     /// only extreme tall/flat illusts are clamped (the cell's `.fill` image
@@ -66,7 +69,8 @@ struct IllustWaterfallList: View {
                         items: visible,
                         columns: mute.waterfallColumns,
                         spacing: 8,
-                        estimatedRelativeHeight: { $0.waterfallImageHeightRatio }
+                        estimatedRelativeHeight: { $0.waterfallImageHeightRatio },
+                        aspectRatio: { $0.imageAspectRatio }
                     ) { illust in
                         NavigationLink(value: illust) {
                             IllustWaterfallCell(illust: illust)
@@ -88,7 +92,9 @@ struct IllustWaterfallList: View {
             }
             .padding(.vertical, 8)
         }
+        .preserveIllustScrollPosition()
         .refreshable { await onRefresh() }
+        .scrollEdgeFeedback()
         .cardMenuHost()
     }
 }
@@ -98,6 +104,7 @@ struct IllustWaterfallList: View {
 struct IllustWaterfallCell: View {
     let illust: Illust
     @State private var mute = MuteStore.shared
+    @State private var settings = AppSettingsStore.shared
 
     var body: some View {
         PixivAsyncImage(url: imageURL)
@@ -121,7 +128,9 @@ struct IllustWaterfallCell: View {
                 }
             }
             .overlay(alignment: .bottomTrailing) {
-                WaterfallBookmarkButton(illust: illust)
+                if settings.showIllustCardBookmarkButton {
+                    WaterfallBookmarkButton(illust: illust)
+                }
             }
             .overlay(alignment: .topLeading) {
                 // shaft-api-v2 trending "▲ N" pill — only set on 当前最热 / 站长推荐.
@@ -137,7 +146,12 @@ struct IllustWaterfallCell: View {
     }
 
     private var displayAspect: CGFloat {
-        1 / CGFloat(illust.waterfallImageHeightRatio)
+        switch IllustListLayout.current {
+        case .grid: return 1
+        case .justified: return CGFloat(min(max(illust.imageAspectRatio, 0.2), 5))
+        case .single: return CGFloat(illust.imageAspectRatio)
+        case .masonry: return 1 / CGFloat(illust.waterfallImageHeightRatio)
+        }
     }
 
     private var imageURL: URL? {
@@ -164,9 +178,8 @@ private struct WaterfallBookmarkButton: View {
     var body: some View {
         let bookmarked = store.isBookmarked(illust)
         Button {
-            BookmarkHaptics.commit(bookmarking: !bookmarked)
             Task {
-                do { try await store.toggleBookmark(illust) } catch { BookmarkHaptics.failed() }
+                try? await store.toggleBookmark(illust)
             }
         } label: {
             Image(systemName: "heart.fill")

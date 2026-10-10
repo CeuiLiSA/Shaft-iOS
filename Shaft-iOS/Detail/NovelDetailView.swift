@@ -53,7 +53,8 @@ final class NovelDetailViewModel {
     }
 
     func toggleBookmark(restrict: String? = nil) async {
-        guard let cur = novel else { return }
+        guard let cur = novel, !isBookmarking else { return }
+        BookmarkHaptics.commit(bookmarking: cur.isBookmarked != true)
         isBookmarking = true
         defer { isBookmarking = false }
         do {
@@ -83,6 +84,8 @@ final class NovelDetailViewModel {
     }
 
     func bookmark(restrict: String, tags: [String]) async {
+        guard !isBookmarking else { return }
+        BookmarkHaptics.commit(bookmarking: true)
         isBookmarking = true
         defer { isBookmarking = false }
         do {
@@ -93,6 +96,7 @@ final class NovelDetailViewModel {
                 syncMirror(n, restrict: restrict)
             }
         } catch {
+            BookmarkHaptics.failed()
             errorMessage = error.localizedDescription
         }
     }
@@ -355,7 +359,6 @@ struct NovelDetailView: View {
     private var bottomBar: some View {
         HStack(spacing: 14) {
             Button {
-                BookmarkHaptics.commit(bookmarking: vm.novel?.isBookmarked != true)
                 Task { await vm.toggleBookmark() }
             } label: {
                 Image(systemName: (vm.novel?.isBookmarked == true) ? "heart.fill" : "heart")

@@ -79,6 +79,8 @@ struct BookmarkLibraryView: View {
             // 想说「我在别处收藏了东西，去看看」时唯一会做的动作 —— 它必须真的去同步，否则这套
             // 镜像对「网页端/别的设备上的收藏」就是个死胡同。同步是异步的（受全局限速），
             // 新收藏落库后由 refreshIfStale 接手上屏。
+            .preserveIllustScrollPosition()
+            .scrollEdgeFeedback()
             .refreshable {
                 await BookmarkMirrorService.shared.syncNow(vm.shelf, reason: "下拉刷新")
                 applyFilterChange()
@@ -366,7 +368,8 @@ struct BookmarkLibraryView: View {
                 items: vm.illusts,
                 columns: mute.waterfallColumns,
                 spacing: 8,
-                estimatedRelativeHeight: { $0.waterfallImageHeightRatio }
+                estimatedRelativeHeight: { $0.waterfallImageHeightRatio },
+                        aspectRatio: { $0.imageAspectRatio }
             ) { illust in
                 NavigationLink(value: illust) {
                     IllustWaterfallCell(illust: illust)

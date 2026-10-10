@@ -102,22 +102,19 @@ struct WaterfallSkeleton: View {
     var spacing: CGFloat = 8
     var rowsPerColumn: Int = 4
 
+    private struct Placeholder: Identifiable { let id: Int }
+
     /// Pseudo-random but fixed height ratios (height ÷ width) — same clamp band
     /// as `Illust.waterfallImageHeightRatio` (0.6...2.0).
     private static let ratios: [CGFloat] = [1.35, 0.78, 1.6, 1.0, 1.2, 0.92, 1.5, 0.7, 1.15, 1.42]
 
     var body: some View {
-        HStack(alignment: .top, spacing: spacing) {
-            ForEach(0..<max(1, columns), id: \.self) { col in
-                LazyVStack(spacing: spacing) {
-                    ForEach(0..<rowsPerColumn, id: \.self) { row in
-                        let r = Self.ratios[(col * rowsPerColumn + row) % Self.ratios.count]
-                        SkeletonShape(corner: 6)
-                            .aspectRatio(1 / r, contentMode: .fit)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-            }
+        WaterfallGrid(items: (0..<(max(1, columns) * rowsPerColumn)).map { Placeholder(id: $0) },
+                      columns: columns, spacing: spacing,
+                      estimatedRelativeHeight: { Double(Self.ratios[$0.id % Self.ratios.count]) },
+                      aspectRatio: { 1 / Double(Self.ratios[$0.id % Self.ratios.count]) }) { item in
+            let ratio = IllustListLayout.current == .grid ? 1 : 1 / Self.ratios[item.id % Self.ratios.count]
+            SkeletonShape(corner: 6).aspectRatio(ratio, contentMode: .fit)
         }
         .padding(.horizontal, 8)
         .padding(.top, 8)

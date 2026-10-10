@@ -97,7 +97,7 @@ struct BulkSelectView: View {
                 .foregroundStyle(.secondary)
             Button {
                 let n = DownloadManager.shared.enqueue(selectedIllusts)
-                flash(l10n.t(.dlEnqueuedFmt, "\(n)"))
+                if DownloadNoticeKind.bulkEnqueue.enabled { flash(l10n.t(.dlEnqueuedFmt, "\(n)")) }
                 Task {
                     try? await Task.sleep(nanoseconds: 850_000_000)
                     dismiss()

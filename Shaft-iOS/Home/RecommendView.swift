@@ -222,7 +222,8 @@ struct RecommendedWorksView: View {
                         items: visible,
                         columns: mute.waterfallColumns,
                         spacing: 8,
-                        estimatedRelativeHeight: { $0.waterfallImageHeightRatio }
+                        estimatedRelativeHeight: { $0.waterfallImageHeightRatio },
+                        aspectRatio: { $0.imageAspectRatio }
                     ) { illust in
                         NavigationLink(value: illust) {
                             IllustWaterfallCell(illust: illust)
@@ -248,6 +249,8 @@ struct RecommendedWorksView: View {
             }
             .padding(.vertical, 12)
         }
+        .preserveIllustScrollPosition()
+        .scrollEdgeFeedback()
         .refreshable { await vm.loadRecommend() }
         .cardMenuHost()
         .task { await vm.loadRecommendIfNeeded() }
@@ -288,6 +291,8 @@ struct PopularTagsView: View {
                 }
             }
         }
+        .preserveIllustScrollPosition()
+        .scrollEdgeFeedback()
         .refreshable { await vm.loadTags() }
         .task { await vm.loadTagsIfNeeded() }
     }

@@ -25,6 +25,7 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
         }
     }
 
+    private var edgeFeedback = ScrollEdgeState()
     private let tableView = UITableView(frame: .zero, style: .plain)
     private var rows: [Row] = []
     private var style: ReaderTypeStyle?
@@ -219,6 +220,12 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
         // Skip the spurious zero reports fired while the table is still
         // laying out after bind — they'd clobber the saved reading anchor.
         guard window != nil, scrollView.contentSize.height > 0 else { return }
+        let crossed = edgeFeedback.crossed(offset: scrollView.contentOffset.y + scrollView.adjustedContentInset.top,
+            content: scrollView.contentSize.height + scrollView.adjustedContentInset.top + scrollView.adjustedContentInset.bottom,
+            viewport: scrollView.bounds.height)
+        if crossed && (scrollView.isDragging || scrollView.isDecelerating) && AppSettingsStore.shared.scrollEdgeHapticEnable {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.5)
+        }
         let range = scrollView.contentSize.height + scrollView.contentInset.top + scrollView.contentInset.bottom - scrollView.bounds.height
         let progress = range > 0 ? Double((scrollView.contentOffset.y + scrollView.contentInset.top) / range) : 0
         let charIndex = tableView.indexPathsForVisibleRows?.first.map { rows[$0.row].sourceStart } ?? 0

@@ -21,8 +21,8 @@ enum AppFonts {
 }
 
 extension Font {
-    static func montserratBold(_ size: CGFloat) -> Font {
-        .custom("Montserrat-Bold", size: size)
+    static func montserratBold(_ size: CGFloat, relativeTo style: Font.TextStyle = .body) -> Font {
+        .custom("Montserrat-Bold", size: size, relativeTo: style)
     }
 
     static func montserratMedium(_ size: CGFloat) -> Font {

@@ -398,6 +398,7 @@ final class NovelReaderV3ViewModel {
         // wait for the metadata fetch if the user tapped before it landed.
         await detailTask?.value
         let target = !isBookmarked
+        BookmarkHaptics.commit(bookmarking: target)
         isBookmarked = target
         do {
             if target {
@@ -410,6 +411,7 @@ final class NovelReaderV3ViewModel {
             }
         } catch {
             isBookmarked = !target
+            BookmarkHaptics.failed()
             showToast(l10n(.nrMsgOpFailed))
         }
     }
@@ -612,7 +614,7 @@ final class NovelReaderV3ViewModel {
 
     func export(format: ReaderExportFormat) async {
         guard let webNovel else { return }
-        showToast(String(format: l10n(.nrMsgExportStartFmt), format.fileExtension.uppercased()))
+        if DownloadNoticeKind.novelProgress.enabled { showToast(String(format: l10n(.nrMsgExportStartFmt), format.fileExtension.uppercased())) }
         let input = ReaderExportInput(
             novelId: novelId,
             title: title,
@@ -626,7 +628,7 @@ final class NovelReaderV3ViewModel {
             let url = try await ReaderExporter.export(input, format: format)
             exportedFileURL = url
         } catch {
-            showToast(String(format: l10n(.nrMsgExportFailFmt), error.localizedDescription))
+            if DownloadNoticeKind.novelSave.enabled { showToast(String(format: l10n(.nrMsgExportFailFmt), error.localizedDescription)) }
         }
     }
 

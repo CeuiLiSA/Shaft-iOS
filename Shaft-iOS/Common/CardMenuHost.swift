@@ -23,6 +23,7 @@ final class CardMenuCoordinator {
     var novelBulkSeed: NovelBulkSelectionSeed?
     var slideshowSeed: SlideshowSeed?
     var toast: String?
+    var showIllustLayoutPicker = false
 
     @ObservationIgnored private var toastTask: Task<Void, Never>?
 
@@ -57,6 +58,7 @@ private struct CardMenuHostModifier: ViewModifier {
             .sheet(item: $coordinator.muteSheet) { seed in
                 MuteTargetsSheet(tags: seed.tags, user: seed.user)
             }
+            .sheet(isPresented: $coordinator.showIllustLayoutPicker) { IllustListLayoutPicker() }
             .fullScreenCover(item: $coordinator.illustBulkSeed) { seed in
                 BulkSelectView(illusts: seed.illusts)
             }
@@ -141,9 +143,9 @@ struct IllustCardMenuItems: View {
             let n = DownloadManager.shared.enqueue([illust])
             if AppSettingsStore.shared.autoPostLikeWhenDownload,
                !InteractionStore.shared.isBookmarked(illust) {
-                Task { try? await InteractionStore.shared.toggleBookmark(illust) }
+                Task { try? await InteractionStore.shared.toggleBookmark(illust, feedback: false) }
             }
-            coordinator?.flash(l10n.t(.dlEnqueuedFmt, "\(n)"))
+            if DownloadNoticeKind.enqueued.enabled { coordinator?.flash(l10n.t(.dlEnqueuedFmt, "\(n)")) }
         } label: {
             Label(l10n.t(.cardDownloadWork), systemImage: "arrow.down.circle")
         }
@@ -162,6 +164,9 @@ struct IllustCardMenuItems: View {
         }
         Divider()
         IllustCellContextMenuItems(illust: illust)
+        Button { coordinator?.showIllustLayoutPicker = true } label: {
+            Label(l10n.t(.illustListLayout), systemImage: "rectangle.grid.2x2")
+        }
     }
 }
 
@@ -216,6 +221,7 @@ struct NovelCardMenuItems: View {
             let coordinator = coordinator
             Task {
                 let failures = await NovelDownloader.download([novel])
+                guard DownloadNoticeKind.novelBatchResult.enabled else { return }
                 coordinator?.flash(
                     failures.isEmpty
                         ? l10n.t(.batchDownloadAllOk)

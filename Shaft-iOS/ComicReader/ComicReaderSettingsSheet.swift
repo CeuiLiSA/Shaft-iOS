@@ -48,6 +48,7 @@ struct ComicReaderSettingsSheet: View {
                     switchRow(l10n.t(.crShowPageNumber), $settings.showPageNumber)
                     switchRow(l10n.t(.crLoadOriginal), $settings.loadOriginal)
                     switchRow(l10n.t(.crTapReversed), $settings.tapZoneReversed)
+                    switchRow(l10n.t(.comicReaderLandscapeTapFlip), $settings.landscapeTapFlip)
                 }
                 .padding(20)
             }

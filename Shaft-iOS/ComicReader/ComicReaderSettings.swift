@@ -90,6 +90,9 @@ final class ComicReaderSettings {
     var tapZoneReversed: Bool {
         didSet { set(tapZoneReversed, oldValue, "tap_reversed") }
     }
+    var landscapeTapFlip: Bool {
+        didSet { set(landscapeTapFlip, oldValue, "landscape_tap_flip") }
+    }
 
     private init() {
         let defaults = UserDefaults.standard
@@ -120,6 +123,7 @@ final class ComicReaderSettings {
         keepScreenOn = b("keep_screen_on", true)
         immersive = b("immersive", true)
         tapZoneReversed = b("tap_reversed", false)
+        landscapeTapFlip = b("landscape_tap_flip", true)
     }
 
     /// 漫画通常右翻页（RTL）；Pixiv 多页插画一般 LTR。提供一键切换。
@@ -146,4 +150,17 @@ final class ComicReaderSettings {
 
 private extension Comparable {
     func clamped(_ lo: Self, _ hi: Self) -> Self { min(max(self, lo), hi) }
+}
+
+/// Shared by tap handling and regression checks; landscape can reserve every tap for controls.
+enum ComicReaderTapPolicy {
+    enum Action: Equatable { case controls, previous, next }
+    static func action(zone: ComicTapZone, landscape: Bool, landscapeTapFlip: Bool, reversed: Bool) -> Action {
+        if landscape && !landscapeTapFlip { return .controls }
+        switch zone {
+        case .center: return .controls
+        case .left: return reversed ? .next : .previous
+        case .right: return reversed ? .previous : .next
+        }
+    }
 }

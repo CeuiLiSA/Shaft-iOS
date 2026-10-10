@@ -214,7 +214,14 @@ struct ComicWebtoonContainer: UIViewRepresentable {
             return CGSize(width: w, height: max(1, w * ratio))
         }
 
+        private var edgeFeedback = ScrollEdgeState()
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            let crossed = edgeFeedback.crossed(offset: scrollView.contentOffset.y + scrollView.adjustedContentInset.top,
+                content: scrollView.contentSize.height + scrollView.adjustedContentInset.top + scrollView.adjustedContentInset.bottom,
+                viewport: scrollView.bounds.height)
+            if crossed && (scrollView.isDragging || scrollView.isDecelerating) && AppSettingsStore.shared.scrollEdgeHapticEnable {
+                UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.5)
+            }
             guard let cv = collectionView else { return }
             let topPoint = CGPoint(x: cv.bounds.midX, y: cv.contentOffset.y + 1)
             guard let ip = cv.indexPathForItem(at: topPoint) else { return }

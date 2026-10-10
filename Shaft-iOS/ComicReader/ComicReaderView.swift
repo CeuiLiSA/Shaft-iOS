@@ -63,6 +63,8 @@ private struct ComicReaderScreen: View {
     @State private var showLongPressMenu = false
     @State private var longPressPage = 0
     @State private var savedBrightness: CGFloat?
+    @State private var indicatorTopInset: CGFloat = 0
+    @State private var indicatorLandscape: Bool?
     @Environment(OnboardingStore.self) private var l10n
     @Environment(\.dismiss) private var dismiss
 
@@ -98,6 +100,10 @@ private struct ComicReaderScreen: View {
             toast
         }
         .statusBarHidden(immersiveHidden)
+        .onChange(of: topSafeInset) { _, inset in indicatorTopInset = max(indicatorTopInset, inset) }
+        .onGeometryChange(for: Bool.self) { $0.size.width > $0.size.height } action: { landscape in
+            if indicatorLandscape != landscape { indicatorLandscape = landscape; indicatorTopInset = topSafeInset }
+        }
         .persistentSystemOverlays(immersiveHidden ? .hidden : .automatic)
         .animation(.easeInOut(duration: 0.15), value: chromeVisible)
         .animation(.easeInOut(duration: 0.2), value: vm.toast != nil)
@@ -107,7 +113,7 @@ private struct ComicReaderScreen: View {
             vm.onSessionStart()
             await vm.loadIfNeeded()
         }
-        .onAppear { applyScreenEffects() }
+        .onAppear { indicatorTopInset = topSafeInset; applyScreenEffects() }
         .onDisappear {
             vm.onSessionFlush()
             restoreScreenEffects()
@@ -199,15 +205,20 @@ private struct ComicReaderScreen: View {
     private var pageIndicator: some View {
         if settings.showPageNumber, vm.pages.count > 1, case .loaded = vm.loadState {
             VStack {
-                Spacer()
+                HStack {
+                    Spacer()
                 Text("\(vm.currentPage + 1) / \(vm.pages.count)")
                     .font(.system(size: 13))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 3)
                     .background(.black.opacity(0.5), in: .rect(cornerRadius: 6))
-                    .padding(.bottom, chromeVisible ? 120 : 16)
+                    .padding(.top, max(indicatorTopInset, topSafeInset) + 10)
+                    .padding(.trailing, (UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow?.safeAreaInsets.right }.max() ?? 0) + 12)
+                }
+                Spacer()
             }
+            .ignoresSafeArea()
             .allowsHitTesting(false)
         }
     }
@@ -325,11 +336,11 @@ private struct ComicReaderScreen: View {
     // MARK: Tap handling
 
     private func handleTap(_ zone: ComicTapZone) {
-        let reversed = settings.tapZoneReversed
-        switch zone {
-        case .center: toggleChrome()
-        case .left:   vm.stepPage(forward: reversed)
-        case .right:  vm.stepPage(forward: !reversed)
+        switch ComicReaderTapPolicy.action(zone: zone, landscape: indicatorLandscape ?? false,
+                                          landscapeTapFlip: settings.landscapeTapFlip, reversed: settings.tapZoneReversed) {
+        case .controls: toggleChrome()
+        case .previous: vm.stepPage(forward: false)
+        case .next: vm.stepPage(forward: true)
         }
     }
 
@@ -389,17 +400,17 @@ private struct ComicReaderScreen: View {
     private func savePage(_ index: Int) async {
         guard vm.pages.indices.contains(index),
               let url = vm.pages[index].original ?? vm.pages[index].large else { return }
-        guard let data = await PixivImageCache.shared.loadData(url) else {
-            vm.showToast(l10n.t(.crMsgOpFailed)); return
+        guard let data = await PixivImageCache.shared.loadData(url, forDownload: true) else {
+            if DownloadNoticeKind.failed.enabled { vm.showToast(l10n.t(.crMsgOpFailed)) }; return
         }
         guard await PhotoLibrarySaver.requestAuthorization() else {
-            vm.showToast(l10n.t(.crMsgOpFailed)); return
+            if DownloadNoticeKind.failed.enabled { vm.showToast(l10n.t(.crMsgOpFailed)) }; return
         }
         do {
             try await PhotoLibrarySaver.save(data: data)
-            vm.showToast(l10n.t(.crMsgSaved))
+            if DownloadNoticeKind.done.enabled { vm.showToast(l10n.t(.crMsgSaved)) }
         } catch {
-            vm.showToast(l10n.t(.crMsgOpFailed))
+            if DownloadNoticeKind.failed.enabled { vm.showToast(l10n.t(.crMsgOpFailed)) }
         }
     }
 

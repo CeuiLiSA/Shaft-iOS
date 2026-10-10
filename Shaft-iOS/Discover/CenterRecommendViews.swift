@@ -86,7 +86,8 @@ struct MangaRecommendView: View {
                         items: visible,
                         columns: mute.waterfallColumns,
                         spacing: 8,
-                        estimatedRelativeHeight: { $0.waterfallImageHeightRatio }
+                        estimatedRelativeHeight: { $0.waterfallImageHeightRatio },
+                        aspectRatio: { $0.imageAspectRatio }
                     ) { illust in
                         NavigationLink(value: illust) {
                             IllustWaterfallCell(illust: illust)
@@ -109,6 +110,8 @@ struct MangaRecommendView: View {
             .padding(.bottom, 12)
         }
         .background(Theme.v3Bg)
+        .preserveIllustScrollPosition()
+        .scrollEdgeFeedback()
         .refreshable { await vm.load() }
         .cardMenuHost()
         .navigationTitle(l10n.t(.centerRecommendMangaTitle))
@@ -242,6 +245,8 @@ private struct RecmdNovelFeedView: View {
             .padding(.bottom, 12)
         }
         .background(Theme.v3Bg)
+        .preserveIllustScrollPosition()
+        .scrollEdgeFeedback()
         .refreshable { await vm.load() }
         .task { await vm.loadIfNeeded() }
     }
@@ -522,6 +527,8 @@ struct HotTagsGridView: View {
             }
         }
         .background(Theme.v3Bg)
+        .preserveIllustScrollPosition()
+        .scrollEdgeFeedback()
         .refreshable { await vm.load() }
         .task { await vm.loadIfNeeded() }
     }

@@ -188,7 +188,6 @@ final class IllustDetailViewModel {
         do {
             try await interactions.toggleBookmark(cur, restrict: restrict)
         } catch {
-            BookmarkHaptics.failed()
             errorMessage = error.localizedDescription
         }
     }
@@ -465,7 +464,7 @@ struct IllustDetailView: View {
                         infoSections(for: illust)
                     }
                     .padding(.top, 8)
-                }
+                }.scrollEdgeFeedback()
                 BottomActionBar(
                     vm: vm,
                     onShowBookmarkSheet: { showBookmarkSheet = true },
@@ -514,6 +513,7 @@ struct IllustDetailView: View {
                         )
                     })
                 }
+                .scrollEdgeFeedback()
                 .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
                     handleScroll(offset)
                 }
@@ -1054,11 +1054,7 @@ private struct V3HeroSection: View {
                 .foregroundStyle(Theme.v3Text1)
                 .fixedSize(horizontal: false, vertical: true)
                 .lineSpacing(23 * 0.2)    // lineSpacingMultiplier 1.2
-                .contextMenu {
-                    Button {
-                        UIPasteboard.general.string = illust.title ?? ""
-                    } label: { Label(l10n.t(.actionCopyLink), systemImage: "doc.on.doc") }
-                }
+                .textSelection(.enabled)
 
             HStack(spacing: 0) {
                 HStack(spacing: 0) {
@@ -1861,7 +1857,8 @@ private struct V3RelatedSection: View {
                         items: visible,
                         columns: mute.waterfallColumns,
                         spacing: 8,
-                        estimatedRelativeHeight: { $0.waterfallImageHeightRatio }
+                        estimatedRelativeHeight: { $0.waterfallImageHeightRatio },
+                        aspectRatio: { $0.imageAspectRatio }
                     ) { item in
                         NavigationLink(value: item) {
                             IllustWaterfallCell(illust: item)
@@ -2143,13 +2140,27 @@ private struct BottomActionBar: View {
     var onJumpToComments: () -> Void
     @Environment(OnboardingStore.self) private var l10n
 
-    @State private var download: DownloadState = .idle
+    @State private var downloads = DownloadManager.shared
     @State private var showResolutionPicker = false
     @State private var settings = AppSettingsStore.shared
 
     enum DownloadState: Equatable {
-        case idle, downloading(Double), done, failed
+        case idle, downloading(Double), done, failed, paused, queued
         var isActive: Bool { if case .downloading = self { return true }; return false }
+    }
+
+    private var download: DownloadState {
+        guard let id = vm.illust?.id else { return .idle }
+        if let item = downloads.queue.first(where: { $0.id == id }) {
+            switch item.status {
+            case .downloading: return .downloading(item.progress)
+            case .pending: return .queued
+            case .paused: return .paused
+            case .failed: return .failed
+            case .success: return .done
+            }
+        }
+        return downloads.done.contains(where: { $0.id == id }) ? .done : .idle
     }
 
     var body: some View {
@@ -2198,10 +2209,10 @@ private struct BottomActionBar: View {
         .confirmationDialog(
             l10n.t(.downloadsTitle), isPresented: $showResolutionPicker, titleVisibility: .hidden
         ) {
-            Button(l10n.t(.artworkV3ResOriginal)) { Task { await runDownload(.original) } }
-            Button(l10n.t(.artworkV3ResLarge)) { Task { await runDownload(.large) } }
-            Button(l10n.t(.artworkV3ResMedium)) { Task { await runDownload(.medium) } }
-            Button(l10n.t(.artworkV3ResSquareMedium)) { Task { await runDownload(.squareMedium) } }
+            Button(l10n.t(.artworkV3ResOriginal)) { enqueueDownload(.original) }
+            Button(l10n.t(.artworkV3ResLarge)) { enqueueDownload(.large) }
+            Button(l10n.t(.artworkV3ResMedium)) { enqueueDownload(.medium) }
+            Button(l10n.t(.artworkV3ResSquareMedium)) { enqueueDownload(.squareMedium) }
             Button(l10n.t(.actionCancel), role: .cancel) {}
         }
     }
@@ -2239,6 +2250,10 @@ private struct BottomActionBar: View {
                                      track: Theme.v3FloatingPillContent.opacity(0.20))
                     }
                     .frame(width: 24, height: 24)   // ring only — upstream draws no percentage
+                case .paused:
+                    Image(systemName: "play.fill").font(.system(size: 20)).foregroundStyle(Theme.v3FloatingPillContent)
+                case .queued:
+                    Image(systemName: "hourglass").font(.system(size: 20)).foregroundStyle(Theme.v3FloatingPillContent)
                 case .done:
                     // `ic_file_download_done_24dp` tinted `has_downloaded`.
                     Image(systemName: "arrow.down.to.line.circle.fill").font(.system(size: 24))
@@ -2251,48 +2266,31 @@ private struct BottomActionBar: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
-        .disabled(download.isActive || vm.illust == nil)
+        .disabled(vm.illust == nil)
         .accessibilityLabel(l10n.t(.downloadsTitle))
-        .simultaneousGesture(LongPressGesture().onEnded { _ in showResolutionPicker = true })
+        .simultaneousGesture(LongPressGesture().onEnded { _ in
+            if let id = vm.illust?.id, !downloads.queue.contains(where: { $0.id == id }) { showResolutionPicker = true }
+        })
     }
 
     private func runDownload(_ resolution: ImageResolution) async {
         guard let illust = vm.illust else { return }
-        let urls = resolution.urls(for: illust)
-        guard !urls.isEmpty else { return }
-        // Low storage pauses every download and says so once (pixez#1361).
-        guard StorageSpaceGuard.hasRoomForDownload() else {
-            DownloadManager.shared.pauseForLowStorage()
-            await flashFailed()
+        if let item = downloads.queue.first(where: { $0.id == illust.id }) {
+            switch item.status {
+            case .downloading: downloads.pause(illust.id)
+            case .failed: downloads.retry(illust.id)
+            case .pending, .paused: downloads.resume(illust.id)
+            case .success: break
+            }
             return
         }
-        guard await PhotoLibrarySaver.requestAuthorization() else { await flashFailed(); return }
-
-        // `isAutoPostLikeWhenDownload`: bookmark the work as the download starts.
-        if settings.autoPostLikeWhenDownload, !vm.isBookmarked {
-            Task { await vm.toggleBookmark() }
-        }
-
-        let total = Double(urls.count)
-        download = .downloading(0)
-        for (i, url) in urls.enumerated() {
-            let data = await PixivImageCache.shared.loadData(url) { p in
-                download = .downloading((Double(i) + p) / total)
-            }
-            guard let data else { await flashFailed(); return }
-            do { try await PhotoLibrarySaver.save(data: data) } catch { await flashFailed(); return }
-            download = .downloading(Double(i + 1) / total)
-        }
-        download = .done
-        DownloadManager.shared.recordCompleted(illust)   // surface in Downloads → Done
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
-        if download == .done { download = .idle }
+        enqueueDownload(resolution)
     }
 
-    private func flashFailed() async {
-        download = .failed
-        try? await Task.sleep(nanoseconds: 1_500_000_000)
-        if download == .failed { download = .idle }
+    private func enqueueDownload(_ resolution: ImageResolution) {
+        guard let illust = vm.illust else { return }
+        downloads.enqueue([illust], resolution: resolution)
+        if settings.autoPostLikeWhenDownload, !vm.isBookmarked { Task { await vm.toggleBookmark() } }
     }
 
     // MARK: Bookmark
@@ -2300,12 +2298,11 @@ private struct BottomActionBar: View {
     private var bookmarkButton: some View {
         Button {
             let willBookmark = !vm.isBookmarked
-            BookmarkHaptics.commit(bookmarking: willBookmark)
             Task {
                 await vm.toggleBookmark()
                 // `isAutoDownloadAfterStar`: bookmarking pulls every page down.
-                if willBookmark, settings.autoDownloadAfterStar {
-                    await runDownload(.default)
+                if willBookmark, vm.isBookmarked, settings.autoDownloadAfterStar {
+                    enqueueDownload(.default)
                 }
             }
         } label: {

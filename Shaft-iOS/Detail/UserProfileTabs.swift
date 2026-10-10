@@ -545,7 +545,8 @@ struct V3InlineIllustGrid: View {
                 items: illusts,
                 columns: mute.waterfallColumns,
                 spacing: 8,
-                estimatedRelativeHeight: { $0.waterfallImageHeightRatio }
+                estimatedRelativeHeight: { $0.waterfallImageHeightRatio },
+                        aspectRatio: { $0.imageAspectRatio }
             ) { illust in
                 NavigationLink(value: illust) {
                     IllustWaterfallCell(illust: illust)
