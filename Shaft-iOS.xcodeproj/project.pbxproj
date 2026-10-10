@@ -15,7 +15,12 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXBuildFile section */
+		69A408E7DAD36A78C642FC6E /* OctoberRenderTests.swift */ = {isa = PBXBuildFile; fileRef = 1633E065630511C3FA73B694; };
+		13D298676A47CE1BB10E6D14 /* OctoberTransportTests.swift */ = {isa = PBXBuildFile; fileRef = CF14318EEA187A923FCA909A; };
 		55002EB615D129B1D7BEF9EF /* AIExemptAuthors.swift */ = {isa = PBXBuildFile; fileRef = 0B1AAB9789C41900C732E86B; };
+		50BF7DD48D0477E72BB2ACDD /* OctoberPortTests.swift */ = {isa = PBXBuildFile; fileRef = 1BBD1051F786C9B4B42D1620; };
+		4047A3F94C81191CBED645DA /* OctoberDownloadTests.swift */ = {isa = PBXBuildFile; fileRef = B8D30DB2A593A5AF3A1C1E0E; };
+		D435906D1174CF1F609A99D1 /* OctoberBackupTests.swift */ = {isa = PBXBuildFile; fileRef = 795EBD438CC5984843AA74CC; };
 		307F1CB557FB9D64E41AAC3A /* ImageTransferPolicy.swift */ = {isa = PBXBuildFile; fileRef = 8A97FB26DCE66A17B2DC3516; };
 		9E1CEA2B1E399E4AE7BE7B22 /* WebDAVSettingsView.swift */ = {isa = PBXBuildFile; fileRef = 2B43FBF55A6BA0F6EF921CE9; };
 		BBFBD826ED9708B83AD88897 /* WebDAVBackupScheduler.swift */ = {isa = PBXBuildFile; fileRef = AC14511AE1505EF01C300262; };
@@ -244,7 +249,12 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1633E065630511C3FA73B694 /* OctoberRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/OctoberRenderTests.swift"; sourceTree = "<group>"; };
+		CF14318EEA187A923FCA909A /* OctoberTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/OctoberTransportTests.swift"; sourceTree = "<group>"; };
 		0B1AAB9789C41900C732E86B /* AIExemptAuthors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "More/AIExemptAuthors.swift"; sourceTree = "<group>"; };
+		1BBD1051F786C9B4B42D1620 /* OctoberPortTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/OctoberPortTests.swift"; sourceTree = "<group>"; };
+		B8D30DB2A593A5AF3A1C1E0E /* OctoberDownloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/OctoberDownloadTests.swift"; sourceTree = "<group>"; };
+		795EBD438CC5984843AA74CC /* OctoberBackupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/OctoberBackupTests.swift"; sourceTree = "<group>"; };
 		8A97FB26DCE66A17B2DC3516 /* ImageTransferPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Download/ImageTransferPolicy.swift"; sourceTree = "<group>"; };
 		2B43FBF55A6BA0F6EF921CE9 /* WebDAVSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Backup/WebDAVSettingsView.swift"; sourceTree = "<group>"; };
 		AC14511AE1505EF01C300262 /* WebDAVBackupScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Backup/WebDAVBackupScheduler.swift"; sourceTree = "<group>"; };
@@ -491,6 +501,11 @@
 		A1000000000000000000G001 = {
 			isa = PBXGroup;
 			children = (
+				1633E065630511C3FA73B694 /* OctoberRenderTests.swift */,
+				CF14318EEA187A923FCA909A /* OctoberTransportTests.swift */,
+				1BBD1051F786C9B4B42D1620 /* OctoberPortTests.swift */,
+				B8D30DB2A593A5AF3A1C1E0E /* OctoberDownloadTests.swift */,
+				795EBD438CC5984843AA74CC /* OctoberBackupTests.swift */,
 				B743CC6D4D537C39387D6BA5 /* AndroidSyncPortTests.swift */,
 				CE15B472BF24E6A0AFA8B91A /* BorrowedSearchCacheTests.swift */,
 				9F4B9D7C3A8E4E2B8A5F1C61 /* ImageHostManagerTests.swift */,
@@ -1229,7 +1244,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		715CEB466C368648489445F5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (DAE58E4B3CA387D74052BD59,1775786A93906E1914C6E2D1,9F4B9D7C3A8E4E2B8A5F1C60,D3C46192FB90706A8F0A869F,77DFBC336C0918E8F92DB333,CED7F99A19BA076297B02BF6,C72C29D7D73334F1DC62F4A0,914987C45FFEA7183388C86A,); runOnlyForDeploymentPostprocessing = 0; };
+		715CEB466C368648489445F5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (69A408E7DAD36A78C642FC6E,13D298676A47CE1BB10E6D14,50BF7DD48D0477E72BB2ACDD,4047A3F94C81191CBED645DA,D435906D1174CF1F609A99D1,DAE58E4B3CA387D74052BD59,1775786A93906E1914C6E2D1,9F4B9D7C3A8E4E2B8A5F1C60,D3C46192FB90706A8F0A869F,77DFBC336C0918E8F92DB333,CED7F99A19BA076297B02BF6,C72C29D7D73334F1DC62F4A0,914987C45FFEA7183388C86A,); runOnlyForDeploymentPostprocessing = 0; };
 		2D339A82CA9C4D373BA23634 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (352006898A7A9C876D799232,B669B1D8C99FD8302912B05C,4FCEBBEE279B651725FF8E35,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
