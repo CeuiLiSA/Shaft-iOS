@@ -227,6 +227,7 @@ private struct RawTokenResponse: Codable {
         let name: String?
         let account: String?
         let is_premium: Bool?
+        let x_restrict: StringOrInt?
     }
 
     enum StringOrInt: Codable {
@@ -267,7 +268,8 @@ private struct RawTokenResponse: Codable {
                     id: $0.id.int64Value,
                     name: $0.name ?? "",
                     account: $0.account ?? "",
-                    isPremium: $0.is_premium
+                    isPremium: $0.is_premium,
+                    xRestrict: $0.x_restrict.flatMap { Int(exactly: $0.int64Value) }
                 )
             },
             issuedAt: issuedAt

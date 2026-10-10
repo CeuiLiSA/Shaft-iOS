@@ -7,6 +7,7 @@ actor AuthTokenProvider: PixivTokenProvider {
     private let oauth = PixivOAuthClient(config: .pixivAndroid)
 
     private var inflightRefresh: Task<String?, Never>?
+    private var refreshID: UUID?
 
     func currentAccessToken() async -> String? {
         store.load()?.accessToken
@@ -18,8 +19,9 @@ actor AuthTokenProvider: PixivTokenProvider {
     /// interleaving — `Task { ... }` does not suspend, so other actor-isolated
     /// methods cannot run between line "check" and line "publish".
     func refreshAccessToken() async -> String? {
+        guard !Task.isCancelled else { return nil }
         if let inflight = inflightRefresh {
-            return await inflight.value
+            return try? await CancellableTaskWaiter<String?>().value(of: inflight)
         }
         let task = Task<String?, Never> { [oauth, store] in
             guard let current = store.load() else { return nil }
@@ -37,7 +39,8 @@ actor AuthTokenProvider: PixivTokenProvider {
                             id: fresh.id,
                             name: fresh.name,
                             account: fresh.account,
-                            isPremium: fresh.isPremium ?? current.user?.isPremium
+                            isPremium: fresh.isPremium ?? current.user?.isPremium,
+                            xRestrict: fresh.xRestrict ?? current.user?.xRestrict
                         ),
                         issuedAt: resp.issuedAt
                     )
@@ -52,14 +55,24 @@ actor AuthTokenProvider: PixivTokenProvider {
                         issuedAt: resp.issuedAt
                     )
                 }
+                guard store.load()?.refreshToken == current.refreshToken else { return store.load()?.accessToken }
                 try? store.save(saved)
                 return resp.accessToken
             }
             return nil
         }
         inflightRefresh = task
-        let result = await task.value
-        inflightRefresh = nil
-        return result
+        let id = UUID()
+        refreshID = id
+        Task { [weak self] in
+            _ = await task.value
+            await self?.finishRefresh(id)
+        }
+        return try? await CancellableTaskWaiter<String?>().value(of: task)
     }
+    private func finishRefresh(_ id: UUID) {
+        guard refreshID == id else { return }
+        inflightRefresh = nil; refreshID = nil
+    }
+
 }

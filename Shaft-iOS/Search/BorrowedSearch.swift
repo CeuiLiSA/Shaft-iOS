@@ -1142,7 +1142,7 @@ actor GroupedNovelSearchClient {
         add("genre", filter.genre)
         add("work_lang", filter.language)
         if filter.replaceableOnly { add("replaceable_only", 1) }
-        if filter.ai == .excludeAI { add("ai_type", 1) }
+        if filter.serverExcludesAI { add("ai_type", 1) }
         components.queryItems = query
 
         guard let url = components.url else { throw WebSearchError.badURL }

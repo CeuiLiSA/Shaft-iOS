@@ -79,6 +79,8 @@ actor PixivAPI {
         ])
     }
 
+    func meState() async throws -> PixivMeStateResponse { try await get(path: "v1/user/me/state") }
+
     /// 1:1 with upstream `API.getRecommendedWorksWithRanking(type)` — the
     /// first page carries `ranking_illusts` for the horizontal ranking preview
     /// header (`RecmdIllustFeedFragment`). `type` is `illust` or `manga`.

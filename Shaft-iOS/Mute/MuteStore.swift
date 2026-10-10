@@ -59,6 +59,15 @@ final class MuteStore {
         defaults.set(value, forKey: hideR18Key)
     }
 
+    func mergeBackup(users: Set<Int64>, tags: Set<String>, illusts: Set<Int64>, novels: Set<Int64>) {
+        mutedUserIDs.formUnion(users); mutedTags.formUnion(tags)
+        mutedIllustIDs.formUnion(illusts); mutedNovelIDs.formUnion(novels)
+        defaults.set(mutedUserIDs.sorted(), forKey: mutedUserKey)
+        defaults.set(mutedTags.sorted(), forKey: mutedTagKey)
+        defaults.set(mutedIllustIDs.sorted(), forKey: mutedIllustKey)
+        defaults.set(mutedNovelIDs.sorted(), forKey: mutedNovelKey)
+    }
+
     func setWaterfallColumns(_ value: Int) {
         let clamped = max(1, min(value, 4))
         waterfallColumns = clamped
@@ -115,8 +124,13 @@ final class MuteStore {
     /// Search passes `applyR18: false` because its per-search R-18 mode governs
     /// age visibility (by real `x_restrict`, not the tag hack) — the global
     /// `hideR18` toggle must not double-filter those results.
-    func filter<T: HasMuteAttributes>(_ items: [T], applyR18: Bool = true) -> [T] {
-        items.filter { item in
+    func filter<T: HasMuteAttributes>(_ items: [T], applyR18: Bool = true, hideAI: Bool? = nil) -> [T] {
+        let settings = AppSettingsStore.shared
+        let blockAI = hideAI ?? settings.deleteAIIllust
+        let exempt = AIExemptAuthors.enabled(ids: settings.aiBlockExemptAuthorIds, disabled: settings.aiBlockExemptDisabledIds)
+        return items.filter { item in
+            if blockAI, item.muteAIType == 2, !(item.muteUserID.map(exempt.contains) ?? false) { return false }
+            if applyR18, hideR18, (item.muteXRestrict ?? 0) > 0 { return false }
             if let uid = item.muteUserID, mutedUserIDs.contains(uid) { return false }
             if let tags = item.muteTags, !tags.isEmpty {
                 if !mutedTags.isDisjoint(with: tags) { return false }
@@ -130,9 +144,13 @@ final class MuteStore {
 protocol HasMuteAttributes {
     var muteUserID: Int64? { get }
     var muteTags: Set<String>? { get }
+    var muteXRestrict: Int? { get }
+    var muteAIType: Int? { get }
 }
 
 extension Illust: HasMuteAttributes {
+    var muteAIType: Int? { illustAIType }
+    var muteXRestrict: Int? { xRestrict }
     var muteUserID: Int64? { user?.id }
     var muteTags: Set<String>? {
         guard let tags else { return nil }
@@ -141,6 +159,8 @@ extension Illust: HasMuteAttributes {
 }
 
 extension Novel: HasMuteAttributes {
+    var muteAIType: Int? { novelAIType }
+    var muteXRestrict: Int? { xRestrict }
     var muteUserID: Int64? { user?.id }
     var muteTags: Set<String>? {
         guard let tags else { return nil }

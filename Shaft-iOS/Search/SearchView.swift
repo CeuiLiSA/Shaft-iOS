@@ -1193,13 +1193,13 @@ final class SearchResultsViewModel {
     // global R-18 block still wins over search's “R-18 only” choice, as in Mapper.
 
     private func recomputeIllusts() {
-        illusts = MuteStore.shared.filter(rawIllusts, applyR18: true)
+        illusts = MuteStore.shared.filter(rawIllusts, applyR18: true, hideAI: false)
             .filter { illustResultsFilter.accepts($0) }
     }
 
     private func recomputeNovels() {
         novelItems = rawNovelItems.filter { item in
-            !MuteStore.shared.filter([item.novel], applyR18: true).isEmpty &&
+            !MuteStore.shared.filter([item.novel], applyR18: true, hideAI: false).isEmpty &&
                 novelResultsFilter.accepts(item.novel)
         }
     }

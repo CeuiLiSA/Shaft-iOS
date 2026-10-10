@@ -78,6 +78,70 @@ private struct WebDiscoveryResponse<Body: Decodable>: Decodable {
     let body: Body?
 }
 
+private struct WebTopBody: Decodable {
+    struct Section: Decodable { let ids: [PixivNumericID]? }
+    struct Page: Decodable { let recommend: Section?; let recommendByTag: [Section]? }
+    let page: Page?
+    let thumbnails: WebDiscoveryBody.Thumbnails?
+}
+
+enum WebHomeRecommendations {
+    @MainActor private static var observedRating: [Int64: (Date, Int)] = [:]
+
+    static func orderedR18(_ data: Data) throws -> [Illust] {
+        let response = try JSONDecoder().decode(WebDiscoveryResponse<WebTopBody>.self, from: data)
+        guard response.error != true, let body = response.body else { return [] }
+        let ids = (body.page?.recommend?.ids ?? []) + (body.page?.recommendByTag ?? []).flatMap { $0.ids ?? [] }
+        let byID = Dictionary((body.thumbnails?.illust ?? []).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var seen = Set<Int64>()
+        return ids.compactMap { id in
+            guard seen.insert(id.value).inserted, let artwork = byID[id.value], !artwork.isMasked,
+                  artwork.xRestrict > 0, let url = artwork.url, !url.isEmpty else { return nil }
+            return artwork.toIllust()
+        }
+    }
+
+    @MainActor static func fetch(type: String) async -> [Illust] {
+        guard !MuteStore.shared.hideR18, let user = KeychainTokenStore.shared.load()?.user,
+              let cookie = await WebDiscoverySession.cookieHeader(),
+              WebDiscoverySession.matchesAccount(cookie: cookie, appUid: user.id) else { return [] }
+        return await withTaskGroup(of: [Illust].self) { group in
+            group.addTask { @MainActor in await fetchWithinBudget(type: type, user: user, cookie: cookie) }
+            group.addTask { do { try await Task.sleep(for: .seconds(3)) } catch {}; return [] }
+            let works = await group.next() ?? []
+            group.cancelAll()
+            return works
+        }
+    }
+
+    @MainActor private static func fetchWithinBudget(type: String, user: PixivOAuthUser, cookie: String) async -> [Illust] {
+        do {
+            var rating = user.xRestrict
+            if let cached = observedRating[user.id], Date().timeIntervalSince(cached.0) < 5 * 60 { rating = cached.1 }
+            else {
+                let profile = try await PixivAPI.make(tokenProvider: AuthTokenProvider.shared).meState().profile
+                guard !Task.isCancelled, profile?.user_id?.value == user.id, KeychainTokenStore.shared.load()?.user?.id == user.id else { return [] }
+                rating = profile?.x_restrict ?? rating
+                if let rating { observedRating[user.id] = (Date(), rating) }
+            }
+            guard (rating ?? 0) > 0, !Task.isCancelled else { return [] }
+            var url = URLComponents(string: "https://www.pixiv.net/ajax/top/\(type == "manga" ? "manga" : "illust")")!
+            url.queryItems = [URLQueryItem(name: "mode", value: "r18"), URLQueryItem(name: "lang", value: "en")]
+            var request = URLRequest(url: url.url!)
+            request.timeoutInterval = 3
+            request.httpShouldHandleCookies = false
+            request.setValue(cookie, forHTTPHeaderField: "Cookie")
+            request.setValue("https://www.pixiv.net/", forHTTPHeaderField: "Referer")
+            request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148", forHTTPHeaderField: "User-Agent")
+            let (data, response) = try await DirectConnection.data(for: request, using: DirectConnection.shared,
+                                                                 directConnect: DirectConnection.isEnabledAtLaunch)
+            guard (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) == true,
+                  !MuteStore.shared.hideR18, KeychainTokenStore.shared.load()?.user?.id == user.id else { return [] }
+            return try orderedR18(data)
+        } catch { return [] }
+    }
+}
+
 private struct WebDiscoveryBody: Decodable {
     struct Thumbnails: Decodable { let illust: [WebDiscoveryArtwork]? }
     let thumbnails: Thumbnails?

@@ -5,6 +5,7 @@ struct PixivOAuthUser: Sendable, Equatable, Codable {
     let name: String
     let account: String
     let isPremium: Bool?
+    var xRestrict: Int? = nil
 }
 
 struct PixivOAuthResponse: Sendable, Equatable, Codable {

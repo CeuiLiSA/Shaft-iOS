@@ -61,8 +61,11 @@ final class RecommendViewModel {
         recommendedError = nil
         defer { isLoadingRecommended = false }
         do {
+            async let adult = WebHomeRecommendations.fetch(type: "illust")
             let resp = try await api.recommendedIllusts()
-            recommendedIllusts = resp.illusts
+            let extra = await adult
+            let ids = Set(extra.map(\.id))
+            recommendedIllusts = extra + resp.illusts.filter { !ids.contains($0.id) }
             recommendedNext = resp.nextUrl
         } catch {
             recommendedError = error.localizedDescription

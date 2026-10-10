@@ -6,6 +6,23 @@ struct EmptyResponse: Codable, Sendable {
     func encode(to encoder: Encoder) throws {}
 }
 
+struct PixivNumericID: Decodable, Sendable {
+    let value: Int64
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let number = try? c.decode(Int64.self) { value = number }
+        else if let string = try? c.decode(String.self), let number = Int64(string) { value = number }
+        else { throw DecodingError.dataCorruptedError(in: c, debugDescription: "Invalid Pixiv ID") }
+    }
+}
+struct PixivMeStateResponse: Decodable, Sendable {
+    struct Profile: Decodable, Sendable {
+        let user_id: PixivNumericID?
+        let x_restrict: Int?
+    }
+    let profile: Profile?
+}
+
 struct ImageUrls: Codable, Hashable, Sendable {
     let url: String?
     let large: String?

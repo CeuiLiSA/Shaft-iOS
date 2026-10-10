@@ -33,8 +33,11 @@ private final class RecmdMangaFeedVM {
         do {
             // Upstream `getRecommendedWorksWithRanking("manga")`: first page carries
             // `ranking_illusts` for the preview header.
+            async let adult = WebHomeRecommendations.fetch(type: "manga")
             let r = try await api.recommendedWorksWithRanking(type: "manga")
-            illusts = r.illusts
+            let extra = await adult
+            let ids = Set(extra.map(\.id))
+            illusts = extra + r.illusts.filter { !ids.contains($0.id) }
             rankingIllusts = r.rankingIllusts ?? []
             nextUrl = r.nextUrl
         } catch { errorMessage = error.localizedDescription }

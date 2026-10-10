@@ -138,7 +138,7 @@ struct SearchFilter: Equatable, Sendable {
 
         // AI: `search_ai_type` is always sent (0 = include, 1 = exclude). "Only AI"
         // sends 0 and is narrowed client-side. Matches Shaft `AiMode.searchAiType()`.
-        q["search_ai_type"] = ai == .excludeAI ? "1" : "0"
+        q["search_ai_type"] = serverExcludesAI ? "1" : "0"
 
         if isNovel {
             if let genre { q["genre"] = "\(genre)" }
@@ -191,15 +191,17 @@ struct SearchFilter: Equatable, Sendable {
 
     /// Shared client-side R-18 + AI decision. Illustration adds the legacy
     /// bookmark/users threshold below; latest Android novel `Mapper` does not.
-    func accepts(xRestrict: Int?, aiType: Int?, bookmarks: Int?) -> Bool {
-        r18.accepts(xRestrict) && ai.accepts(aiType)
+    var serverExcludesAI: Bool { ai == .excludeAI && AIExemptAuthors.current().isEmpty }
+    func accepts(xRestrict: Int?, aiType: Int?, bookmarks: Int?, userID: Int64? = nil) -> Bool {
+        let exempt = ai == .excludeAI && (userID.map { AIExemptAuthors.current().contains($0) } ?? false)
+        return r18.accepts(xRestrict) && (exempt || ai.accepts(aiType))
     }
 
     func accepts(_ illust: Illust) -> Bool {
         guard accepts(
             xRestrict: illust.xRestrict,
             aiType: illust.illustAIType,
-            bookmarks: illust.totalBookmarks
+            bookmarks: illust.totalBookmarks, userID: illust.user?.id
         ) else { return false }
         let count = illust.totalBookmarks ?? 0
         if count < max(bookmarkRange?.min ?? 0, keywordUsers) { return false }
@@ -211,7 +213,7 @@ struct SearchFilter: Equatable, Sendable {
 
     func accepts(_ novel: Novel) -> Bool {
         accepts(xRestrict: novel.xRestrict, aiType: novel.novelAIType,
-                bookmarks: novel.totalBookmarks)
+                bookmarks: novel.totalBookmarks, userID: novel.user?.id)
     }
 }
 
