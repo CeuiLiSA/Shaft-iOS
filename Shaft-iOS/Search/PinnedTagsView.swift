@@ -101,6 +101,16 @@ final class PinnedTagsStore {
         save()
     }
 
+    func mergeBackup(_ imported: [PinnedTag]) {
+        var merged = Dictionary(tags.map { ($0.name, $0) }, uniquingKeysWith: { $0.pinnedAt > $1.pinnedAt ? $0 : $1 })
+        for tag in imported {
+            if let old = merged[tag.name], old.pinnedAt >= tag.pinnedAt { continue }
+            merged[tag.name] = tag
+        }
+        tags = merged.values.sorted { $0.pinnedAt > $1.pinnedAt }
+        save()
+    }
+
     func unpin(_ name: String?) {
         guard let n = normalized(name) else { return }
         tags.removeAll { $0.name == n }
@@ -139,7 +149,7 @@ final class PinnedTagsStore {
 /// One pinned tag. `previewURLs` holds up to a few square thumbs (we currently
 /// store one, like upstream) shown on the card; empty for tags pinned without a
 /// work context.
-struct PinnedTag: Codable, Hashable, Identifiable {
+struct PinnedTag: Codable, Hashable, Identifiable, Sendable {
     let name: String
     let translatedName: String?
     var previewURLs: [String]

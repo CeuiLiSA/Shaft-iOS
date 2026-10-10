@@ -81,6 +81,16 @@ final class SearchHistoryStore {
         save()
     }
 
+    func mergeBackup(_ imported: [SearchHistoryEntry]) {
+        var merged = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { $0.searchTime > $1.searchTime ? $0 : $1 })
+        for entry in imported {
+            if let old = merged[entry.id], old.searchTime >= entry.searchTime { continue }
+            merged[entry.id] = entry
+        }
+        entries = Array(merged.values.sorted { $0.searchTime > $1.searchTime }.prefix(cap))
+        save()
+    }
+
     private func save() {
         if let data = try? JSONEncoder().encode(entries) {
             defaults.set(data, forKey: key)

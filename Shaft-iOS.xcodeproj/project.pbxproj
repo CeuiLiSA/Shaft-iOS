@@ -17,6 +17,14 @@
 /* Begin PBXBuildFile section */
 		55002EB615D129B1D7BEF9EF /* AIExemptAuthors.swift */ = {isa = PBXBuildFile; fileRef = 0B1AAB9789C41900C732E86B; };
 		307F1CB557FB9D64E41AAC3A /* ImageTransferPolicy.swift */ = {isa = PBXBuildFile; fileRef = 8A97FB26DCE66A17B2DC3516; };
+		9E1CEA2B1E399E4AE7BE7B22 /* WebDAVSettingsView.swift */ = {isa = PBXBuildFile; fileRef = 2B43FBF55A6BA0F6EF921CE9; };
+		BBFBD826ED9708B83AD88897 /* WebDAVBackupScheduler.swift */ = {isa = PBXBuildFile; fileRef = AC14511AE1505EF01C300262; };
+		61559C454BA713D7E50846C1 /* WebDAVPreferences.swift */ = {isa = PBXBuildFile; fileRef = 314C0198FD606578E008652B; };
+		23066CD5D4AA68251D1B5742 /* WebDAVClient.swift */ = {isa = PBXBuildFile; fileRef = 0EF91326D79448E8B8F5C0D7; };
+		2A8F8562D74B643FF7EA7E41 /* WebDAVBackupService.swift */ = {isa = PBXBuildFile; fileRef = 695016943C3E9965976D66E1; };
+		93AF2F096E759D2FDC2E6625 /* ShaftBackupCodec.swift */ = {isa = PBXBuildFile; fileRef = B20BE51363BD74016FE07854; };
+		E5F0588C6A5F75A3A35B1676 /* ShaftBackupBridge.swift */ = {isa = PBXBuildFile; fileRef = A8A9898AC05CB2F5B9E9AC30; };
+		6DB6B7F2EF4925B2E939EF92 /* BackupPreferenceSchema.swift */ = {isa = PBXBuildFile; fileRef = ECD21C9EC008E9B08E1F8310; };
 		480B43DC3C556DD4843FA7BD /* OctoberPortStrings.swift */ = {isa = PBXBuildFile; fileRef = E70AC7064373194DDA0CA6F7; };
 		2CDC3F843BEA9B34985D48BC /* DownloadNotices.swift */ = {isa = PBXBuildFile; fileRef = 10082E654E21F1E271F4F619; };
 		600A2026ACCC95696FF3A869 /* AppLock.swift */ = {isa = PBXBuildFile; fileRef = A215A5CC37CAEC540B731EE0; };
@@ -238,6 +246,14 @@
 /* Begin PBXFileReference section */
 		0B1AAB9789C41900C732E86B /* AIExemptAuthors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "More/AIExemptAuthors.swift"; sourceTree = "<group>"; };
 		8A97FB26DCE66A17B2DC3516 /* ImageTransferPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Download/ImageTransferPolicy.swift"; sourceTree = "<group>"; };
+		2B43FBF55A6BA0F6EF921CE9 /* WebDAVSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Backup/WebDAVSettingsView.swift"; sourceTree = "<group>"; };
+		AC14511AE1505EF01C300262 /* WebDAVBackupScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Backup/WebDAVBackupScheduler.swift"; sourceTree = "<group>"; };
+		314C0198FD606578E008652B /* WebDAVPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Backup/WebDAVPreferences.swift"; sourceTree = "<group>"; };
+		0EF91326D79448E8B8F5C0D7 /* WebDAVClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Backup/WebDAVClient.swift"; sourceTree = "<group>"; };
+		695016943C3E9965976D66E1 /* WebDAVBackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Backup/WebDAVBackupService.swift"; sourceTree = "<group>"; };
+		B20BE51363BD74016FE07854 /* ShaftBackupCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Backup/ShaftBackupCodec.swift"; sourceTree = "<group>"; };
+		A8A9898AC05CB2F5B9E9AC30 /* ShaftBackupBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Backup/ShaftBackupBridge.swift"; sourceTree = "<group>"; };
+		ECD21C9EC008E9B08E1F8310 /* BackupPreferenceSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Backup/BackupPreferenceSchema.swift"; sourceTree = "<group>"; };
 		E70AC7064373194DDA0CA6F7 /* OctoberPortStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Localization/OctoberPortStrings.swift"; sourceTree = "<group>"; };
 		10082E654E21F1E271F4F619 /* DownloadNotices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Download/DownloadNotices.swift"; sourceTree = "<group>"; };
 		A215A5CC37CAEC540B731EE0 /* AppLock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "More/AppLock.swift"; sourceTree = "<group>"; };
@@ -498,6 +514,14 @@
 			children = (
 				0B1AAB9789C41900C732E86B /* AIExemptAuthors.swift */,
 				8A97FB26DCE66A17B2DC3516 /* ImageTransferPolicy.swift */,
+				2B43FBF55A6BA0F6EF921CE9 /* WebDAVSettingsView.swift */,
+				AC14511AE1505EF01C300262 /* WebDAVBackupScheduler.swift */,
+				314C0198FD606578E008652B /* WebDAVPreferences.swift */,
+				0EF91326D79448E8B8F5C0D7 /* WebDAVClient.swift */,
+				695016943C3E9965976D66E1 /* WebDAVBackupService.swift */,
+				B20BE51363BD74016FE07854 /* ShaftBackupCodec.swift */,
+				A8A9898AC05CB2F5B9E9AC30 /* ShaftBackupBridge.swift */,
+				ECD21C9EC008E9B08E1F8310 /* BackupPreferenceSchema.swift */,
 				E70AC7064373194DDA0CA6F7 /* OctoberPortStrings.swift */,
 				10082E654E21F1E271F4F619 /* DownloadNotices.swift */,
 				A215A5CC37CAEC540B731EE0 /* AppLock.swift */,
@@ -1006,6 +1030,14 @@
 			files = (
 				55002EB615D129B1D7BEF9EF /* AIExemptAuthors.swift */,
 				307F1CB557FB9D64E41AAC3A /* ImageTransferPolicy.swift */,
+				9E1CEA2B1E399E4AE7BE7B22 /* WebDAVSettingsView.swift */,
+				BBFBD826ED9708B83AD88897 /* WebDAVBackupScheduler.swift */,
+				61559C454BA713D7E50846C1 /* WebDAVPreferences.swift */,
+				23066CD5D4AA68251D1B5742 /* WebDAVClient.swift */,
+				2A8F8562D74B643FF7EA7E41 /* WebDAVBackupService.swift */,
+				93AF2F096E759D2FDC2E6625 /* ShaftBackupCodec.swift */,
+				E5F0588C6A5F75A3A35B1676 /* ShaftBackupBridge.swift */,
+				6DB6B7F2EF4925B2E939EF92 /* BackupPreferenceSchema.swift */,
 				480B43DC3C556DD4843FA7BD /* OctoberPortStrings.swift */,
 				2CDC3F843BEA9B34985D48BC /* DownloadNotices.swift */,
 				600A2026ACCC95696FF3A869 /* AppLock.swift */,

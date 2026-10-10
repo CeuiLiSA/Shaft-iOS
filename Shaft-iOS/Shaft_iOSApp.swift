@@ -9,6 +9,7 @@ struct Shaft_iOSApp: App {
         // Settings changes are persisted and intentionally apply on next launch.
         ImageHostManager.hydrate()
         _ = ImageTransferPolicy.active
+        WebDAVBackupScheduler.shared.register()
     }
 
     var body: some Scene {
@@ -26,6 +27,7 @@ struct Shaft_iOSApp: App {
         .onChange(of: phase, initial: true) { _, value in
             AppLockController.shared.update(value)
             if value == .active { unlockAutomatically() }
+            if value == .background { WebDAVBackupScheduler.shared.sync() }
         }
         .onChange(of: AppLockController.shared.authenticating) { _, authenticating in
             if !authenticating, phase == .active { unlockAutomatically() }

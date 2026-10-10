@@ -4,6 +4,7 @@ struct ContentView: View {
     @State private var onboarding = OnboardingStore()
     @State private var auth = AuthViewModel()
     @State private var appLock = AppLockController.shared
+    @State private var network = NetworkState.shared
     @Environment(\.scenePhase) private var phase
 
     var body: some View {
@@ -27,6 +28,10 @@ struct ContentView: View {
         .environment(onboarding)
         .environment(\.locale, onboarding.currentLocale)
         .onOpenURL { url in ReferralLinkStore.shared.receive(url) }
+        .task(id: phase == .active && network.isUnmetered) {
+            guard phase == .active, network.isUnmetered else { return }
+            await WebDAVBackupScheduler.shared.runIfDue()
+        }
         .task(id: phase == .active ? auth.token?.user?.id : nil) {
             guard phase == .active, let uid = auth.token?.user?.id else { return }
             await ReferralActivityReporter.shared.active(uid: uid)

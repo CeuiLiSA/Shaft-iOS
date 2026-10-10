@@ -27,6 +27,7 @@ final class HistoryStore {
         let subtitle: String
         let imageURL: String?
         let viewedAt: Date
+        var sourceJSON: String? = nil
 
         var compositeID: String { "\(kind.rawValue):\(id)" }
         var idForList: String { compositeID }
@@ -41,7 +42,7 @@ final class HistoryStore {
             title: illust.title ?? "",
             subtitle: illust.user?.name ?? "",
             imageURL: illust.imageUrls?.squareMedium ?? illust.imageUrls?.medium,
-            viewedAt: Date()
+            viewedAt: Date(), sourceJSON: (try? JSONEncoder().encode(illust)).flatMap { String(data: $0, encoding: .utf8) }
         )
         prepend(entry)
     }
@@ -52,7 +53,7 @@ final class HistoryStore {
             title: novel.title ?? "",
             subtitle: novel.user?.name ?? "",
             imageURL: novel.imageUrls?.medium ?? novel.imageUrls?.squareMedium,
-            viewedAt: Date()
+            viewedAt: Date(), sourceJSON: (try? JSONEncoder().encode(novel)).flatMap { String(data: $0, encoding: .utf8) }
         )
         prepend(entry)
     }

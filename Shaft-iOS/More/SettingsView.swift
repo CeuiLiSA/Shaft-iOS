@@ -71,6 +71,12 @@ private enum SettingsCatalog {
         .init(id: "largeThumbnail", category: .network, title: .stLargeThumbnail, description: .stOriginalHint, keywords: "thumbnail image quality 缩略图 大图 画质"),
         .init(id: "originalPreview", category: .network, title: .stShowOriginalPreview, description: .stOriginalHint, keywords: "original detail image 原图 高清 详情"),
 
+        .init(id: "readTimeout", category: .network, title: .settingReadTimeoutTitle, keywords: "stall timeout retry 断流 超时 重试"),
+        .init(id: "imageStallRetry", category: .network, title: .settingReadTimeoutStallRetry, keywords: "image retry 图片 重试"),
+        .init(id: "appLock", category: .account, title: .appLockTitle, keywords: "lock biometric faceid touchid 锁 生物识别 隐私"),
+        .init(id: "appLockTimeout", category: .account, title: .appLockTimeoutTitle, keywords: "lock timeout 锁 超时"),
+        .init(id: "cardBookmarkButton", category: .appearance, title: .showIllustCardBookmarkButtonSetting, keywords: "heart bookmark 卡片 收藏 爱心"),
+        .init(id: "scrollEdgeHaptic", category: .appearance, title: .settingsScrollEdgeHaptic, keywords: "scroll edge haptic 滚动 边缘 振动"),
         // Appearance
         .init(id: "themeMode", category: .appearance, title: .stThemeMode, keywords: "theme dark light system 主题 深色 浅色"),
         .init(id: "themeColor", category: .appearance, title: .stThemeColor, keywords: "accent palette color 主题色 配色"),
@@ -80,7 +86,7 @@ private enum SettingsCatalog {
         .init(id: "tabOrder", category: .appearance, title: .stBottomBarOrder, keywords: "bottom bar tab order 底部 导航 顺序"),
         .init(id: "homeR18", category: .appearance, title: .stMainViewR18, keywords: "home r18 首页"),
         .init(id: "columns", category: .appearance, title: .stLineCount, keywords: "columns grid 列数 网格 瀑布流"),
-        .init(id: "layoutMode", category: .appearance, title: .stLayoutMode, keywords: "layout staggered linear 布局 瀑布流 列表"),
+        .init(id: "layoutMode", category: .appearance, title: .illustListLayout, keywords: "layout staggered linear 布局 瀑布流 列表"),
         .init(id: "novelTags", category: .appearance, title: .stShowNovelTags, keywords: "novel tags 小说 标签 卡片"),
         .init(id: "widgetRefresh", category: .appearance, title: .stWidgetRefreshInterval, keywords: "widget refresh interval 小组件 刷新 间隔"),
 
@@ -91,6 +97,7 @@ private enum SettingsCatalog {
         .init(id: "clearCloudHistory", category: .browsing, title: .stClearCloudHistory, keywords: "clear delete cloud history 清除 云端 历史"),
         .init(id: "filterComments", category: .browsing, title: .stFilterComment, keywords: "spam comments 垃圾 评论 广告"),
         .init(id: "filterR18", category: .browsing, title: .stR18DefaultFilter, description: .stR18DefaultFilterHint, keywords: "r18 safe filter 成人 屏蔽"),
+        .init(id: "aiExemptAuthors", category: .browsing, title: .aiBlockExemptAuthors, keywords: "AI exempt authors whitelist 豁免 作者 白名单"),
         .init(id: "hideAI", category: .browsing, title: .stDeleteAIIllust, keywords: "ai aigc filter 屏蔽 生成"),
         .init(id: "rankBookmarked", category: .browsing, title: .stFilterRankBookmarked, keywords: "ranking bookmark 排行榜 已收藏"),
         .init(id: "novelMinLength", category: .browsing, title: .stNovelMinLength, description: .stNovelMinLengthHint, keywords: "novel minimum length filter 小说 最小 字数 过滤"),
@@ -144,7 +151,7 @@ private enum SettingsCatalog {
         .init(id: "downloadLimit", category: .download, title: .stDownloadLimitType, keywords: "wifi cellular network limit 流量 网络 限制"),
         .init(id: "concurrency", category: .download, title: .stMaxConcurrent, keywords: "concurrent parallel download 并发 同时 下载"),
         .init(id: "longPressDownload", category: .download, title: .stLongPressDownload, keywords: "long press download 长按 下载"),
-        .init(id: "downloadNotice", category: .download, title: .stToastDownloadResult, keywords: "download complete notice 下载 完成 提示"),
+        .init(id: "downloadNotice", category: .download, title: .downloadToastEntryTitle, keywords: "download complete notice 下载 完成 提示"),
         .init(id: "silentDownload", category: .download, title: .stSilentDownload, description: .stSilentDownloadHint, keywords: "silent download photo date gallery 静默 下载 相册 日期"),
         .init(id: "aria2", category: .download, title: .stAria2Title, description: .stAria2Desc, keywords: "aria2 rpc nas remote 远程 下载"),
 
@@ -157,6 +164,7 @@ private enum SettingsCatalog {
         .init(id: "aiTranslate", category: .ai, title: .stAITranslate, description: .stAITranslateHint, keywords: "openai translation api comment manga AI 翻译 评论 漫画"),
 
         // Data
+        .init(id: "webdav", category: .data, title: .webdavSettingsTitle, description: .webdavSettingsEntryDesc, keywords: "webdav 坚果云 nextcloud pcloud NAS backup 备份 同步 自动备份"),
         .init(id: "backup", category: .data, title: .stBackup, keywords: "backup export 备份 导出"),
         .init(id: "restore", category: .data, title: .stRestore, keywords: "restore import 恢复 还原 导入"),
         .init(id: "cloudUpload", category: .data, title: .stMoonUpload, keywords: "cloud upload sync 云端 上传 同步"),
@@ -416,6 +424,10 @@ private struct SettingsCategoryView: View {
     @State private var showImageHostRestart = false
     @State private var customImageHostDraft = ""
     @State private var highlightID: String?
+    @State private var showIllustLayoutPicker = false
+    @State private var showDownloadNotices = false
+    @State private var showAIExemptAuthors = false
+    @State private var appLock = AppLockController.shared
 
     private static let r18SettingURL = URL(string: "https://www.pixiv.net/settings/viewing")!
     private static let premiumSettingURL = URL(string: "https://www.pixiv.net/premium.php#premium-payment")!
@@ -430,6 +442,7 @@ private struct SettingsCategoryView: View {
     var body: some View {
         ScrollViewReader { proxy in
             Form { categoryContent }
+                .scrollEdgeFeedback()
                 .scrollContentBackground(.hidden)
                 .background(Theme.v3Bg)
                 .task(id: requestedHighlightID) {
@@ -450,6 +463,9 @@ private struct SettingsCategoryView: View {
         }
         .navigationTitle(l10n.t(category.titleKey))
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showIllustLayoutPicker) { IllustListLayoutPicker() }
+        .sheet(isPresented: $showAIExemptAuthors) { AIExemptAuthorsView() }
+        .sheet(isPresented: $showDownloadNotices) { DownloadNoticeSettingsView() }
         .sheet(isPresented: $showTagLegibility) {
             TagLegibilitySheet().presentationDetents([.medium, .large])
         }
@@ -532,6 +548,22 @@ private struct SettingsCategoryView: View {
 
     @ViewBuilder private var accountContent: some View {
         Section {
+            Toggle(isOn: Binding(get: { appLock.enabled }, set: { value in
+                Task { await appLock.setEnabled(value, reason: l10n.t(.applockEnablePromptSubtitle)) }
+            })) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(l10n.t(.appLockTitle))
+                    Text(l10n.t(.appLockDesc)).font(.caption).foregroundStyle(Theme.v3Text2)
+                }
+            }.disabled(appLock.authenticating).settingRow("appLock", highlightID)
+            if appLock.enabled {
+                Picker(l10n.t(.appLockTimeoutTitle), selection: Binding(get: { appLock.timeout }, set: { appLock.timeout = $0 })) {
+                    ForEach(AppLockTimeout.allCases) { Text(l10n.t($0.label)).tag($0) }
+                }.settingRow("appLockTimeout", highlightID)
+            }
+            if let error = appLock.errorMessage { Text(error).font(.caption).foregroundStyle(Theme.v3Text2) }
+        }
+        Section {
             subPageRow(l10n.t(.stAccountManage)).settingRow("accountManage", highlightID)
             subPageRow(l10n.t(.stEditAccount)).settingRow("editAccount", highlightID)
             subPageRow(l10n.t(.stEmailBackup)).settingRow("emailBackup", highlightID)
@@ -547,7 +579,9 @@ private struct SettingsCategoryView: View {
 
     @ViewBuilder private var networkContent: some View {
         Section {
-            Toggle(isOn: $st.directConnect) {
+            Toggle(isOn: Binding(get: { st.directConnect }, set: { value in
+                if st.directConnect != value { st.directConnect = value; st.imageReadTimeoutSeconds = 0 }
+            })) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(l10n.t(.stDirectConnect))
                     Button { openURL(Self.pixEzURL) } label: {
@@ -563,6 +597,22 @@ private struct SettingsCategoryView: View {
             }
             actionRow(l10n.t(.stImageHost), value: imageHostSummary) { showImageHostPicker = true }
                 .settingRow("imageHost", highlightID)
+        }
+        Section {
+            Picker(l10n.t(.settingReadTimeoutTitle), selection: Binding(get: {
+                let maximum = st.directConnect ? 30 : 10
+                return (1..<maximum).contains(st.imageReadTimeoutSeconds) ? st.imageReadTimeoutSeconds : 0
+            }, set: { st.imageReadTimeoutSeconds = $0 })) {
+                let maximum = st.directConnect ? 30 : 10
+                Text(String(format: l10n.t(.settingReadTimeoutDefaultValue), maximum)).tag(0)
+                ForEach(1..<maximum, id: \.self) { seconds in
+                    Text(String(format: l10n.t(.settingReadTimeoutSeconds), seconds)).tag(seconds)
+                }
+            }
+            .tint(Theme.brand).settingRow("readTimeout", highlightID)
+            Text(l10n.t(.settingReadTimeoutDialogHint)).font(.caption).foregroundStyle(Theme.v3Text2)
+            Toggle(l10n.t(.settingReadTimeoutStallRetry), isOn: $st.imageLoadRetryOnStall)
+                .settingRow("imageStallRetry", highlightID)
         }
         Section {
             hintToggle(l10n.t(.stLargeThumbnail), l10n.t(.stOriginalHint), isOn: $st.showLargeThumbnailImage)
@@ -618,10 +668,12 @@ private struct SettingsCategoryView: View {
             .pickerStyle(.menu)
             .tint(Theme.brand)
             .settingRow("columns", highlightID)
-            pickerRow(l10n.t(.stLayoutMode), selection: Binding(
-                get: { st.useStaggeredLayout ? 0 : 1 }, set: { st.useStaggeredLayout = $0 == 0 }
-            ), options: [l10n.t(.stOptStaggered), l10n.t(.stOptLinear)])
+            actionRow(l10n.t(.illustListLayout), value: l10n.t(IllustListLayout.current.title)) { showIllustLayoutPicker = true }
             .settingRow("layoutMode", highlightID)
+            Toggle(l10n.t(.showIllustCardBookmarkButtonSetting), isOn: $st.showIllustCardBookmarkButton)
+                .settingRow("cardBookmarkButton", highlightID)
+            hintToggle(l10n.t(.settingsScrollEdgeHaptic), l10n.t(.settingsScrollEdgeHapticDesc), isOn: $st.scrollEdgeHapticEnable)
+                .settingRow("scrollEdgeHaptic", highlightID)
             Toggle(l10n.t(.stShowNovelTags), isOn: $st.showNovelCardTags).settingRow("novelTags", highlightID)
             // Present on Android's category page but intentionally absent from
             // its SettingsCatalog, so it is likewise not searchable here.
@@ -654,6 +706,9 @@ private struct SettingsCategoryView: View {
                 get: { mute.hideR18 }, set: { mute.setHideR18($0) }
             )).settingRow("filterR18", highlightID)
             Toggle(l10n.t(.stDeleteAIIllust), isOn: $st.deleteAIIllust).settingRow("hideAI", highlightID)
+            actionRow(l10n.t(.aiBlockExemptAuthors), value: String(format: l10n.t(.aiBlockExemptCountPartial), st.aiBlockExemptAuthorIds.count,
+                AIExemptAuthors.enabled(ids: st.aiBlockExemptAuthorIds, disabled: st.aiBlockExemptDisabledIds).count)) { showAIExemptAuthors = true }
+                .settingRow("aiExemptAuthors", highlightID)
             Toggle(l10n.t(.stFilterRankBookmarked), isOn: $st.filterRankBookmarked).settingRow("rankBookmarked", highlightID)
         }
         Section {
@@ -789,7 +844,9 @@ private struct SettingsCategoryView: View {
                 get: { st.maxConcurrentDownloads - 1 }, set: { st.maxConcurrentDownloads = $0 + 1 }
             ), options: concurrentOptions).settingRow("concurrency", highlightID)
             Toggle(l10n.t(.stLongPressDownload), isOn: $st.illustLongPressDownload).settingRow("longPressDownload", highlightID)
-            Toggle(l10n.t(.stToastDownloadResult), isOn: $st.toastDownloadResult).settingRow("downloadNotice", highlightID)
+            actionRow(l10n.t(.downloadToastEntryTitle), value: String(format: l10n.t(.downloadToastEntrySummary), st.mutedDownloadToasts.count)) {
+                showDownloadNotices = true
+            }.settingRow("downloadNotice", highlightID)
             actionRow(l10n.t(.stSilentDownload), hint: l10n.t(.stSilentDownloadHint), value: l10n.t(.stNotAvailable)) { showNotAvailable = true }
                 .settingRow("silentDownload", highlightID)
         }
@@ -817,8 +874,14 @@ private struct SettingsCategoryView: View {
 
     @ViewBuilder private var dataContent: some View {
         Section {
-            actionRow(l10n.t(.stBackup)) { showNotAvailable = true }.settingRow("backup", highlightID)
-            actionRow(l10n.t(.stRestore)) { showNotAvailable = true }.settingRow("restore", highlightID)
+            NavigationLink { LocalBackupSettingsView() } label: { Text(l10n.t(.stBackup)) }.settingRow("backup", highlightID)
+            NavigationLink { LocalBackupSettingsView(startRestoring: true) } label: { Text(l10n.t(.stRestore)) }.settingRow("restore", highlightID)
+            NavigationLink { WebDAVSettingsView() } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(l10n.t(.webdavSettingsTitle))
+                    Text(l10n.t(.webdavSettingsEntryDesc)).font(.caption).foregroundStyle(Theme.v3Text2)
+                }
+            }.settingRow("webdav", highlightID)
             actionRow(l10n.t(.stMoonUpload)) { showNotAvailable = true }.settingRow("cloudUpload", highlightID)
             actionRow(l10n.t(.stMoonSync)) { showNotAvailable = true }.settingRow("cloudSync", highlightID)
         }
