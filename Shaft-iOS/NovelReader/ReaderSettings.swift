@@ -281,6 +281,15 @@ final class NovelReaderSettings {
     var ttsSpeed: Double { didSet { set(ttsSpeed.clamped(0.5, 2.0), oldValue, "r_tts_speed") } }
     var ttsPitch: Double { didSet { set(ttsPitch.clamped(0.5, 2.0), oldValue, "r_tts_pitch") } }
 
+    /// 全文翻译的显示方式（issue #864）：双语对照 / 仅译文，默认双语。「仅原文」不是一种
+    /// 持久化的方式，而是收起译文。不进 `layoutSnapshot`：阅读页切换后由 VM 直接重排版。
+    var translationRole: TranslationRole {
+        didSet {
+            if translationRole == .none { translationRole = .interlinear; return }
+            set(translationRole.rawValue, oldValue.rawValue, "r_translation_role")
+        }
+    }
+
     private init() {
         let d = UserDefaults.standard
         func i(_ key: String, _ def: Int) -> Int { d.object(forKey: Self.prefix + key) == nil ? def : d.integer(forKey: Self.prefix + key) }
@@ -323,6 +332,8 @@ final class NovelReaderSettings {
         ttsShowPageAction = b("r_tts_page_action", true)
         ttsSpeed = f("r_tts_speed", 1.0).clamped(0.5, 2.0)
         ttsPitch = f("r_tts_pitch", 1.0).clamped(0.5, 2.0)
+        translationRole = TranslationRole(rawValue: s("r_translation_role", TranslationRole.interlinear.rawValue))
+            .flatMap { $0 == .none ? nil : $0 } ?? .interlinear
         for preset in ReaderTheme.presets {
             let key = Self.prefix + Self.textColorKeyPrefix + preset.id
             if d.object(forKey: key) != nil {
@@ -456,6 +467,11 @@ struct ReaderTypeStyle {
     let firstLineIndent: CGFloat
     let chapterTopGap: CGFloat
     let chapterBottomGap: CGFloat
+    /// 全文翻译的译文：字号降一级（0.9×）、次要文字色（issue #864）。
+    let translationFont: UIFont
+    let translationLineHeight: CGFloat
+    /// 原文段落与紧随其后的译文之间的间距，比段间距紧，让一对原文/译文读起来是一组。
+    let translationGap: CGFloat
     let imagePlacement: ImagePlacement
     let imageScaleMode: ImageScaleMode
     let theme: ReaderTheme
@@ -469,7 +485,9 @@ struct ReaderTypeStyle {
         let body = preset.font(size: size, weight: settings.fontWeight, bold: settings.boldText)
         let chapter = preset.font(size: size * 1.55, weight: max(settings.fontWeight, 700), bold: true)
         let caption = preset.font(size: size * 0.82, weight: settings.fontWeight, bold: false)
+        let translation = preset.font(size: size * 0.9, weight: settings.fontWeight, bold: settings.boldText)
         let fontHeight = body.ascender - body.descender
+        let paragraphSpacing = fontHeight * CGFloat(settings.paragraphSpacingLines)
         let chapterHeight = chapter.ascender - chapter.descender
         return ReaderTypeStyle(
             bodyFont: body,
@@ -478,10 +496,13 @@ struct ReaderTypeStyle {
             kern: CGFloat(settings.letterSpacing) * size,
             lineHeight: (fontHeight * CGFloat(settings.lineSpacing)).rounded(),
             chapterLineHeight: (chapterHeight * 1.15).rounded(),
-            paragraphSpacing: fontHeight * CGFloat(settings.paragraphSpacingLines),
+            paragraphSpacing: paragraphSpacing,
             firstLineIndent: size * CGFloat(settings.firstLineIndent),
             chapterTopGap: chapterHeight * 0.8,
             chapterBottomGap: chapterHeight * 1.2,
+            translationFont: translation,
+            translationLineHeight: ((translation.ascender - translation.descender) * CGFloat(settings.lineSpacing)).rounded(),
+            translationGap: (paragraphSpacing * 0.35).rounded(),
             imagePlacement: settings.imagePlacement,
             imageScaleMode: settings.imageScaleMode,
             theme: theme
@@ -507,6 +528,29 @@ struct ReaderTypeStyle {
         ]
         if kern != 0 { attrs[.kern] = kern }
         return attrs
+    }
+
+    /// 双语对照的译文段（issue #864）：降一级字号、次要文字色、不缩进，固定行高同样钉死，
+    /// 分页测量与渲染逐行一致。
+    func translationAttributes() -> [NSAttributedString.Key: Any] {
+        let p = NSMutableParagraphStyle()
+        p.minimumLineHeight = translationLineHeight
+        p.maximumLineHeight = translationLineHeight
+        p.lineBreakMode = .byWordWrapping
+        p.alignment = .natural
+        var attrs: [NSAttributedString.Key: Any] = [
+            .font: translationFont,
+            .foregroundColor: theme.secondaryTextColor,
+            .paragraphStyle: p,
+        ]
+        // 字距按 em 设定，跟着 0.9× 字号一起缩。
+        if kern != 0 { attrs[.kern] = kern * 0.9 }
+        return attrs
+    }
+
+    /// 段落正文的属性：双语译文走 `translationAttributes`，其余（原文 / 仅译文）按正文样式。
+    func paragraphAttributes(role: TranslationRole, indentFirstLine: Bool) -> [NSAttributedString.Key: Any] {
+        role == .interlinear ? translationAttributes() : bodyAttributes(indentFirstLine: indentFirstLine)
     }
 
     func chapterAttributes() -> [NSAttributedString.Key: Any] {

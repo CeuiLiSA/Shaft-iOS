@@ -90,7 +90,7 @@ enum ReaderExporter {
             switch token {
             case .chapter(_, _, let title):
                 out += "\n【\(title)】\n\n"
-            case .paragraph(_, _, let text, _, _):
+            case .paragraph(_, _, let text, _, _, _):
                 out += text + "\n"
             case .blankLine:
                 out += "\n"
@@ -128,7 +128,7 @@ enum ReaderExporter {
             switch token {
             case .chapter(_, _, let title):
                 out += "\n## \(escapeMd(title))\n\n"
-            case .paragraph(_, _, let text, _, _):
+            case .paragraph(_, _, let text, _, _, _):
                 out += escapeMd(text) + "\n\n"
             case .blankLine:
                 out += "\n"
@@ -188,7 +188,7 @@ enum ReaderExporter {
             case .chapter(_, _, let title):
                 flushChunk()
                 current.append(NSAttributedString(string: title + "\n", attributes: chapterAttrs))
-            case .paragraph(_, _, let text, _, _):
+            case .paragraph(_, _, let text, _, _, _):
                 current.append(NSAttributedString(string: text + "\n", attributes: bodyAttrs))
             case .blankLine:
                 current.append(NSAttributedString(string: "\n", attributes: bodyAttrs))
@@ -288,7 +288,7 @@ enum ReaderExporter {
                 let id = "c\(chapterAnchors.count + 1)"
                 chapterAnchors.append((id, title))
                 bodyHtml += "<h2 id=\"\(id)\">\(xmlEscape(title))</h2>\n"
-            case .paragraph(_, _, let text, _, _):
+            case .paragraph(_, _, let text, _, _, _):
                 bodyHtml += "<p>\(xmlEscape(text))</p>\n"
             case .blankLine:
                 bodyHtml += "<p class=\"blank\">&#160;</p>\n"

@@ -51,7 +51,7 @@ enum NovelTtsText {
         var result: [Segment] = []
         for token in tokens where token.sourceEnd > startCharIndex {
             switch token {
-            case .paragraph(_, _, let text, let textSourceStart, _):
+            case .paragraph(_, _, let text, let textSourceStart, _, _):
                 let ns = text as NSString
                 let offset = min(max(startCharIndex - textSourceStart, 0), ns.length)
                 result += split(ns.substring(from: offset), maxChars: maxChars).map {
@@ -74,7 +74,7 @@ enum NovelTtsText {
     static func paragraphStart(_ tokens: [ContentToken], charIndex: Int) -> Int? {
         for token in tokens {
             switch token {
-            case .paragraph(_, _, let text, let textSourceStart, _):
+            case .paragraph(_, _, let text, let textSourceStart, _, _):
                 if (textSourceStart..<(textSourceStart + text.utf16.count)).contains(charIndex) { return textSourceStart }
             case .chapter(let start, let end, _):
                 if (start..<end).contains(charIndex) { return start }
@@ -103,7 +103,7 @@ enum NovelTtsText {
         }
         for token in tokens where token.sourceEnd > startCharIndex {
             switch token {
-            case .paragraph(_, _, let text, let textSourceStart, _):
+            case .paragraph(_, _, let text, let textSourceStart, _, _):
                 let ns = text as NSString
                 let offset = min(max(startCharIndex - textSourceStart, 0), ns.length)
                 out += ns.substring(from: offset) + "\n"

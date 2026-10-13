@@ -1,4 +1,5 @@
 import SwiftUI
+import os
 
 // Orchestration — port of NovelReaderV3Fragment + NovelReaderV3ViewModel:
 // load (text cache → /webview/v2/novel + /v2/novel/detail), background
@@ -42,6 +43,46 @@ final class NovelReaderV3ViewModel {
     @ObservationIgnored private var paginationRevision = 0
     @ObservationIgnored private var lastLayoutKey: String = ""
     @ObservationIgnored private var paginationTask: Task<Void, Never>?
+    /// Last style / geometry handed in by the paged host — `repaginateIfReady`
+    /// re-flows with them when only the token stream changed.
+    @ObservationIgnored private var lastStyle: ReaderTypeStyle?
+    @ObservationIgnored private var lastGeometry: PageGeometry?
+
+    // MARK: 全文翻译（issue #864）
+    // 译文只进展示链路（displayTokens）；关掉后保留已翻好的部分，再开秒出、只补缺口。
+
+    enum TranslationState: Equatable {
+        case off
+        case running(done: Int, total: Int)
+        case done
+        case failed
+    }
+
+    private(set) var translationState: TranslationState = .off
+
+    /// 译文有变化（到货一批 / 开关切换）后 +1，滚动阅读 observe 它把译文贴进视图。
+    private(set) var translationVersion = 0
+
+    /// 翻译因网络不通中断：提示「需要代理」（upstream `promptProxyNeededIfPossible`）。
+    var translateProxyPromptVisible = false
+
+    /// App 语言 → gtx 的 `tl`，由阅读页注入（upstream `appTranslateTargetLang`）。
+    @ObservationIgnored var translateTargetLang: () -> String = { "en" }
+
+    /// 原文段落 sourceStart → 译文，目标语言为 `translationsLang`。
+    @ObservationIgnored private var translations: [Int: String] = [:]
+    @ObservationIgnored private var translationsLang: String?
+    @ObservationIgnored private var translationTask: Task<Void, Never>?
+    @ObservationIgnored private var lastTranslationRefreshAt: ContinuousClock.Instant?
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Shaft-iOS", category: "NovelReaderV3")
+    /// 分批到货时两次译文上屏的最小间隔；首批与结束时不受限。
+    private static let translationRefreshInterval: Duration = .milliseconds(2500)
+
+    /// 本篇已经有（部分）译文：切到「仅原文」后菜单仍要给出「译文显示方式」好切回来。
+    var hasBodyTranslation: Bool { !translations.isEmpty }
+
+    /// 中断（`.failed`）时已到手的译文照常显示，不随失败一起消失。
+    private var isTranslationShown: Bool { translationState != .off }
 
     // MARK: Interactions
 
@@ -169,8 +210,22 @@ final class NovelReaderV3ViewModel {
         guard case .loaded = loadState, !tokens.isEmpty else { return }
         guard layoutKey != lastLayoutKey else { return }
         lastLayoutKey = layoutKey
+        lastStyle = style
+        lastGeometry = geometry
+        paginate(style: style, geometry: geometry)
+    }
+
+    /// Re-flow the current display tokens with the last layout (translation
+    /// batches / display-mode switches). Scroll mode has no pages to rebuild.
+    private func repaginateIfReady() {
+        guard case .loaded = loadState, NovelReaderSettings.shared.readingDirection == .horizontal,
+              let style = lastStyle, let geometry = lastGeometry, !lastLayoutKey.isEmpty else { return }
+        paginate(style: style, geometry: geometry)
+    }
+
+    private func paginate(style: ReaderTypeStyle, geometry: PageGeometry) {
         paginationTask?.cancel()
-        let tokens = self.tokens
+        let tokens = displayTokens()
         let webNovel = self.webNovel
         let anchor = desiredCharIndex
         paginationRevision += 1
@@ -188,7 +243,7 @@ final class NovelReaderV3ViewModel {
             guard !Task.isCancelled else { return }
             await MainActor.run { [weak self] in
                 guard let self, revision == self.paginationRevision else { return }
-                let start = pages.firstIndex { $0.charEnd >= anchor } ?? max(pages.count - 1, 0)
+                let start = pages.indexOfPageForAnchor(anchor)
                 self.currentPageIndex = start
                 self.pagination = Pagination(
                     pages: pages, style: style, geometry: geometry,
@@ -201,6 +256,110 @@ final class NovelReaderV3ViewModel {
         }
     }
 
+    // MARK: Display tokens + 全文翻译
+
+    /// 展示链路的 token 流：原始 tokens 上插入译文。原始 `tokens` 保持纯净 → 朗读 / 导出 /
+    /// 复制 / 搜索不受影响。翻页 `paginate` 与滚动 rebind 都从这取。
+    func displayTokens() -> [ContentToken] {
+        guard isTranslationShown else { return tokens }
+        return TranslationInserter.insert(tokens, translations: translations,
+                                          role: NovelReaderSettings.shared.translationRole)
+    }
+
+    /// 收起译文回到纯原文，并停掉进行中的请求；已翻好的部分留着，再开时秒出。
+    func hideBodyTranslation() {
+        guard translationState != .off else { return }
+        translationTask?.cancel()
+        translationState = .off
+        refreshTranslationDisplay(force: true)
+    }
+
+    /// 「译文显示方式」：nil = 仅原文（收起译文）；否则记住双语 / 仅译文并上屏——
+    /// 还没翻过就顺带开始翻。
+    func setTranslationDisplay(_ role: TranslationRole?) {
+        guard let role, role != .none else {
+            hideBodyTranslation()
+            return
+        }
+        NovelReaderSettings.shared.translationRole = role
+        if translationState == .off {
+            startBodyTranslation()
+        } else {
+            refreshTranslationDisplay(force: true)
+        }
+    }
+
+    /// 开始全文翻译；上次中断的话只补没翻到的段落。
+    func startBodyTranslation() {
+        if case .running = translationState { return }
+        guard !tokens.isEmpty else { return }
+        let lang = translateTargetLang()
+        if translationsLang != lang {
+            translations = [:]
+            translationsLang = lang
+        }
+        // 从当前阅读位置往后先翻，再回头补前面——译文先出现在用户正在看的地方。
+        var before: [NovelBodyTranslator.Paragraph] = []
+        var after: [NovelBodyTranslator.Paragraph] = []
+        let anchor = desiredCharIndex
+        for token in tokens {
+            guard case .paragraph(let start, let end, let text, _, _, .none) = token,
+                  !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  translations[start] == nil else { continue }
+            let paragraph = NovelBodyTranslator.Paragraph(sourceStart: start, text: text)
+            if end < anchor { before.append(paragraph) } else { after.append(paragraph) }
+        }
+        let pending = after + before
+        if pending.isEmpty {
+            translationState = .done
+            refreshTranslationDisplay(force: true)
+            return
+        }
+        translationState = .running(done: 0, total: pending.count)
+        // 已有的部分译文（上次中断 / 关掉又打开）立刻上屏；首批新译文也不受限频。
+        if !translations.isEmpty { refreshTranslationDisplay(force: true) }
+        lastTranslationRefreshAt = nil
+        translationTask?.cancel()
+        translationTask = Task { [weak self] in
+            var done = 0
+            do {
+                try await NovelBodyTranslator.translate(pending, targetLang: lang) { [weak self] chunk in
+                    // 阅读页已关：停掉后续请求。
+                    guard let self, !Task.isCancelled else { throw CancellationError() }
+                    self.translations.merge(chunk) { _, new in new }
+                    done += chunk.count
+                    self.translationState = .running(done: done, total: pending.count)
+                    self.refreshTranslationDisplay(force: false)
+                }
+                // 最后一批上屏后、回到这里之前还有一次 actor 切换：期间被「仅原文」取消的话，
+                // 不能再把状态写回 `.done`、把译文重新排上屏。
+                guard let self, !Task.isCancelled else { return }
+                self.translationState = .done
+                self.showToast(self.l10n(.msgReaderTranslateDone))
+            } catch {
+                guard let self, !(error is CancellationError), !Task.isCancelled else { return }
+                Self.logger.warning("body translation stopped at \(done)/\(pending.count): \(error.localizedDescription)")
+                self.translationState = .failed
+                if error is URLError {
+                    self.translateProxyPromptVisible = true
+                } else {
+                    self.showToast(String(format: self.l10n(.msgReaderTranslateFailedFmt), error.localizedDescription))
+                }
+            }
+            self?.refreshTranslationDisplay(force: true)
+        }
+    }
+
+    /// 译文上屏：翻页重排版、滚动通过 `translationVersion` 换 token。分批到货时限频——
+    /// 长篇每次重排版都是整本重新测量，且每次换页都会让当前页重绘一下。
+    private func refreshTranslationDisplay(force: Bool) {
+        let now = ContinuousClock.now
+        if !force, let last = lastTranslationRefreshAt, now - last < Self.translationRefreshInterval { return }
+        lastTranslationRefreshAt = now
+        repaginateIfReady()
+        translationVersion += 1
+    }
+
     /// Force the next updateLayout to repaginate (mode/theme switches).
     func invalidateLayout() {
         lastLayoutKey = ""
@@ -211,7 +370,12 @@ final class NovelReaderV3ViewModel {
     func onPageChanged(_ index: Int) {
         guard let pages = pagination?.pages, pages.indices.contains(index) else { return }
         currentPageIndex = index
-        desiredCharIndex = pages[index].charStart
+        // 重排版后视图会回报落到的那一页：它本来就包含锚点时别把锚点改写成页首，否则
+        // 每次重排版（全文翻译分批到货、开关译文）都往回退一截，翻译途中能倒退好几页。
+        let page = pages[index]
+        if !(desiredCharIndex >= page.charStart && desiredCharIndex < page.charEnd) {
+            desiredCharIndex = page.charStart
+        }
         ReaderProgressStore.saveProgress(
             novelId: novelId, charIndex: pages[index].charStart,
             pageIndex: index, totalPages: pages.count
@@ -600,7 +764,7 @@ final class NovelReaderV3ViewModel {
         for token in tokens {
             switch token {
             case .chapter(_, _, let title): out += "【\(title)】\n"
-            case .paragraph(_, _, let text, _, _): out += text + "\n"
+            case .paragraph(_, _, let text, _, _, _): out += text + "\n"
             case .blankLine: out += "\n"
             case .pageBreak: out += "\n"
             default: break

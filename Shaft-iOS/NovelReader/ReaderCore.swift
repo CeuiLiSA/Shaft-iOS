@@ -79,8 +79,23 @@ enum InlineMarkupProcessor {
 
 // MARK: - Content tokens
 
+/// 全文翻译的译文段落在展示 token 流里的身份（issue #864）。
+enum TranslationRole: String {
+    /// 原文段落。
+    case none = "None"
+
+    /// 双语对照：插在原文段落正下方，字号降一级、次要文字色。源偏移**零宽度**
+    /// （sourceStart == sourceEnd == textSourceStart == 原文段落的 sourceEnd）。
+    case interlinear = "Interlinear"
+
+    /// 仅译文：顶替原文段落，按正文样式排版。源区间沿用原文段落，进度锚点照常落在段首。
+    case replacement = "Replacement"
+}
+
 enum ContentToken {
-    case paragraph(sourceStart: Int, sourceEnd: Int, text: String, textSourceStart: Int, inlineSpans: [InlineSpan])
+    /// `translationRole` = 全文翻译的译文段落（issue #864），只出现在展示链路里，见 `TranslationRole`。
+    /// `text` 不在源文本中：选区 / 高亮把整段映射到 `textSourceStart` 这一个点。
+    case paragraph(sourceStart: Int, sourceEnd: Int, text: String, textSourceStart: Int, inlineSpans: [InlineSpan], translationRole: TranslationRole = .none)
     case chapter(sourceStart: Int, sourceEnd: Int, title: String)
     case pixivImage(sourceStart: Int, sourceEnd: Int, illustId: Int64, pageIndex: Int)
     case uploadedImage(sourceStart: Int, sourceEnd: Int, imageId: Int64)
@@ -91,7 +106,7 @@ enum ContentToken {
 
     var sourceStart: Int {
         switch self {
-        case .paragraph(let s, _, _, _, _), .chapter(let s, _, _),
+        case .paragraph(let s, _, _, _, _, _), .chapter(let s, _, _),
              .pixivImage(let s, _, _, _), .uploadedImage(let s, _, _),
              .pageBreak(let s, _), .blankLine(let s, _), .jump(let s, _, _):
             return s
@@ -100,11 +115,17 @@ enum ContentToken {
 
     var sourceEnd: Int {
         switch self {
-        case .paragraph(_, let e, _, _, _), .chapter(_, let e, _),
+        case .paragraph(_, let e, _, _, _, _), .chapter(_, let e, _),
              .pixivImage(_, let e, _, _), .uploadedImage(_, let e, _),
              .pageBreak(_, let e), .blankLine(_, let e), .jump(_, let e, _):
             return e
         }
+    }
+
+    /// 译文段落的身份；非段落 token 恒为 `.none`。
+    var translationRole: TranslationRole {
+        if case .paragraph(_, _, _, _, _, let role) = self { return role }
+        return .none
     }
 }
 
@@ -127,6 +148,11 @@ enum PageElement {
         var isFirstLineOfParagraph: Bool
         var isLastLineOfParagraph: Bool
         var lineCount: Int
+        /// 全文翻译的译文切片（`TranslationRole`）：选区 / 高亮映射到 `absoluteCharStart` 这一个点。
+        var translationRole: TranslationRole = .none
+
+        var isTranslation: Bool { translationRole != .none }
+        var isInterlinear: Bool { translationRole == .interlinear }
     }
 
     struct Chapter {
@@ -193,6 +219,20 @@ struct ReaderPage {
             case .jump(let j): return c >= j.absoluteCharStart && c < j.absoluteCharEnd
             }
         }
+    }
+}
+
+extension Array where Element == ReaderPage {
+    /// 锚点 `charIndex` 所在的页（issue #864：全文翻译分批上屏，每次重排版都靠它把读者放回原处）。
+    ///
+    /// 1. 锚点正好是某页页首（翻页时锚点取的就是页首）→ 那一页。零宽度页（整页的双语译文，
+    ///    charStart == charEnd）只能靠这一条认回来，否则会被推到下一页。
+    /// 2. 否则取第一个 charEnd **严格大于**锚点的页：锚点落在两页交界（跨页段落续页的页首 ==
+    ///    前一页的 charEnd）时属于后一页，用 `>=` 会退回前一页。
+    /// 3. 锚点在全书末尾 → 最后一页；空列表 → 0。
+    func indexOfPageForAnchor(_ charIndex: Int) -> Int {
+        if let i = firstIndex(where: { $0.charStart == charIndex }) { return i }
+        return firstIndex(where: { $0.charEnd > charIndex }) ?? Swift.max(count - 1, 0)
     }
 }
 

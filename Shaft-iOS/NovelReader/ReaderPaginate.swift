@@ -19,8 +19,10 @@ enum ReaderTextMeasurer {
     /// Measure a body paragraph at `width`, returning per-line char ranges +
     /// vertical extents. First-line indent applied like upstream
     /// `withFirstLineIndent` so wrap points match the rendered slice.
-    static func measureParagraph(_ text: String, style: ReaderTypeStyle, width: CGFloat) -> [MeasuredLine] {
-        measure(NSAttributedString(string: text, attributes: style.bodyAttributes(indentFirstLine: true)), width: width)
+    /// 双语对照的译文降一级排版、不缩进；仅译文顶替原文，按正文样式排（issue #864）。
+    static func measureParagraph(_ text: String, style: ReaderTypeStyle, width: CGFloat,
+                                 role: TranslationRole = .none) -> [MeasuredLine] {
+        measure(NSAttributedString(string: text, attributes: style.paragraphAttributes(role: role, indentFirstLine: true)), width: width)
     }
 
     /// Chapter headings use a lightweight centred layout at 1.15 spacing.
@@ -80,14 +82,14 @@ struct ReaderPaginator {
         guard !tokens.isEmpty, geometry.contentWidth > 0, geometry.contentHeight > 0 else { return [] }
         let st = State()
         st.currentY = geometry.paddingTop
-        for token in tokens {
-            process(token, st)
+        for (i, token) in tokens.enumerated() {
+            process(token, next: i + 1 < tokens.count ? tokens[i + 1] : nil, st)
         }
         finishPage(st)
         return st.pages
     }
 
-    private func process(_ token: ContentToken, _ st: State) {
+    private func process(_ token: ContentToken, next: ContentToken?, _ st: State) {
         switch token {
         case .pageBreak(_, let end):
             finishPage(st)
@@ -125,8 +127,11 @@ struct ReaderPaginator {
             st.currentChapterTitle = title
             emitChapterHeading(st, sourceStart: start, sourceEnd: end, title: title)
 
-        case .paragraph(let start, _, let text, let textSourceStart, _):
-            emitParagraph(st, paragraphIndex: start, text: text, textSourceStart: textSourceStart)
+        case .paragraph(let start, let end, let text, let textSourceStart, _, let role):
+            // 紧跟自己双语译文的原文段落收紧段后距，原文/译文读起来是一组（issue #864）。
+            let followedByTranslation = next?.translationRole == .interlinear
+            emitParagraph(st, paragraphIndex: start, sourceEnd: end, text: text, textSourceStart: textSourceStart,
+                          role: role, gapAfter: followedByTranslation ? style.translationGap : style.paragraphSpacing)
 
         case .blankLine(let start, let end):
             if !st.currentElements.isEmpty {
@@ -198,10 +203,11 @@ struct ReaderPaginator {
         st.currentCharEnd = sourceEnd
     }
 
-    private func emitParagraph(_ st: State, paragraphIndex: Int, text: String, textSourceStart: Int) {
+    private func emitParagraph(_ st: State, paragraphIndex: Int, sourceEnd: Int, text: String, textSourceStart: Int,
+                               role: TranslationRole, gapAfter: CGFloat) {
         let width = geometry.contentWidth
         guard width > 0 else { return }
-        let lines = ReaderTextMeasurer.measureParagraph(text, style: style, width: width)
+        let lines = ReaderTextMeasurer.measureParagraph(text, style: style, width: width, role: role)
         let total = lines.count
         guard total > 0 else { return }
         let ns = text as NSString
@@ -243,8 +249,24 @@ struct ReaderPaginator {
             let startChar = min(max(lines[cursor].range.location, 0), ns.length)
             let lastRange = lines[cursor + linesFit - 1].range
             let endChar = min(max(lastRange.location + lastRange.length, 0), ns.length)
-            let absoluteStart = textSourceStart + startChar
-            let absoluteEnd = textSourceStart + endChar
+            let absoluteStart: Int
+            let absoluteEnd: Int
+            switch role {
+            case .none:
+                absoluteStart = textSourceStart + startChar
+                absoluteEnd = textSourceStart + endChar
+            // 双语译文不在源文本里：钉在零宽度锚点上，不虚构字符区间。
+            case .interlinear:
+                absoluteStart = textSourceStart
+                absoluteEnd = textSourceStart
+            // 仅译文顶替整段原文：切片按比例映射回原文区间。跨页的段落每页各占一截，
+            // 续页的页首才与前一页的 charEnd 区分得开，重排版能落回续页。
+            case .replacement:
+                let span = sourceEnd - textSourceStart
+                let length = max(ns.length, 1)
+                absoluteStart = textSourceStart + startChar * span / length
+                absoluteEnd = textSourceStart + endChar * span / length
+            }
             let sliceText = ns.substring(with: NSRange(location: startChar, length: endChar - startChar))
 
             st.currentElements.append(.text(PageElement.Text(
@@ -254,7 +276,8 @@ struct ReaderPaginator {
                 paragraphIndex: paragraphIndex,
                 isFirstLineOfParagraph: cursor == 0,
                 isLastLineOfParagraph: (cursor + linesFit) == total,
-                lineCount: linesFit
+                lineCount: linesFit,
+                translationRole: role
             )))
             ensureStartTracked(st, absoluteStart)
             st.currentY += pxUsed
@@ -264,7 +287,7 @@ struct ReaderPaginator {
             if cursor < total {
                 finishPage(st)
             } else {
-                st.currentY += style.paragraphSpacing
+                st.currentY += gapAfter
             }
         }
     }

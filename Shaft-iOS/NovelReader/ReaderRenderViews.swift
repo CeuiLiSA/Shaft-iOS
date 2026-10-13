@@ -36,10 +36,18 @@ struct ReaderTextSelection {
 // MARK: - ReaderTextBlockView
 
 final class ReaderTextBlockView: UITextView, UITextViewDelegate {
+    /// `zeroWidth` = 全文翻译的译文段（issue #864）：整段映射到同一个源偏移。
     private struct Segment {
         let localStart: Int
         let localEnd: Int
         let absoluteStart: Int
+        var zeroWidth = false
+
+        var absoluteEnd: Int { zeroWidth ? absoluteStart : absoluteStart + (localEnd - localStart) }
+
+        func toAbsolute(_ localOffset: Int) -> Int {
+            zeroWidth ? absoluteStart : absoluteStart + (localOffset - localStart)
+        }
     }
 
     private var segments: [Segment] = []
@@ -90,7 +98,8 @@ final class ReaderTextBlockView: UITextView, UITextViewDelegate {
         for (idx, slice) in slices.enumerated() {
             let text = slice.text.hasSuffix("\n") ? String(slice.text.dropLast()) : slice.text
             let localStart = sb.length
-            let attrs = style.bodyAttributes(indentFirstLine: slice.isFirstLineOfParagraph)
+            // 双语对照的译文：字号降一级 + 次要文字色、不缩进；分页测量用的是同一套属性，换行位置一致。
+            let attrs = style.paragraphAttributes(role: slice.translationRole, indentFirstLine: slice.isFirstLineOfParagraph)
             var sliceAttrs = attrs
             if idx < slices.count - 1 {
                 let gap = max(slices[idx + 1].top - slice.bottom, 0)
@@ -99,7 +108,8 @@ final class ReaderTextBlockView: UITextView, UITextViewDelegate {
                 sliceAttrs[.paragraphStyle] = p
             }
             sb.append(NSAttributedString(string: text, attributes: sliceAttrs))
-            segments.append(Segment(localStart: localStart, localEnd: sb.length, absoluteStart: slice.absoluteCharStart))
+            segments.append(Segment(localStart: localStart, localEnd: sb.length, absoluteStart: slice.absoluteCharStart,
+                                    zeroWidth: slice.isTranslation))
             if idx < slices.count - 1 {
                 sb.append(NSAttributedString(string: "\n", attributes: sliceAttrs))
             }
@@ -114,8 +124,9 @@ final class ReaderTextBlockView: UITextView, UITextViewDelegate {
     }
 
     /// Bind a single full paragraph (scroll mode) with inline link spans.
-    func bind(paragraph text: String, spans: [InlineSpan], absoluteStart: Int, style: ReaderTypeStyle) {
-        let sb = NSMutableAttributedString(string: text, attributes: style.bodyAttributes(indentFirstLine: true))
+    func bind(paragraph text: String, spans: [InlineSpan], absoluteStart: Int, style: ReaderTypeStyle,
+              translationRole: TranslationRole = .none) {
+        let sb = NSMutableAttributedString(string: text, attributes: style.paragraphAttributes(role: translationRole, indentFirstLine: true))
         for span in spans {
             let r = NSRange(location: span.start, length: span.end - span.start)
             guard r.location + r.length <= sb.length else { continue }
@@ -124,7 +135,8 @@ final class ReaderTextBlockView: UITextView, UITextViewDelegate {
             }
             // Ruby annotations degrade to plain base text (upstream parity).
         }
-        segments = [Segment(localStart: 0, localEnd: sb.length, absoluteStart: absoluteStart)]
+        segments = [Segment(localStart: 0, localEnd: sb.length, absoluteStart: absoluteStart,
+                            zeroWidth: translationRole != .none)]
         baseAttributed = sb
         attributedText = sb
         tintColor = style.theme.accentColor
@@ -140,10 +152,9 @@ final class ReaderTextBlockView: UITextView, UITextViewDelegate {
         guard let base = baseAttributed else { return }
         let withHighlights = NSMutableAttributedString(attributedString: base)
         for hit in hits {
-            for seg in segments {
-                let segAbsEnd = seg.absoluteStart + (seg.localEnd - seg.localStart)
+            for seg in segments where !seg.zeroWidth {
                 let s = max(hit.absoluteStart, seg.absoluteStart)
-                let e = min(hit.absoluteEnd, segAbsEnd)
+                let e = min(hit.absoluteEnd, seg.absoluteEnd)
                 guard e > s else { continue }
                 let local = NSRange(location: seg.localStart + (s - seg.absoluteStart), length: e - s)
                 guard local.location + local.length <= withHighlights.length else { continue }
@@ -160,10 +171,10 @@ final class ReaderTextBlockView: UITextView, UITextViewDelegate {
     func currentSelection() -> ReaderTextSelection? {
         let r = selectedRange
         guard r.length > 0, let seg = segment(forLocal: r.location) else { return nil }
-        let absStart = seg.absoluteStart + (r.location - seg.localStart)
+        let absStart = seg.toAbsolute(r.location)
         // Selection may span segments; map the end through its own segment.
         let endSeg = segment(forLocal: max(r.location, r.location + r.length - 1)) ?? seg
-        let absEnd = endSeg.absoluteStart + (r.location + r.length - endSeg.localStart)
+        let absEnd = endSeg.toAbsolute(r.location + r.length)
         let text = (attributedText.string as NSString).substring(with: r)
         return ReaderTextSelection(absoluteStart: absStart, absoluteEnd: absEnd, text: text)
     }
@@ -178,12 +189,12 @@ final class ReaderTextBlockView: UITextView, UITextViewDelegate {
         guard p.y >= line.minY, p.y <= line.maxY else { return nil }
         let local = min(layoutManager.characterIndexForGlyph(at: glyph), text.length - 1)
         guard let seg = segment(forLocal: local) else { return nil }
-        return seg.absoluteStart + min(local - seg.localStart, seg.localEnd - seg.localStart)
+        return seg.toAbsolute(min(local, seg.localEnd))
     }
 
     /// Line rect (this view's coordinates) containing absolute char `index`, if it lives here.
     func lineRect(forAbsoluteChar index: Int) -> CGRect? {
-        guard let seg = segments.first(where: { index >= $0.absoluteStart && index < $0.absoluteStart + ($0.localEnd - $0.localStart) }) else { return nil }
+        guard let seg = segments.first(where: { !$0.zeroWidth && index >= $0.absoluteStart && index < $0.absoluteEnd }) else { return nil }
         let local = seg.localStart + (index - seg.absoluteStart)
         guard local < (attributedText?.length ?? 0) else { return nil }
         let glyph = layoutManager.glyphIndexForCharacter(at: local)

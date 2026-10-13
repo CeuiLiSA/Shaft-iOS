@@ -493,6 +493,8 @@ enum LocalizedKey: String, CaseIterable, Sendable {
 
     // MARK: 小说朗读 TTS (Android reader_tts_* / reader_menu_tts_*, #1113 #1139)
     case readerMenuTtsStart, readerMenuTtsPause, readerMenuTtsResume, readerMenuTtsSpeed, readerTtsSpeedValue, readerTtsTitle, readerTtsProgress, readerTtsEmpty, readerTtsInitFailed, readerTtsLanguageUnavailable, readerTtsSettings, readerTtsFromPage, readerTtsHighlight, readerTtsAutoPage, readerTtsDoubleTap, readerTtsShowPageAction, readerTtsFollowHint
+    // 小说阅读器全文翻译 (Android reader_translate_*, #864)
+    case readerTranslateBody, readerTranslateResume, readerTranslateDisplay, readerTranslateDisplayRunning, readerTranslateModeOriginal, readerTranslateModeTranslation, readerTranslateModeBilingual, msgReaderTranslateStarted, msgReaderTranslateDone, msgReaderTranslateFailedFmt, msgNovelNotReady, translateProxyRequiredTitle, translateProxyRequiredMessage
 
     // MARK: 搜索结果页图钉 / 标签组合 (Android search_pin* / pinned_tag_combo_count, pixez#1364)
     case searchPinAction, searchUnpinAction, searchPinnedSnack, searchUnpinnedSnack, searchPinSnackView, searchPinSnackUndo, pinnedTagComboCountFmt

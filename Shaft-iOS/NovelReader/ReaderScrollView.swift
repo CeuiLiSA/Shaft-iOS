@@ -8,8 +8,8 @@ import UIKit
 // bordered pills. Progress reports as scroll fraction + top-visible char.
 
 final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDelegate, UIGestureRecognizerDelegate {
-    enum Row {
-        case paragraph(text: String, spans: [InlineSpan], absoluteStart: Int, sourceStart: Int)
+    enum Row: Equatable {
+        case paragraph(text: String, spans: [InlineSpan], absoluteStart: Int, sourceStart: Int, translationRole: TranslationRole)
         case chapter(title: String, sourceStart: Int)
         case spacer(sourceStart: Int)
         case divider(sourceStart: Int)
@@ -18,9 +18,27 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
 
         var sourceStart: Int {
             switch self {
-            case .paragraph(_, _, _, let s), .chapter(_, let s), .spacer(let s),
+            case .paragraph(_, _, _, let s, _), .chapter(_, let s), .spacer(let s),
                  .divider(let s), .image(_, let s), .jump(_, let s):
                 return s
+            }
+        }
+
+        /// 双语译文行是零宽度锚点（issue #864）：按字符找行时跳过它，进度 / 朗读跟随永远落在原文段落上。
+        var isInterlinear: Bool {
+            if case .paragraph(_, _, _, _, .interlinear) = self { return true }
+            return false
+        }
+
+        static func == (a: Row, b: Row) -> Bool {
+            switch (a, b) {
+            case let (.paragraph(t1, _, a1, s1, r1), .paragraph(t2, _, a2, s2, r2)):
+                return t1 == t2 && a1 == a2 && s1 == s2 && r1 == r2
+            case let (.chapter(t1, s1), .chapter(t2, s2)): return t1 == t2 && s1 == s2
+            case let (.spacer(s1), .spacer(s2)), let (.divider(s1), .divider(s2)): return s1 == s2
+            case let (.image(e1, s1), .image(e2, s2)): return e1.resourceId == e2.resourceId && s1 == s2
+            case let (.jump(t1, s1), .jump(t2, s2)): return t1 == t2 && s1 == s2
+            default: return false
             }
         }
     }
@@ -29,6 +47,7 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
     private let tableView = UITableView(frame: .zero, style: .plain)
     private var rows: [Row] = []
     private var style: ReaderTypeStyle?
+    private var imageUrlResolver: ((ContentToken) -> String?)?
     private var horizontalMargin: CGFloat = 20
     private var overlays: [HighlightRange] = []
     /// Extra top offset applied to programmatic jumps (search overlay height).
@@ -84,8 +103,9 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
     required init?(coder: NSCoder) { fatalError() }
 
     func bind(tokens: [ContentToken], style: ReaderTypeStyle, horizontalMargin: CGFloat, verticalMargin: CGFloat,
-              safeTop: CGFloat, safeBottom: CGFloat, imageUrlResolver: (ContentToken) -> String?) {
+              safeTop: CGFloat, safeBottom: CGFloat, imageUrlResolver: @escaping (ContentToken) -> String?) {
         self.style = style
+        self.imageUrlResolver = imageUrlResolver
         self.horizontalMargin = horizontalMargin
         backgroundColor = style.theme.backgroundColor
         tableView.contentInset = UIEdgeInsets(
@@ -93,12 +113,38 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
             bottom: safeBottom + verticalMargin, right: 0
         )
 
+        rows = Self.buildRows(tokens, imageUrlResolver: imageUrlResolver)
+        tableView.reloadData()
+    }
+
+    /// 换一份 token 流（全文翻译分批到货，issue #864），沿用当前 style / 边距 / 图片解析，
+    /// 并把视口第一个可见行钉回原来的像素位置——不能走 `bind` + `scrollToCharIndex`，
+    /// 那会把读到一半的段落拽回段首，每到一批译文跳一下。
+    func updateTokens(_ tokens: [ContentToken]) {
+        guard style != nil, let resolver = imageUrlResolver else { return }
+        let newRows = Self.buildRows(tokens, imageUrlResolver: resolver)
+        let anchorPath = tableView.indexPathsForVisibleRows?.first
+        let anchorRow = anchorPath.flatMap { rows.indices.contains($0.row) ? rows[$0.row] : nil }
+        let screenOffset = anchorPath.map { tableView.rectForRow(at: $0).minY - tableView.contentOffset.y } ?? 0
+        rows = newRows
+        tableView.reloadData()
+        guard let anchorRow,
+              let newIndex = newRows.firstIndex(of: anchorRow) ?? rowIndex(forChar: anchorRow.sourceStart) else { return }
+        let path = IndexPath(row: newIndex, section: 0)
+        tableView.layoutIfNeeded()
+        tableView.scrollToRow(at: path, at: .top, animated: false)
+        tableView.layoutIfNeeded()
+        tableView.contentOffset.y = tableView.rectForRow(at: path).minY - screenOffset
+    }
+
+    private static func buildRows(_ tokens: [ContentToken], imageUrlResolver: (ContentToken) -> String?) -> [Row] {
         var built: [Row] = []
         built.reserveCapacity(tokens.count)
         for token in tokens {
             switch token {
-            case .paragraph(let start, _, let text, let textSourceStart, let spans):
-                built.append(.paragraph(text: text, spans: spans, absoluteStart: textSourceStart, sourceStart: start))
+            case .paragraph(let start, _, let text, let textSourceStart, let spans, let role):
+                built.append(.paragraph(text: text, spans: spans, absoluteStart: textSourceStart, sourceStart: start,
+                                        translationRole: role))
             case .chapter(let start, _, let title):
                 built.append(.chapter(title: title, sourceStart: start))
             case .blankLine(let start, _):
@@ -121,8 +167,7 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
                 built.append(.jump(target: target, sourceStart: start))
             }
         }
-        rows = built
-        tableView.reloadData()
+        return built
     }
 
     func applyOverlays(_ overlays: [HighlightRange]) {
@@ -135,10 +180,7 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
     func scrollToCharIndex(_ charIndex: Int, animated: Bool) {
         guard !rows.isEmpty else { return }
         // Last row starting at or before the anchor — the row containing it.
-        var target = 0
-        for (i, row) in rows.enumerated() {
-            if row.sourceStart <= charIndex { target = i } else { break }
-        }
+        let target = rowIndex(forChar: charIndex) ?? 0
         let current = tableView.indexPathsForVisibleRows?.first?.row ?? 0
         let canAnimate = animated && abs(target - current) <= Self.smoothScrollMaxItems
         tableView.scrollToRow(at: IndexPath(row: target, section: 0), at: .top, animated: canAnimate)
@@ -178,10 +220,13 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
         guard let style else { return UITableViewCell() }
         let row = rows[indexPath.row]
         switch row {
-        case .paragraph(let text, let spans, let absoluteStart, _):
+        case .paragraph(let text, let spans, let absoluteStart, _, let role):
             let cell = dequeue(ScrollParagraphCell.self, "p")
+            // 紧跟自己双语译文的原文段落收紧段后距，与翻页 Paginator 同口径（issue #864）。
+            let followedByTranslation = rows.indices.contains(indexPath.row + 1) && rows[indexPath.row + 1].isInterlinear
             cell.configure(text: text, spans: spans, absoluteStart: absoluteStart, style: style,
-                           hMargin: horizontalMargin, menuStrings: menuStrings)
+                           hMargin: horizontalMargin, menuStrings: menuStrings, translationRole: role,
+                           bottomGap: followedByTranslation ? style.translationGap : style.paragraphSpacing)
             cell.textBlock.onSelectionAction = { [weak self] a, s in self?.onSelectionAction?(a, s) }
             cell.textBlock.onLinkTap = { [weak self] url in self?.onLinkTap?(url) }
             cell.applyOverlays(overlays)
@@ -254,6 +299,9 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
         guard let indexPath = tableView.indexPathForRow(at: point), rows.indices.contains(indexPath.row),
               let cell = tableView.cellForRow(at: indexPath) else { return nil }
         switch rows[indexPath.row] {
+        // 双语译文不在任何原文段落里；仅译文段整段对应原文段首（文本块里是零宽度段）。
+        case .paragraph(_, _, _, _, .interlinear):
+            return nil
         case .paragraph:
             guard let p = cell as? ScrollParagraphCell else { return nil }
             return p.textBlock.absoluteCharIndex(at: p.textBlock.convert(point, from: tableView))
@@ -266,9 +314,12 @@ final class NovelScrollReaderView: UIView, UITableViewDataSource, UITableViewDel
 
     // MARK: TTS follow
 
+    /// Last row whose anchor char is <= `charIndex`. 双语译文行是零宽度锚点，跳过它，
+    /// 进度 / 朗读跟随永远落在原文段落上。
     private func rowIndex(forChar charIndex: Int) -> Int? {
         var target: Int?
         for (i, row) in rows.enumerated() {
+            if row.isInterlinear { continue }
             if row.sourceStart <= charIndex { target = i } else { break }
         }
         return target
@@ -355,12 +406,14 @@ final class ScrollParagraphCell: UITableViewCell {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(text: String, spans: [InlineSpan], absoluteStart: Int, style: ReaderTypeStyle, hMargin: CGFloat, menuStrings: ReaderMenuStrings) {
+    func configure(text: String, spans: [InlineSpan], absoluteStart: Int, style: ReaderTypeStyle, hMargin: CGFloat,
+                   menuStrings: ReaderMenuStrings, translationRole: TranslationRole, bottomGap: CGFloat) {
         leading.constant = hMargin
         trailing.constant = -hMargin
-        bottom.constant = -style.paragraphSpacing
+        bottom.constant = -bottomGap
         textBlock.menuStrings = menuStrings
-        textBlock.bind(paragraph: text, spans: spans, absoluteStart: absoluteStart, style: style)
+        textBlock.bind(paragraph: text, spans: spans, absoluteStart: absoluteStart, style: style,
+                       translationRole: translationRole)
     }
 
     func applyOverlays(_ overlays: [HighlightRange]) {

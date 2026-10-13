@@ -16,6 +16,7 @@
 
 /* Begin PBXBuildFile section */
 		69A408E7DAD36A78C642FC6E /* OctoberRenderTests.swift */ = {isa = PBXBuildFile; fileRef = 1633E065630511C3FA73B694; };
+		93C62E112E61A21023862818 /* NovelTranslationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EEC10CCA9B43C1DA84EFBAF; };
 		13D298676A47CE1BB10E6D14 /* OctoberTransportTests.swift */ = {isa = PBXBuildFile; fileRef = CF14318EEA187A923FCA909A; };
 		55002EB615D129B1D7BEF9EF /* AIExemptAuthors.swift */ = {isa = PBXBuildFile; fileRef = 0B1AAB9789C41900C732E86B; };
 		50BF7DD48D0477E72BB2ACDD /* OctoberPortTests.swift */ = {isa = PBXBuildFile; fileRef = 1BBD1051F786C9B4B42D1620; };
@@ -43,6 +44,7 @@
 		8A716D36FF078B416299A255 /* LibraryProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43DE863E7ED9C1B53DE40F75; };
 		E0C1CE9E048982AE99847EA2 /* WebDiscoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 075D8EB2514BF60BB075B554; };
 		BDE5E656835810A49D1987F9 /* NovelTts.swift in Sources */ = {isa = PBXBuildFile; fileRef = E620A930C26FE759675ED204; };
+		B961131D2025F835E8360DF1 /* NovelBodyTranslation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B3B81A25CC005197E9E3AA; };
 		9D5FC83E0C62C5F3E4634972 /* HSVColorPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E01230187897662BFCE7DBD; };
 		D3C46192FB90706A8F0A869F /* StickerTests.swift */ = {isa = PBXBuildFile; fileRef = E8D5A2E74D8C63DA2DFFC85E; };
 		9F4B9D7C3A8E4E2B8A5F1C60 /* ImageHostManagerTests.swift */ = {isa = PBXBuildFile; fileRef = 9F4B9D7C3A8E4E2B8A5F1C61 /* ImageHostManagerTests.swift */; };
@@ -250,6 +252,7 @@
 
 /* Begin PBXFileReference section */
 		1633E065630511C3FA73B694 /* OctoberRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/OctoberRenderTests.swift"; sourceTree = "<group>"; };
+		1EEC10CCA9B43C1DA84EFBAF /* NovelTranslationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/NovelTranslationTests.swift"; sourceTree = "<group>"; };
 		CF14318EEA187A923FCA909A /* OctoberTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/OctoberTransportTests.swift"; sourceTree = "<group>"; };
 		0B1AAB9789C41900C732E86B /* AIExemptAuthors.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "More/AIExemptAuthors.swift"; sourceTree = "<group>"; };
 		1BBD1051F786C9B4B42D1620 /* OctoberPortTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/OctoberPortTests.swift"; sourceTree = "<group>"; };
@@ -277,6 +280,7 @@
 		43DE863E7ED9C1B53DE40F75 /* LibraryProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BookmarkLibrary/LibraryProfile.swift"; sourceTree = "<group>"; };
 		075D8EB2514BF60BB075B554 /* WebDiscoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Discover/WebDiscoveryView.swift"; sourceTree = "<group>"; };
 		E620A930C26FE759675ED204 /* NovelTts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NovelReader/NovelTts.swift"; sourceTree = "<group>"; };
+		05B3B81A25CC005197E9E3AA /* NovelBodyTranslation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NovelReader/NovelBodyTranslation.swift"; sourceTree = "<group>"; };
 		6E01230187897662BFCE7DBD /* HSVColorPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Common/HSVColorPickerSheet.swift"; sourceTree = "<group>"; };
 		E8D5A2E74D8C63DA2DFFC85E /* StickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/StickerTests.swift"; sourceTree = "<group>"; };
 		9F4B9D7C3A8E4E2B8A5F1C61 /* ImageHostManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shaft-iOSTests/ImageHostManagerTests.swift"; sourceTree = "<group>"; };
@@ -502,6 +506,7 @@
 			isa = PBXGroup;
 			children = (
 				1633E065630511C3FA73B694 /* OctoberRenderTests.swift */,
+				1EEC10CCA9B43C1DA84EFBAF /* NovelTranslationTests.swift */,
 				CF14318EEA187A923FCA909A /* OctoberTransportTests.swift */,
 				1BBD1051F786C9B4B42D1620 /* OctoberPortTests.swift */,
 				B8D30DB2A593A5AF3A1C1E0E /* OctoberDownloadTests.swift */,
@@ -547,6 +552,7 @@
 				43DE863E7ED9C1B53DE40F75 /* LibraryProfile.swift */,
 				075D8EB2514BF60BB075B554 /* WebDiscoveryView.swift */,
 				E620A930C26FE759675ED204 /* NovelTts.swift */,
+				05B3B81A25CC005197E9E3AA /* NovelBodyTranslation.swift */,
 				6E01230187897662BFCE7DBD /* HSVColorPickerSheet.swift */,
 				5B5AC9129DB77A756BA680E4 /* StickerMessageContent.swift */,
 				5DEACABE0CAF16E41ED8AF2E /* sticker-strings.json */,
@@ -1063,6 +1069,7 @@
 				8A716D36FF078B416299A255 /* LibraryProfile.swift */,
 				E0C1CE9E048982AE99847EA2 /* WebDiscoveryView.swift */,
 				BDE5E656835810A49D1987F9 /* NovelTts.swift */,
+				B961131D2025F835E8360DF1 /* NovelBodyTranslation.swift in Sources */,
 				9D5FC83E0C62C5F3E4634972 /* HSVColorPickerSheet.swift */,
 				8721425C4E1AE3EB49D2DA20 /* StickerMessageContent.swift */,
 				60A8707BDC2193411371B1AC /* StickerStore.swift */,
@@ -1244,7 +1251,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		715CEB466C368648489445F5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (69A408E7DAD36A78C642FC6E,13D298676A47CE1BB10E6D14,50BF7DD48D0477E72BB2ACDD,4047A3F94C81191CBED645DA,D435906D1174CF1F609A99D1,DAE58E4B3CA387D74052BD59,1775786A93906E1914C6E2D1,9F4B9D7C3A8E4E2B8A5F1C60,D3C46192FB90706A8F0A869F,77DFBC336C0918E8F92DB333,CED7F99A19BA076297B02BF6,C72C29D7D73334F1DC62F4A0,914987C45FFEA7183388C86A,); runOnlyForDeploymentPostprocessing = 0; };
+		715CEB466C368648489445F5 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (69A408E7DAD36A78C642FC6E,93C62E112E61A21023862818,13D298676A47CE1BB10E6D14,50BF7DD48D0477E72BB2ACDD,4047A3F94C81191CBED645DA,D435906D1174CF1F609A99D1,DAE58E4B3CA387D74052BD59,1775786A93906E1914C6E2D1,9F4B9D7C3A8E4E2B8A5F1C60,D3C46192FB90706A8F0A869F,77DFBC336C0918E8F92DB333,CED7F99A19BA076297B02BF6,C72C29D7D73334F1DC62F4A0,914987C45FFEA7183388C86A,); runOnlyForDeploymentPostprocessing = 0; };
 		2D339A82CA9C4D373BA23634 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (352006898A7A9C876D799232,B669B1D8C99FD8302912B05C,4FCEBBEE279B651725FF8E35,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 

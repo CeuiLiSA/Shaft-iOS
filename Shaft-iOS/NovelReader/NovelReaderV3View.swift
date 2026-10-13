@@ -81,6 +81,7 @@ private struct NovelReaderV3Screen: View {
     @State private var chromeVisible = false
     @State private var activeSheet: ReaderSheet?
     @State private var showMoreMenu = false
+    @State private var showTranslationDisplayPicker = false
     @State private var tts = NovelTtsPlayer.shared
     @State private var showTtsSettings = false
     @State private var lastFollowedTtsRange: Range<Int>?
@@ -123,6 +124,10 @@ private struct NovelReaderV3Screen: View {
 
                 ttsPageAction(safe: safe)
 
+                if showTranslationDisplayPicker {
+                    translationDisplayPicker
+                }
+
                 if let toast = vm.toast {
                     VStack {
                         Spacer()
@@ -159,6 +164,7 @@ private struct NovelReaderV3Screen: View {
         .task {
             vm.configureL10n { l10n.t($0) }
             vm.onOpenNovel = { openNovel($0) }
+            vm.translateTargetLang = { translateTargetLang(appTag: l10n.activeTag) }
             ReaderJumpButton.labelFormat = { String(format: l10n.t(.nrJumpButtonFmt), $0) }
             await vm.loadIfNeeded()
         }
@@ -195,6 +201,13 @@ private struct NovelReaderV3Screen: View {
         .confirmationDialog("", isPresented: $showMoreMenu) {
             moreMenuButtons
         }
+        // upstream `promptProxyNeededIfPossible`: 网络不通导致的中断，提示需要代理。
+        .alert(l10n.t(.translateProxyRequiredTitle), isPresented: Bindable(vm).translateProxyPromptVisible) {
+            Button(l10n.t(.stSure), role: .cancel) {}
+        } message: {
+            Text(l10n.t(.translateProxyRequiredMessage))
+        }
+        .animation(.easeOut(duration: 0.18), value: showTranslationDisplayPicker)
         .sheet(isPresented: $showTtsSettings) {
             ReaderTtsSettingsSheet(settings: settings, sessionId: ttsSessionId)
                 .presentationDetents([.medium, .large])
@@ -338,7 +351,8 @@ private struct NovelReaderV3Screen: View {
 
     @ViewBuilder
     private var moreMenuButtons: some View {
-        // Upstream `addReaderMenuItems`: the TTS entries lead the reader's own items.
+        // Upstream `addReaderMenuItems`: 全文翻译 first, then the TTS entries lead the reader's own items.
+        bodyTranslationButtons
         Button(l10n.t(ttsMenuLabel)) { handleTtsAction() }
         if tts.playback.isActive && tts.playback.sessionId == ttsSessionId {
             Button(l10n.t(.readerTtsFromPage)) { startTtsFromReader() }
@@ -355,6 +369,60 @@ private struct NovelReaderV3Screen: View {
                 Task { await vm.toggleWatchlist() }
             }
         }
+    }
+
+    // MARK: 全文翻译 (#864)
+
+    /// 从没翻过 → 「全文翻译」；翻过（含切到「仅原文」之后）→ 「译文显示方式」三选一，
+    /// 随时能切回来；中断时多一条「继续翻译」。
+    @ViewBuilder
+    private var bodyTranslationButtons: some View {
+        let state = vm.translationState
+        if state == .off && !vm.hasBodyTranslation {
+            Button(l10n.t(.readerTranslateBody)) { startBodyTranslation() }
+        } else {
+            if state == .failed {
+                Button(l10n.t(.readerTranslateResume)) { startBodyTranslation() }
+            }
+            Button(translationDisplayLabel(state)) { showTranslationDisplayPicker = true }
+        }
+    }
+
+    private func translationDisplayLabel(_ state: NovelReaderV3ViewModel.TranslationState) -> String {
+        if case .running(let done, let total) = state {
+            return String(format: l10n.t(.readerTranslateDisplayRunning), done, total)
+        }
+        return l10n.t(.readerTranslateDisplay)
+    }
+
+    private func startBodyTranslation() {
+        guard isLoaded else {
+            vm.showToast(l10n.t(.msgNovelNotReady))
+            return
+        }
+        vm.showToast(l10n.t(.msgReaderTranslateStarted))
+        vm.startBodyTranslation()
+    }
+
+    /// 仅原文 / 仅译文 / 原文 + 译文 三选一；后两者记进 `translationRole`。
+    private var translationDisplayPicker: some View {
+        let options: [(LocalizedKey, TranslationRole?)] = [
+            (.readerTranslateModeOriginal, nil),
+            (.readerTranslateModeTranslation, .replacement),
+            (.readerTranslateModeBilingual, .interlinear),
+        ]
+        let shown = vm.translationState != .off
+        let current = shown ? options.firstIndex { $0.1 == settings.translationRole } ?? 0 : 0
+        return ReaderCheckableDialog(
+            title: l10n.t(.readerTranslateDisplay),
+            items: options.map { l10n.t($0.0) },
+            checkedIndex: current,
+            onSelect: { which in
+                showTranslationDisplayPicker = false
+                vm.setTranslationDisplay(options[which].1)
+            },
+            onDismiss: { showTranslationDisplayPicker = false }
+        )
     }
 
     // MARK: TTS (#1113 / #1139)
@@ -742,6 +810,7 @@ private struct ScrollReaderHost: UIViewRepresentable {
 
     final class Coordinator {
         var boundKey = ""
+        var boundTranslationVersion = 0
         var lastTtsChar: Int?
         weak var view: NovelScrollReaderView?
         weak var vm: NovelReaderV3ViewModel?
@@ -792,11 +861,13 @@ private struct ScrollReaderHost: UIViewRepresentable {
         }
 
         let key = "\(vm.tokens.count)|\(settings.layoutSnapshot.fontSizeSp)|\(settings.layoutSnapshot.lineSpacing)|\(settings.layoutSnapshot.paragraphSpacingLines)|\(settings.layoutSnapshot.horizontalMarginDp)|\(settings.layoutSnapshot.verticalMarginDp)|\(settings.layoutSnapshot.firstLineIndent)|\(settings.layoutSnapshot.letterSpacing)|\(settings.layoutSnapshot.boldText)|\(settings.layoutSnapshot.fontId)|\(settings.layoutSnapshot.fontWeight)|\(style.theme.styleKey)"
+        let translationVersion = vm.translationVersion
         if key != context.coordinator.boundKey, !vm.tokens.isEmpty {
             context.coordinator.boundKey = key
+            context.coordinator.boundTranslationVersion = translationVersion
             let webNovel = vm.webNovel
             view.bind(
-                tokens: vm.tokens,
+                tokens: vm.displayTokens(),
                 style: style,
                 horizontalMargin: CGFloat(settings.horizontalMarginDp),
                 verticalMargin: CGFloat(settings.verticalMarginDp),
@@ -806,6 +877,10 @@ private struct ScrollReaderHost: UIViewRepresentable {
                     webNovel.flatMap { ReaderImageResolver.resolve(token: token, webNovel: $0) }
                 }
             )
+        } else if translationVersion != context.coordinator.boundTranslationVersion {
+            // 全文翻译（#864）：译文分批到货，换 token 时钉住视口不跳。
+            context.coordinator.boundTranslationVersion = translationVersion
+            view.updateTokens(vm.displayTokens())
         }
 
         let overlays = vm.overlays
@@ -831,6 +906,70 @@ private struct ScrollReaderHost: UIViewRepresentable {
                 break
             }
         }
+    }
+}
+
+// MARK: - Checkable dialog (`WitDialog.CheckableDialogBuilder`)
+
+/// Single-choice WitDialog: r28 `settingsCardBg` card (32pt side inset, ≤340pt
+/// wide) over a 50 % scrim, 19pt bold title (24 / 24 padding), 52pt rows with
+/// 15pt text and a 22pt accent check mark on the right — invisible, not
+/// removed, when unchecked so the labels don't shift.
+private struct ReaderCheckableDialog: View {
+    let title: String
+    let items: [String]
+    let checkedIndex: Int
+    let onSelect: (Int) -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+                .ignoresSafeArea()
+                .onTapGesture(perform: onDismiss)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(Theme.v3Text1)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 24)
+                    .padding(.bottom, 4)
+                ForEach(items.indices, id: \.self) { index in
+                    Button { onSelect(index) } label: {
+                        HStack(spacing: 12) {
+                            Text(items[index])
+                                .font(.system(size: 15))
+                                .foregroundStyle(Theme.v3Text1)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Theme.v3TextAccent)
+                                .frame(width: 22, height: 22)
+                                .opacity(index == checkedIndex ? 1 : 0)
+                        }
+                        .padding(.horizontal, 24)
+                        .frame(minHeight: 52)
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(ReaderDialogRowStyle())
+                }
+            }
+            .padding(.bottom, 12)
+            .frame(width: min(UIScreen.main.bounds.width - 64, 340))
+            .background(Theme.v3CardFill, in: .rect(cornerRadius: 28))
+            .overlay(RoundedRectangle(cornerRadius: 28).strokeBorder(Theme.v3CardHairline, lineWidth: 1))
+            .clipShape(.rect(cornerRadius: 28))
+        }
+        .transition(.opacity)
+        .zIndex(10)
+    }
+}
+
+/// Full-width row press feedback (`rowRipple`).
+private struct ReaderDialogRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background(configuration.isPressed ? Theme.v3Surface2 : Color.clear)
     }
 }
 
